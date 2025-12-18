@@ -10,7 +10,9 @@
 import {
   type CreateVtxoSwapResult,
   type EstimateVtxoSwapResponse,
+  type ExtendedVtxoSwapStorageData,
   JsSwapStorageProvider,
+  JsVtxoSwapStorageProvider,
   JsWalletStorageProvider,
   type SwapParams,
   type VtxoSwapResponse,
@@ -27,6 +29,7 @@ import type { VhtlcAmounts } from "./types.js";
 export {
   CreateVtxoSwapResult,
   EstimateVtxoSwapResponse,
+  ExtendedVtxoSwapStorageData,
   QuoteResponse,
   SwapParams as VtxoSwapParams,
   TokenId,
@@ -103,7 +106,7 @@ function mapChain(wasmChain: WasmChain): Chain {
  */
 function mapTokenInfo(wasmToken: WasmTokenInfo): TokenInfo {
   return {
-    tokenId: wasmToken.tokenId as TokenIdString,
+    tokenId: wasmToken.token_id as TokenIdString,
     symbol: wasmToken.symbol,
     chain: mapChain(wasmToken.chain),
     name: wasmToken.name,
@@ -332,6 +335,57 @@ export type VtxoSwapStatus =
   | "expired";
 
 /**
+ * Plain interface for VtxoSwapResponse data (for storage).
+ * Uses snake_case to match Rust/API conventions.
+ */
+export interface VtxoSwapResponseData {
+  id: string;
+  status: VtxoSwapStatus;
+  created_at: string;
+  client_vhtlc_address: string;
+  client_fund_amount_sats: number;
+  client_pk: string;
+  client_locktime: number;
+  client_unilateral_claim_delay: number;
+  client_unilateral_refund_delay: number;
+  client_unilateral_refund_without_receiver_delay: number;
+  server_vhtlc_address: string;
+  server_fund_amount_sats: number;
+  server_pk: string;
+  server_locktime: number;
+  server_unilateral_claim_delay: number;
+  server_unilateral_refund_delay: number;
+  server_unilateral_refund_without_receiver_delay: number;
+  arkade_server_pk: string;
+  preimage_hash: string;
+  fee_sats: number;
+  network: string;
+}
+
+/**
+ * Plain interface for SwapParams data (for storage).
+ * Uses snake_case to match Rust conventions.
+ */
+export interface SwapParamsData {
+  secret_key: string;
+  public_key: string;
+  preimage: string;
+  preimage_hash: string;
+  user_id: string;
+  key_index: number;
+}
+
+/**
+ * Plain interface for ExtendedVtxoSwapStorageData (for storage).
+ * This is a plain object version without WASM class methods.
+ * Uses snake_case to match Rust conventions.
+ */
+export interface ExtendedVtxoSwapStorageDataPlain {
+  response: VtxoSwapResponseData;
+  swap_params: SwapParamsData;
+}
+
+/**
  * Convert a value from WASM (which may be a Map) to a plain object.
  * serde_wasm_bindgen serializes structs as Maps by default.
  */
@@ -376,6 +430,26 @@ export interface SwapStorageProvider {
 }
 
 /**
+ * Typed storage provider interface for VTXO swap data.
+ * Uses plain object types (not WASM classes) for storage compatibility.
+ */
+export interface VtxoSwapStorageProvider {
+  /** Get VTXO swap data by swap ID. Returns null if not found. */
+  get: (swapId: string) => Promise<ExtendedVtxoSwapStorageDataPlain | null>;
+  /** Store VTXO swap data. Overwrites any existing swap with the same ID. */
+  store: (
+    swapId: string,
+    data: ExtendedVtxoSwapStorageDataPlain,
+  ) => Promise<void>;
+  /** Delete VTXO swap data by swap ID. */
+  delete: (swapId: string) => Promise<void>;
+  /** List all stored VTXO swap IDs. */
+  list: () => Promise<string[]>;
+  /** List all stored VTXO swaps. */
+  getAll: () => Promise<ExtendedVtxoSwapStorageDataPlain[]>;
+}
+
+/**
  * Network type for Bitcoin networks.
  */
 export type Network = "bitcoin" | "testnet" | "regtest" | "mutinynet";
@@ -410,39 +484,29 @@ export class Client {
    * @param baseUrl - The base URL of the Lendaswap API
    * @param walletStorage - Storage provider for persisting wallet data (mnemonic, key index)
    * @param swapStorage - Storage provider for persisting swap data (uses Dexie/IndexedDB)
+   * @param vtxoSwapStorage - Storage provider for persisting VTXO swap data (uses Dexie/IndexedDB)
    * @param network - Bitcoin network ("bitcoin", "testnet", "regtest", "mutinynet")
    * @param arkadeUrl - Arkade's server url
-   * @param wasmPath - Optional path to the WASM file (for Node.js environments)
    * @returns A new Client instance
    *
    * @example
    * ```typescript
-   * import Dexie from 'dexie';
+   * import {
+   *   Client,
+   *   createDexieWalletStorage,
+   *   createDexieSwapStorage,
+   *   createDexieVtxoSwapStorage
+   * } from '@lendasat/lendaswap-sdk';
    *
-   * // Wallet storage using localStorage with typed methods
-   * const walletStorage: WalletStorageProvider = {
-   *   getMnemonic: async () => localStorage.getItem('mnemonic'),
-   *   setMnemonic: async (mnemonic) => localStorage.setItem('mnemonic', mnemonic),
-   *   getKeyIndex: async () => parseInt(localStorage.getItem('key_index') ?? '0'),
-   *   setKeyIndex: async (index) => localStorage.setItem('key_index', index.toString()),
-   * };
-   *
-   * // Swap storage using Dexie (IndexedDB)
-   * const db = new Dexie('lendaswap');
-   * db.version(1).stores({ swaps: 'id' });
-   *
-   * const swapStorage: SwapStorageProvider = {
-   *   get: async (swapId) => await db.table('swaps').get(swapId) ?? null,
-   *   store: async (swapId, data) => await db.table('swaps').put({ id: swapId, ...data }),
-   *   delete: async (swapId) => await db.table('swaps').delete(swapId),
-   *   list: async () => await db.table('swaps').toCollection().primaryKeys() as string[],
-   *   getAll: async () => await db.table('swaps').toArray(),
-   * };
+   * const walletStorage = createDexieWalletStorage();
+   * const swapStorage = createDexieSwapStorage();
+   * const vtxoSwapStorage = createDexieVtxoSwapStorage();
    *
    * const client = await Client.create(
    *   'https://apilendaswap.lendasat.com',
    *   walletStorage,
    *   swapStorage,
+   *   vtxoSwapStorage,
    *   'bitcoin',
    *   'https://arkade.computer'
    * );
@@ -452,6 +516,7 @@ export class Client {
     baseUrl: string,
     walletStorage: WalletStorageProvider,
     swapStorage: ExtendedSwapStorageProvider,
+    vtxoSwapStorage: VtxoSwapStorageProvider,
     network: Network,
     arkadeUrl: string,
   ): Promise<Client> {
@@ -470,10 +535,19 @@ export class Client {
       swapStorage.list.bind(swapStorage),
       swapStorage.getAll.bind(swapStorage),
     );
+    // Bind VTXO swap storage methods to preserve 'this' context when called from WASM
+    const jsVtxoSwapStorageProvider = new JsVtxoSwapStorageProvider(
+      vtxoSwapStorage.get.bind(vtxoSwapStorage),
+      vtxoSwapStorage.store.bind(vtxoSwapStorage),
+      vtxoSwapStorage.delete.bind(vtxoSwapStorage),
+      vtxoSwapStorage.list.bind(vtxoSwapStorage),
+      vtxoSwapStorage.getAll.bind(vtxoSwapStorage),
+    );
     const wasmClient = new WasmClient(
       baseUrl,
       jsWalletStorageProvider,
       jsSwapStorageProvider,
+      jsVtxoSwapStorageProvider,
       network,
       arkadeUrl,
     );
@@ -820,9 +894,9 @@ export class Client {
    * Get VTXO swap details by ID.
    *
    * @param id - The swap ID
-   * @returns The VTXO swap response
+   * @returns The extended VTXO swap data
    */
-  async getVtxoSwap(id: string): Promise<VtxoSwapResponse> {
+  async getVtxoSwap(id: string): Promise<ExtendedVtxoSwapStorageData> {
     return await this.client.getVtxoSwap(id);
   }
 
@@ -851,17 +925,23 @@ export class Client {
    * This can be called if the swap fails (e.g., server doesn't fund)
    * and the client's locktime has expired.
    *
-   * @param swap - The VTXO swap response
-   * @param swapParams - The client's swap parameters
+   * @param swapId - The swap ID
    * @param refundAddress - The Arkade address to receive the refunded funds
    * @returns The refund transaction ID
    */
-  async refundVtxoSwap(
-    swap: VtxoSwapResponse,
-    swapParams: SwapParams,
-    refundAddress: string,
-  ): Promise<string> {
-    return await this.client.refundVtxoSwap(swap, swapParams, refundAddress);
+  async refundVtxoSwap(swapId: string, refundAddress: string): Promise<string> {
+    return await this.client.refundVtxoSwap(swapId, refundAddress);
+  }
+
+  /**
+   * List all VTXO swaps from local storage.
+   *
+   * Returns all stored VTXO swaps without fetching from the API.
+   *
+   * @returns Array of all stored extended VTXO swap data
+   */
+  async listAllVtxoSwaps(): Promise<ExtendedVtxoSwapStorageData[]> {
+    return await this.client.listAllVtxoSwaps();
   }
 }
 

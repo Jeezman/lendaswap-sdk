@@ -1,5 +1,7 @@
 use crate::JsSwapStorageAdapter;
 use crate::JsSwapStorageProvider;
+use crate::JsVtxoSwapStorageAdapter;
+use crate::JsVtxoSwapStorageProvider;
 use crate::JsWalletStorageAdapter;
 use crate::JsWalletStorageProvider;
 use crate::TokenId;
@@ -38,7 +40,6 @@ impl From<core_api::Chain> for Chain {
 #[wasm_bindgen(getter_with_clone)]
 #[derive(Debug, Clone)]
 pub struct TokenInfo {
-    #[wasm_bindgen(js_name = "tokenId")]
     pub token_id: String,
     pub symbol: String,
     pub chain: Chain,
@@ -110,19 +111,14 @@ impl From<core_api::QuoteResponse> for QuoteResponse {
 #[derive(Debug, Clone)]
 pub struct EstimateVtxoSwapResponse {
     /// Total fee in satoshis
-    #[wasm_bindgen(js_name = "feeSats")]
     pub fee_sats: i64,
     /// Total input amount in satoshis
-    #[wasm_bindgen(js_name = "totalInputSats")]
     pub total_input_sats: i64,
     /// Amount user will receive (total_input_sats - fee_sats)
-    #[wasm_bindgen(js_name = "outputSats")]
     pub output_sats: i64,
     /// Number of VTXOs being refreshed
-    #[wasm_bindgen(js_name = "vtxoCount")]
     pub vtxo_count: u32,
     /// Expected expiry timestamp (Unix) of the resulting VTXOs
-    #[wasm_bindgen(js_name = "expectedVtxoExpiry")]
     pub expected_vtxo_expiry: i64,
 }
 
@@ -147,64 +143,45 @@ pub struct VtxoSwapResponse {
     /// Swap status
     pub status: String,
     /// Creation timestamp (RFC3339)
-    #[wasm_bindgen(js_name = "createdAt")]
     pub created_at: String,
-
     // Client VHTLC params
     /// Client's VHTLC address
-    #[wasm_bindgen(js_name = "clientVhtlcAddress")]
     pub client_vhtlc_address: String,
     /// Amount client should fund in satoshis
-    #[wasm_bindgen(js_name = "clientFundAmountSats")]
     pub client_fund_amount_sats: i64,
     /// Client's public key
-    #[wasm_bindgen(js_name = "clientPk")]
     pub client_pk: String,
     /// Client VHTLC locktime (Unix timestamp)
-    #[wasm_bindgen(js_name = "clientLocktime")]
     pub client_locktime: u64,
     /// Client claim delay in seconds
-    #[wasm_bindgen(js_name = "clientUnilateralClaimDelay")]
     pub client_unilateral_claim_delay: i64,
     /// Client refund delay in seconds
-    #[wasm_bindgen(js_name = "clientUnilateralRefundDelay")]
     pub client_unilateral_refund_delay: i64,
     /// Client refund without receiver delay in seconds
-    #[wasm_bindgen(js_name = "clientUnilateralRefundWithoutReceiverDelay")]
     pub client_unilateral_refund_without_receiver_delay: i64,
 
     // Server VHTLC params
     /// Server's VHTLC address
-    #[wasm_bindgen(js_name = "serverVhtlcAddress")]
     pub server_vhtlc_address: String,
     /// Amount server will fund in satoshis
-    #[wasm_bindgen(js_name = "serverFundAmountSats")]
     pub server_fund_amount_sats: i64,
     /// Server's public key
-    #[wasm_bindgen(js_name = "serverPk")]
     pub server_pk: String,
     /// Server VHTLC locktime (Unix timestamp)
-    #[wasm_bindgen(js_name = "serverLocktime")]
     pub server_locktime: u64,
     /// Server claim delay in seconds
-    #[wasm_bindgen(js_name = "serverUnilateralClaimDelay")]
     pub server_unilateral_claim_delay: i64,
     /// Server refund delay in seconds
-    #[wasm_bindgen(js_name = "serverUnilateralRefundDelay")]
     pub server_unilateral_refund_delay: i64,
     /// Server refund without receiver delay in seconds
-    #[wasm_bindgen(js_name = "serverUnilateralRefundWithoutReceiverDelay")]
     pub server_unilateral_refund_without_receiver_delay: i64,
 
     // Common params
     /// Arkade server's public key
-    #[wasm_bindgen(js_name = "arkadeServerPk")]
     pub arkade_server_pk: String,
     /// The preimage hash (SHA256)
-    #[wasm_bindgen(js_name = "preimageHash")]
     pub preimage_hash: String,
     /// Fee in satoshis
-    #[wasm_bindgen(js_name = "feeSats")]
     pub fee_sats: i64,
     /// Bitcoin network
     pub network: String,
@@ -306,24 +283,48 @@ pub struct CreateVtxoSwapResult {
     /// The swap response
     pub response: VtxoSwapResponse,
     /// The swap parameters (needed for claim/refund)
-    #[wasm_bindgen(js_name = "swapParams")]
     pub swap_params: SwapParams,
+}
+
+/// Extended VTXO swap data that combines the API response with client-side swap parameters.
+/// This is the data structure stored for each VTXO swap.
+#[wasm_bindgen(getter_with_clone)]
+#[derive(Debug, Clone)]
+pub struct ExtendedVtxoSwapStorageData {
+    /// The VTXO swap response from the API
+    pub response: VtxoSwapResponse,
+    /// The client-side swap parameters (keys, preimage, etc.)
+    pub swap_params: SwapParams,
+}
+
+impl From<lendaswap_core::ExtendedVtxoSwapStorageData> for ExtendedVtxoSwapStorageData {
+    fn from(data: lendaswap_core::ExtendedVtxoSwapStorageData) -> Self {
+        ExtendedVtxoSwapStorageData {
+            response: data.response.into(),
+            swap_params: data.swap_params.into(),
+        }
+    }
 }
 
 /// Lendaswap client.
 #[wasm_bindgen]
 pub struct Client {
-    inner: lendaswap_core::Client<JsWalletStorageAdapter, JsSwapStorageAdapter>,
+    inner: lendaswap_core::Client<
+        JsWalletStorageAdapter,
+        JsSwapStorageAdapter,
+        JsVtxoSwapStorageAdapter,
+    >,
 }
 
 #[wasm_bindgen]
 impl Client {
-    /// Create a new client with separate wallet and swap storage.
+    /// Create a new client with separate wallet, swap, and VTXO swap storage.
     ///
     /// # Arguments
     /// * `base_url` - The Lendaswap API URL
     /// * `wallet_storage` - Storage provider for wallet data (mnemonic, key index)
     /// * `swap_storage` - Storage provider for swap data
+    /// * `vtxo_swap_storage` - Storage provider for VTXO swap data
     /// * `network` - The Bitcoin network ("bitcoin" or "testnet")
     /// * `arkade_url` - The Arkade server URL
     #[wasm_bindgen(constructor)]
@@ -331,6 +332,7 @@ impl Client {
         base_url: String,
         wallet_storage: JsWalletStorageProvider,
         swap_storage: JsSwapStorageProvider,
+        vtxo_swap_storage: JsVtxoSwapStorageProvider,
         network: String,
         arkade_url: String,
     ) -> Result<Client, JsValue> {
@@ -339,12 +341,14 @@ impl Client {
             .map_err(|e: lendaswap_core::Error| JsValue::from_str(&format!("{}", e)))?;
         let wallet_adapter = JsWalletStorageAdapter::new(wallet_storage);
         let swap_adapter = JsSwapStorageAdapter::new(swap_storage);
+        let vtxo_swap_adapter = JsVtxoSwapStorageAdapter::new(vtxo_swap_storage);
 
         Ok(Client {
             inner: lendaswap_core::Client::new(
                 base_url,
                 wallet_adapter,
                 swap_adapter,
+                vtxo_swap_adapter,
                 network,
                 arkade_url,
             ),
@@ -743,7 +747,7 @@ impl Client {
 
     /// Get VTXO swap details by ID.
     #[wasm_bindgen(js_name = "getVtxoSwap")]
-    pub async fn get_vtxo_swap(&self, id: String) -> Result<VtxoSwapResponse, JsValue> {
+    pub async fn get_vtxo_swap(&self, id: String) -> Result<ExtendedVtxoSwapStorageData, JsValue> {
         let response = self
             .inner
             .get_vtxo_swap(&id)
@@ -786,30 +790,34 @@ impl Client {
     /// Refund the client's VHTLC in a VTXO swap.
     ///
     /// # Arguments
-    /// * `swap` - The VTXO swap response
-    /// * `swap_params` - The client's swap parameters
+    /// * `swap_id` - The swap ID
     /// * `refund_address` - The Arkade address to receive the refunded funds
     #[wasm_bindgen(js_name = "refundVtxoSwap")]
     pub async fn refund_vtxo_swap(
         &self,
-        swap: &VtxoSwapResponse,
-        swap_params: &SwapParams,
+        swap_id: String,
         refund_address: String,
     ) -> Result<String, JsValue> {
-        let core_swap: lendaswap_core::api::VtxoSwapResponse = swap
-            .try_into()
-            .map_err(|e: String| JsValue::from_str(&format!("Failed to convert swap: {}", e)))?;
-        let core_params: lendaswap_core::SwapParams =
-            swap_params.try_into().map_err(|e: String| {
-                JsValue::from_str(&format!("Failed to convert swap_params: {}", e))
-            })?;
-
         let txid = self
             .inner
-            .refund_vtxo_swap(&core_swap, core_params, &refund_address)
+            .refund_vtxo_swap(&swap_id, &refund_address)
             .await
             .map_err(|e| JsValue::from_str(&format!("{:#}", e)))?;
 
         Ok(txid)
+    }
+
+    /// List all VTXO swaps from local storage.
+    ///
+    /// Returns all stored VTXO swaps without fetching from the API.
+    #[wasm_bindgen(js_name = "listAllVtxoSwaps")]
+    pub async fn list_all_vtxo_swaps(&self) -> Result<Vec<ExtendedVtxoSwapStorageData>, JsValue> {
+        let swaps = self
+            .inner
+            .list_all_vtxo_swaps()
+            .await
+            .map_err(|e| JsValue::from_str(&format!("{:#}", e)))?;
+
+        Ok(swaps.into_iter().map(|s| s.into()).collect())
     }
 }

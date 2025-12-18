@@ -3,7 +3,7 @@ use crate::api::{
     EvmToArkadeSwapRequest, EvmToBtcSwapResponse, EvmToLightningSwapRequest, GetSwapResponse,
     QuoteRequest, QuoteResponse, SwapRequest, TokenId, TokenInfo, Version, VtxoSwapResponse,
 };
-use crate::storage::{SwapStorage, WalletStorage};
+use crate::storage::{SwapStorage, VtxoSwapStorage, WalletStorage};
 use crate::types::SwapData;
 use crate::{ApiClient, Network, SwapParams, VhtlcAmounts, Wallet, vhtlc, vtxo_swap};
 use ark_rs::core::ArkAddress;
@@ -38,14 +38,16 @@ pub struct ExtendedVtxoSwapStorageData {
 /// The client is parameterized by two storage backends:
 /// - `S`: Typed storage for wallet data (mnemonic, key index)
 /// - `SS`: Typed storage for swap data
-pub struct Client<S: WalletStorage, SS: SwapStorage> {
+/// - `VSS`: Typed storage for vtxo swap data
+pub struct Client<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> {
     api_client: ApiClient,
     wallet: Wallet<S>,
     swap_storage: SS,
+    vtxo_swap_storage: VSS,
     arkade_url: String,
 }
 
-impl<S: WalletStorage, SS: SwapStorage> Client<S, SS> {
+impl<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> Client<S, SS, VSS> {
     /// Create a new client with separate wallet and swap storage.
     ///
     /// # Arguments
@@ -58,6 +60,7 @@ impl<S: WalletStorage, SS: SwapStorage> Client<S, SS> {
         url: impl Into<String>,
         wallet_storage: S,
         swap_storage: SS,
+        vtxo_swap_storage: VSS,
         network: Network,
         arkade_url: String,
     ) -> Self {
@@ -68,6 +71,7 @@ impl<S: WalletStorage, SS: SwapStorage> Client<S, SS> {
             api_client,
             wallet,
             swap_storage,
+            vtxo_swap_storage,
             arkade_url,
         }
     }
@@ -493,15 +497,43 @@ impl<S: WalletStorage, SS: SwapStorage> Client<S, SS> {
         let response = self.api_client.create_vtxo_swap(&request).await?;
 
         let swap_id = response.id.to_string();
+
+        self.vtxo_swap_storage
+            .store(
+                &swap_id,
+                &ExtendedVtxoSwapStorageData {
+                    response: response.clone(),
+                    swap_params: swap_params.clone(),
+                },
+            )
+            .await?;
+
         log::info!("Created VTXO swap {}", swap_id);
 
         Ok((response, swap_params))
     }
 
     /// Get VTXO swap details by ID.
-    pub async fn get_vtxo_swap(&self, id: &str) -> crate::Result<VtxoSwapResponse> {
-        let response = self.api_client.get_vtxo_swap(id).await?;
-        Ok(response)
+    pub async fn get_vtxo_swap(&self, id: &str) -> crate::Result<ExtendedVtxoSwapStorageData> {
+        let maybe_data = self.vtxo_swap_storage.get(id).await?;
+        match maybe_data {
+            None => Err(crate::Error::SwapNotFound(format!(
+                "Swap id not found {id}"
+            ))),
+            Some(known) => {
+                let response = self.api_client.get_vtxo_swap(id).await?;
+
+                let new_extended = ExtendedVtxoSwapStorageData {
+                    response,
+                    swap_params: known.swap_params,
+                };
+
+                self.vtxo_swap_storage
+                    .store(&new_extended.response.id.to_string(), &new_extended)
+                    .await?;
+                Ok(new_extended)
+            }
+        }
     }
 
     /// Claim the server's VHTLC in a VTXO swap.
@@ -545,22 +577,33 @@ impl<S: WalletStorage, SS: SwapStorage> Client<S, SS> {
     /// * `refund_address` - The Arkade address to receive the refunded funds
     pub async fn refund_vtxo_swap(
         &self,
-        swap: &VtxoSwapResponse,
-        swap_params: SwapParams,
+        swap_id: &String,
         refund_address: &str,
     ) -> crate::Result<String> {
         let refund_ark_address = ArkAddress::from_str(refund_address)
             .map_err(|e| crate::Error::Parse(format!("Invalid refund ark address: {}", e)))?;
 
+        let swap =
+            self.vtxo_swap_storage.get(swap_id).await?.ok_or_else(|| {
+                crate::Error::SwapNotFound(format!("Swap id not found {swap_id}"))
+            })?;
+
         let txid = vtxo_swap::refund_client_vhtlc(
             &self.arkade_url,
             refund_ark_address,
-            swap,
-            swap_params,
+            &swap.response,
+            swap.swap_params,
             self.wallet.network(),
         )
         .await?;
 
         Ok(txid.to_string())
+    }
+
+    /// Load all vtxo swap data from storage without fetching from the API.
+    pub async fn list_all_vtxo_swaps(&self) -> crate::Result<Vec<ExtendedVtxoSwapStorageData>> {
+        let swaps = self.vtxo_swap_storage.get_all().await?;
+
+        Ok(swaps)
     }
 }

@@ -3,8 +3,10 @@
 //! Run with: cargo test --test integration -- --nocapture --ignored
 
 use lendaswap_core::api::{EvmChain, TokenId};
+use lendaswap_core::storage::VtxoSwapStorage;
 use lendaswap_core::{
-    ApiClient, Client, ExtendedSwapStorageData, Network, StorageFuture, SwapStorage, WalletStorage,
+    ApiClient, Client, ExtendedSwapStorageData, ExtendedVtxoSwapStorageData, Network,
+    StorageFuture, SwapStorage, WalletStorage,
 };
 use rust_decimal_macros::dec;
 use std::collections::HashMap;
@@ -118,16 +120,74 @@ impl SwapStorage for InMemorySwapStorage {
     }
 }
 
+#[derive(Default)]
+pub struct InMemoryVtxoSwapStorage {
+    data: RwLock<HashMap<String, ExtendedVtxoSwapStorageData>>,
+}
+
+impl InMemoryVtxoSwapStorage {
+    pub fn new() -> Self {
+        Self {
+            data: RwLock::new(HashMap::new()),
+        }
+    }
+}
+
+impl VtxoSwapStorage for InMemoryVtxoSwapStorage {
+    fn get(&self, swap_id: &str) -> StorageFuture<'_, Option<ExtendedVtxoSwapStorageData>> {
+        let swap_id = swap_id.to_string();
+        Box::pin(async move {
+            let data = self.data.read().unwrap();
+            Ok(data.get(&swap_id).cloned())
+        })
+    }
+
+    fn store(&self, swap_id: &str, data: &ExtendedVtxoSwapStorageData) -> StorageFuture<'_, ()> {
+        let swap_id = swap_id.to_string();
+        let data = data.clone();
+        Box::pin(async move {
+            let mut storage = self.data.write().unwrap();
+            storage.insert(swap_id, data);
+            Ok(())
+        })
+    }
+
+    fn delete(&self, swap_id: &str) -> StorageFuture<'_, ()> {
+        let swap_id = swap_id.to_string();
+        Box::pin(async move {
+            let mut data = self.data.write().unwrap();
+            data.remove(&swap_id);
+            Ok(())
+        })
+    }
+
+    fn list(&self) -> StorageFuture<'_, Vec<String>> {
+        Box::pin(async move {
+            let data = self.data.read().unwrap();
+            Ok(data.keys().cloned().collect())
+        })
+    }
+
+    fn get_all(&self) -> StorageFuture<'_, Vec<ExtendedVtxoSwapStorageData>> {
+        Box::pin(async move {
+            let data = self.data.read().unwrap();
+            Ok(data.values().cloned().collect())
+        })
+    }
+}
+
 #[tokio::test]
 #[ignore] // Run manually with: cargo test --test integration test_create_arkade_to_evm_swap -- --nocapture --ignored
 async fn test_create_arkade_to_evm_swap() {
     let wallet_storage = InMemoryWalletStorage::new();
     let swap_storage = InMemorySwapStorage::new();
+    let vtxo_swap_storage = InMemoryVtxoSwapStorage::new();
 
     let client = Client::new(
         API_URL,
         wallet_storage,
         swap_storage,
+        vtxo_swap_storage,
         Network::Bitcoin,
         "https://arkade.computer".to_string(),
     );
@@ -288,11 +348,13 @@ async fn test_vtxo_swap_e2e_happy_path() {
 
     let wallet_storage = InMemoryWalletStorage::new();
     let swap_storage = InMemorySwapStorage::new();
+    let vtxo_swap_storage = InMemoryVtxoSwapStorage::new();
 
     let client = Client::new(
         API_URL,
         wallet_storage,
         swap_storage,
+        vtxo_swap_storage,
         Network::Regtest,
         ARKADE_URL.to_string(),
     );
@@ -337,14 +399,14 @@ async fn test_vtxo_swap_e2e_happy_path() {
             .get_vtxo_swap(&swap.id.to_string())
             .await
             .expect("Failed to get swap");
-        println!("  Current status: {:?}", updated_swap.status);
+        println!("  Current status: {:?}", updated_swap.response.status);
 
-        if updated_swap.status == VtxoSwapStatus::ServerFunded {
+        if updated_swap.response.status == VtxoSwapStatus::ServerFunded {
             println!("  Server funded! Ready to claim.");
             break;
         }
 
-        if updated_swap.status == VtxoSwapStatus::Expired {
+        if updated_swap.response.status == VtxoSwapStatus::Expired {
             panic!("Swap expired!");
         }
 
@@ -371,9 +433,9 @@ async fn test_vtxo_swap_e2e_happy_path() {
             .get_vtxo_swap(&swap.id.to_string())
             .await
             .expect("Failed to get swap");
-        println!("  Current status: {:?}", final_swap.status);
+        println!("  Current status: {:?}", final_swap.response.status);
 
-        if final_swap.status == VtxoSwapStatus::ServerRedeemed {
+        if final_swap.response.status == VtxoSwapStatus::ServerRedeemed {
             println!("\n✅ VTXO swap completed successfully!");
             break;
         }
@@ -401,11 +463,13 @@ async fn test_vtxo_swap_client_refund() {
 
     let wallet_storage = InMemoryWalletStorage::new();
     let swap_storage = InMemorySwapStorage::new();
+    let vtxo_swap_storage = InMemoryVtxoSwapStorage::new();
 
     let client = Client::new(
         API_URL,
         wallet_storage,
         swap_storage,
+        vtxo_swap_storage,
         Network::Regtest,
         ARKADE_URL.to_string(),
     );
@@ -419,7 +483,7 @@ async fn test_vtxo_swap_client_refund() {
         vec!["3e1de0735ca02f1223b753b11c3c531e2da19a0e516bf02b1dcec0e93ec366e7:0".to_string()];
 
     println!("Step 1: Creating VTXO swap...");
-    let (swap, swap_params) = client
+    let (swap, _) = client
         .create_vtxo_swap(vtxos)
         .await
         .expect("Failed to create swap");
@@ -450,14 +514,14 @@ async fn test_vtxo_swap_client_refund() {
             .get_vtxo_swap(&swap.id.to_string())
             .await
             .expect("Failed to get swap");
-        println!("  Current status: {:?}", updated_swap.status);
+        println!("  Current status: {:?}", updated_swap.response.status);
 
-        if updated_swap.status == VtxoSwapStatus::ServerFunded {
+        if updated_swap.response.status == VtxoSwapStatus::ServerFunded {
             println!("  Server funded! Ready to claim.");
             break;
         }
 
-        if updated_swap.status == VtxoSwapStatus::Expired {
+        if updated_swap.response.status == VtxoSwapStatus::Expired {
             panic!("Swap expired!");
         }
 
@@ -473,7 +537,7 @@ async fn test_vtxo_swap_client_refund() {
 
     loop {
         match client
-            .refund_vtxo_swap(&swap, swap_params.clone(), refund_address)
+            .refund_vtxo_swap(&swap.id.to_string(), refund_address)
             .await
         {
             Ok(txid) => {

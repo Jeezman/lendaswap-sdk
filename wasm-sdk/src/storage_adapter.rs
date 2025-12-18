@@ -1,12 +1,12 @@
 //! JavaScript storage adapter for WASM.
 //!
 //! This module provides the bridge between JavaScript storage implementations
-//! and the Rust WalletStorage/SwapStorage traits. It allows TypeScript code to provide
+//! and the Rust WalletStorage/SwapStorage/VtxoSwapStorage traits. It allows TypeScript code to provide
 //! storage callbacks that are used by the core SDK.
 
 use js_sys::{Function, Promise};
-use lendaswap_core::ExtendedSwapStorageData;
-use lendaswap_core::storage::{StorageFuture, SwapStorage, WalletStorage};
+use lendaswap_core::storage::{StorageFuture, SwapStorage, VtxoSwapStorage, WalletStorage};
+use lendaswap_core::{ExtendedSwapStorageData, ExtendedVtxoSwapStorageData};
 use serde::Serialize;
 use std::cell::RefCell;
 use wasm_bindgen::prelude::*;
@@ -438,6 +438,223 @@ impl SwapStorage for JsSwapStorageAdapter {
                     array.length()
                 );
             }
+
+            Ok(swaps)
+        })
+    }
+}
+
+/// JavaScript VTXO swap storage provider passed from TypeScript.
+///
+/// This struct wraps JavaScript callback functions that implement
+/// typed VTXO swap storage operations. Each function should return a Promise.
+///
+/// # Example (TypeScript with Dexie)
+///
+/// ```typescript
+/// import Dexie from 'dexie';
+///
+/// const db = new Dexie('lendaswap');
+/// db.version(1).stores({ vtxoSwaps: 'id' });
+///
+/// const vtxoSwapStorage = new JsVtxoSwapStorageProvider(
+///     async (swapId) => await db.vtxoSwaps.get(swapId) ?? null,
+///     async (swapId, data) => { await db.vtxoSwaps.put({ id: swapId, ...data }); },
+///     async (swapId) => { await db.vtxoSwaps.delete(swapId); },
+///     async () => await db.vtxoSwaps.toCollection().primaryKeys(),
+///     async () => await db.vtxoSwaps.toArray()
+/// );
+/// ```
+#[wasm_bindgen]
+pub struct JsVtxoSwapStorageProvider {
+    get_fn: Function,
+    store_fn: Function,
+    delete_fn: Function,
+    list_fn: Function,
+    get_all_fn: Function,
+}
+
+#[wasm_bindgen]
+impl JsVtxoSwapStorageProvider {
+    /// Create a new JsVtxoSwapStorageProvider from JavaScript callbacks.
+    ///
+    /// # Arguments
+    /// * `get_fn` - Function: `(swapId: string) => Promise<ExtendedVtxoSwapStorageData | null>`
+    /// * `store_fn` - Function: `(swapId: string, data: ExtendedVtxoSwapStorageData) => Promise<void>`
+    /// * `delete_fn` - Function: `(swapId: string) => Promise<void>`
+    /// * `list_fn` - Function: `() => Promise<string[]>`
+    /// * `get_all_fn` - Function: `() => Promise<ExtendedVtxoSwapStorageData[]>`
+    #[wasm_bindgen(constructor)]
+    pub fn new(
+        get_fn: Function,
+        store_fn: Function,
+        delete_fn: Function,
+        list_fn: Function,
+        get_all_fn: Function,
+    ) -> Self {
+        Self {
+            get_fn,
+            store_fn,
+            delete_fn,
+            list_fn,
+            get_all_fn,
+        }
+    }
+}
+
+/// Internal adapter that implements the core VtxoSwapStorage trait using JS callbacks.
+///
+/// This adapter converts JavaScript Promise-based callbacks into Rust async
+/// operations that implement the VtxoSwapStorage trait.
+pub struct JsVtxoSwapStorageAdapter {
+    provider: JsVtxoSwapStorageProvider,
+}
+
+impl JsVtxoSwapStorageAdapter {
+    /// Create a new adapter wrapping a JsVtxoSwapStorageProvider.
+    pub fn new(provider: JsVtxoSwapStorageProvider) -> Self {
+        Self { provider }
+    }
+}
+
+impl VtxoSwapStorage for JsVtxoSwapStorageAdapter {
+    fn get(&self, swap_id: &str) -> StorageFuture<'_, Option<ExtendedVtxoSwapStorageData>> {
+        let swap_id = JsValue::from_str(swap_id);
+        let result = self.provider.get_fn.call1(&JsValue::NULL, &swap_id);
+
+        Box::pin(async move {
+            let promise: Promise = result
+                .map_err(|e| {
+                    lendaswap_core::Error::Storage(format!("Failed to call get: {:?}", e))
+                })?
+                .dyn_into()
+                .map_err(|_| lendaswap_core::Error::Storage("Expected Promise from get".into()))?;
+
+            let value = JsFuture::from(promise).await.map_err(|e| {
+                lendaswap_core::Error::Storage(format!("get Promise rejected: {:?}", e))
+            })?;
+
+            if value.is_null() || value.is_undefined() {
+                Ok(None)
+            } else {
+                let data: ExtendedVtxoSwapStorageData = serde_wasm_bindgen::from_value(value)
+                    .map_err(|e| {
+                        lendaswap_core::Error::Storage(format!(
+                            "Failed to deserialize VTXO swap data: {:?}",
+                            e
+                        ))
+                    })?;
+                Ok(Some(data))
+            }
+        })
+    }
+
+    fn store(&self, swap_id: &str, data: &ExtendedVtxoSwapStorageData) -> StorageFuture<'_, ()> {
+        let swap_id = JsValue::from_str(swap_id);
+        let data_js = serde_wasm_bindgen::to_value(data);
+
+        Box::pin(async move {
+            let data_js = data_js.map_err(|e| {
+                lendaswap_core::Error::Storage(format!(
+                    "Failed to serialize VTXO swap data: {:?}",
+                    e
+                ))
+            })?;
+
+            let result = self
+                .provider
+                .store_fn
+                .call2(&JsValue::NULL, &swap_id, &data_js);
+
+            let promise: Promise = result
+                .map_err(|e| {
+                    lendaswap_core::Error::Storage(format!("Failed to call store: {:?}", e))
+                })?
+                .dyn_into()
+                .map_err(|_| {
+                    lendaswap_core::Error::Storage("Expected Promise from store".into())
+                })?;
+
+            JsFuture::from(promise).await.map_err(|e| {
+                lendaswap_core::Error::Storage(format!("store Promise rejected: {:?}", e))
+            })?;
+
+            Ok(())
+        })
+    }
+
+    fn delete(&self, swap_id: &str) -> StorageFuture<'_, ()> {
+        let swap_id = JsValue::from_str(swap_id);
+        let result = self.provider.delete_fn.call1(&JsValue::NULL, &swap_id);
+
+        Box::pin(async move {
+            let promise: Promise = result
+                .map_err(|e| {
+                    lendaswap_core::Error::Storage(format!("Failed to call delete: {:?}", e))
+                })?
+                .dyn_into()
+                .map_err(|_| {
+                    lendaswap_core::Error::Storage("Expected Promise from delete".into())
+                })?;
+
+            JsFuture::from(promise).await.map_err(|e| {
+                lendaswap_core::Error::Storage(format!("delete Promise rejected: {:?}", e))
+            })?;
+
+            Ok(())
+        })
+    }
+
+    fn list(&self) -> StorageFuture<'_, Vec<String>> {
+        let result = self.provider.list_fn.call0(&JsValue::NULL);
+
+        Box::pin(async move {
+            let promise: Promise = result
+                .map_err(|e| {
+                    lendaswap_core::Error::Storage(format!("Failed to call list: {:?}", e))
+                })?
+                .dyn_into()
+                .map_err(|_| lendaswap_core::Error::Storage("Expected Promise from list".into()))?;
+
+            let value = JsFuture::from(promise).await.map_err(|e| {
+                lendaswap_core::Error::Storage(format!("list Promise rejected: {:?}", e))
+            })?;
+
+            let ids: Vec<String> = serde_wasm_bindgen::from_value(value).map_err(|e| {
+                lendaswap_core::Error::Storage(format!(
+                    "Failed to deserialize VTXO swap IDs: {:?}",
+                    e
+                ))
+            })?;
+
+            Ok(ids)
+        })
+    }
+
+    fn get_all(&self) -> StorageFuture<'_, Vec<ExtendedVtxoSwapStorageData>> {
+        let result = self.provider.get_all_fn.call0(&JsValue::NULL);
+
+        Box::pin(async move {
+            let promise: Promise = result
+                .map_err(|e| {
+                    lendaswap_core::Error::Storage(format!("Failed to call get_all: {:?}", e))
+                })?
+                .dyn_into()
+                .map_err(|_| {
+                    lendaswap_core::Error::Storage("Expected Promise from get_all".into())
+                })?;
+
+            let value = JsFuture::from(promise).await.map_err(|e| {
+                lendaswap_core::Error::Storage(format!("get_all Promise rejected: {:?}", e))
+            })?;
+
+            let swaps: Vec<ExtendedVtxoSwapStorageData> = serde_wasm_bindgen::from_value(value)
+                .map_err(|e| {
+                    lendaswap_core::Error::Storage(format!(
+                        "Failed to deserialize VTXO swaps: {:?}",
+                        e
+                    ))
+                })?;
 
             Ok(swaps)
         })

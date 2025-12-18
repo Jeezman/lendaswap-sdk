@@ -7,7 +7,7 @@
 //! - `WalletStorage`: Typed storage for wallet data (mnemonic, key index)
 //! - `SwapStorage`: Typed storage specifically for swap data
 
-use crate::client::ExtendedSwapStorageData;
+use crate::client::{ExtendedSwapStorageData, ExtendedVtxoSwapStorageData};
 use crate::error::Result;
 use std::future::Future;
 use std::pin::Pin;
@@ -165,6 +165,71 @@ pub trait SwapStorage: Send + Sync {
 
     /// Get all stored swaps.
     fn get_all(&self) -> StorageFuture<'_, Vec<ExtendedSwapStorageData>>;
+}
+
+/// Typed storage trait for swap data.
+///
+/// This trait provides an opinionated API for storing and retrieving swap data.
+/// Unlike the generic `Storage` trait, this works directly with `ExtendedSwapStorageData`
+/// objects, allowing implementations to store them efficiently (e.g., as objects in IndexedDB).
+///
+/// # Example Implementation (TypeScript/Dexie)
+///
+/// ```typescript
+/// // In TypeScript, implement this as callbacks passed to the WASM SDK:
+/// const swapStorage = new JsSwapStorageProvider(
+///     async (swapId) => await db.swaps.get(swapId),           // get
+///     async (swapId, data) => await db.swaps.put(data, swapId), // store
+///     async (swapId) => await db.swaps.delete(swapId),        // delete
+///     async () => await db.swaps.toCollection().primaryKeys() // list
+/// );
+/// ```
+#[cfg(target_arch = "wasm32")]
+pub trait VtxoSwapStorage {
+    /// Get swap data by swap ID.
+    ///
+    /// Returns `Ok(None)` if the swap doesn't exist.
+    fn get(&self, swap_id: &str) -> StorageFuture<'_, Option<ExtendedVtxoSwapStorageData>>;
+
+    /// Store swap data.
+    ///
+    /// Overwrites any existing swap with the same ID.
+    fn store(&self, swap_id: &str, data: &ExtendedVtxoSwapStorageData) -> StorageFuture<'_, ()>;
+
+    /// Delete swap data by swap ID.
+    ///
+    /// Does nothing if the swap doesn't exist.
+    fn delete(&self, swap_id: &str) -> StorageFuture<'_, ()>;
+
+    /// List all stored swap IDs.
+    fn list(&self) -> StorageFuture<'_, Vec<String>>;
+
+    /// Get all stored swaps.
+    fn get_all(&self) -> StorageFuture<'_, Vec<ExtendedVtxoSwapStorageData>>;
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub trait VtxoSwapStorage: Send + Sync {
+    /// Get swap data by swap ID.
+    ///
+    /// Returns `Ok(None)` if the swap doesn't exist.
+    fn get(&self, swap_id: &str) -> StorageFuture<'_, Option<ExtendedVtxoSwapStorageData>>;
+
+    /// Store swap data.
+    ///
+    /// Overwrites any existing swap with the same ID.
+    fn store(&self, swap_id: &str, data: &ExtendedVtxoSwapStorageData) -> StorageFuture<'_, ()>;
+
+    /// Delete swap data by swap ID.
+    ///
+    /// Does nothing if the swap doesn't exist.
+    fn delete(&self, swap_id: &str) -> StorageFuture<'_, ()>;
+
+    /// List all stored swap IDs.
+    fn list(&self) -> StorageFuture<'_, Vec<String>>;
+
+    /// Get all stored swaps.
+    fn get_all(&self) -> StorageFuture<'_, Vec<ExtendedVtxoSwapStorageData>>;
 }
 
 /// In-memory wallet storage implementation for testing.

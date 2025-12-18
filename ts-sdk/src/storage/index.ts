@@ -20,6 +20,11 @@ export {
   createDexieSwapStorage,
   DexieSwapStorageProvider,
 } from "./dexieSwapStorage.js";
+// VTXO Swap storage (typed storage for VTXO swap data using Dexie/IndexedDB)
+export {
+  createDexieVtxoSwapStorage,
+  DexieVtxoSwapStorageProvider,
+} from "./dexieVtxoSwapStorage.js";
 // Wallet storage (typed storage for wallet data using Dexie/IndexedDB)
 export {
   createDexieWalletStorage,
