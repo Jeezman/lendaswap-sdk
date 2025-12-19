@@ -65,19 +65,26 @@ impl WalletStorage for InMemoryWalletStorage {
 
 /// In-memory swap storage implementation for integration tests.
 #[derive(Default)]
-pub struct InMemorySwapStorage {
-    data: RwLock<HashMap<String, ExtendedSwapStorageData>>,
+pub struct InMemorySwapStorage<T> {
+    data: RwLock<HashMap<String, T>>,
 }
 
-impl InMemorySwapStorage {
-    pub fn new() -> Self {
+impl InMemorySwapStorage<ExtendedVtxoSwapStorageData> {
+    pub fn new() -> InMemorySwapStorage<ExtendedVtxoSwapStorageData> {
+        Self {
+            data: RwLock::new(HashMap::new()),
+        }
+    }
+}
+impl InMemorySwapStorage<ExtendedSwapStorageData> {
+    pub fn new() -> InMemorySwapStorage<ExtendedSwapStorageData> {
         Self {
             data: RwLock::new(HashMap::new()),
         }
     }
 }
 
-impl SwapStorage for InMemorySwapStorage {
+impl SwapStorage for InMemorySwapStorage<ExtendedSwapStorageData> {
     fn get(&self, swap_id: &str) -> StorageFuture<'_, Option<ExtendedSwapStorageData>> {
         let swap_id = swap_id.to_string();
         Box::pin(async move {
@@ -120,20 +127,7 @@ impl SwapStorage for InMemorySwapStorage {
     }
 }
 
-#[derive(Default)]
-pub struct InMemoryVtxoSwapStorage {
-    data: RwLock<HashMap<String, ExtendedVtxoSwapStorageData>>,
-}
-
-impl InMemoryVtxoSwapStorage {
-    pub fn new() -> Self {
-        Self {
-            data: RwLock::new(HashMap::new()),
-        }
-    }
-}
-
-impl VtxoSwapStorage for InMemoryVtxoSwapStorage {
+impl VtxoSwapStorage for InMemorySwapStorage<ExtendedVtxoSwapStorageData> {
     fn get(&self, swap_id: &str) -> StorageFuture<'_, Option<ExtendedVtxoSwapStorageData>> {
         let swap_id = swap_id.to_string();
         Box::pin(async move {
@@ -180,8 +174,8 @@ impl VtxoSwapStorage for InMemoryVtxoSwapStorage {
 #[ignore] // Run manually with: cargo test --test integration test_create_arkade_to_evm_swap -- --nocapture --ignored
 async fn test_create_arkade_to_evm_swap() {
     let wallet_storage = InMemoryWalletStorage::new();
-    let swap_storage = InMemorySwapStorage::new();
-    let vtxo_swap_storage = InMemoryVtxoSwapStorage::new();
+    let swap_storage = InMemorySwapStorage::<ExtendedSwapStorageData>::new();
+    let vtxo_swap_storage = InMemorySwapStorage::<ExtendedVtxoSwapStorageData>::new();
 
     let client = Client::new(
         API_URL,
@@ -347,8 +341,9 @@ async fn test_vtxo_swap_e2e_happy_path() {
     use lendaswap_core::api::VtxoSwapStatus;
 
     let wallet_storage = InMemoryWalletStorage::new();
-    let swap_storage = InMemorySwapStorage::new();
-    let vtxo_swap_storage = InMemoryVtxoSwapStorage::new();
+
+    let swap_storage = InMemorySwapStorage::<ExtendedSwapStorageData>::new();
+    let vtxo_swap_storage = InMemorySwapStorage::<ExtendedVtxoSwapStorageData>::new();
 
     let client = Client::new(
         API_URL,
@@ -462,8 +457,8 @@ async fn test_vtxo_swap_client_refund() {
     use lendaswap_core::api::VtxoSwapStatus;
 
     let wallet_storage = InMemoryWalletStorage::new();
-    let swap_storage = InMemorySwapStorage::new();
-    let vtxo_swap_storage = InMemoryVtxoSwapStorage::new();
+    let swap_storage = InMemorySwapStorage::<ExtendedSwapStorageData>::new();
+    let vtxo_swap_storage = InMemorySwapStorage::<ExtendedVtxoSwapStorageData>::new();
 
     let client = Client::new(
         API_URL,
