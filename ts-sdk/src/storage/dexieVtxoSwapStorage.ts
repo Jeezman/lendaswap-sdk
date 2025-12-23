@@ -6,11 +6,57 @@
  */
 
 import Dexie, { type Table } from "dexie";
-import type { ExtendedVtxoSwapStorageDataPlain } from "../api.js";
+import type { ExtendedVtxoSwapStorageData } from "../api.js";
 
 /**
- * Stored VTXO swap record in IndexedDB.
- * Extends ExtendedVtxoSwapStorageDataPlain with an id field for Dexie's primary key.
+ * Plain interface for VtxoSwapResponse (matches serde serialization).
+ */
+interface VtxoSwapResponsePlain {
+  id: string;
+  status: string;
+  created_at: string;
+  client_vhtlc_address: string;
+  client_fund_amount_sats: bigint;
+  client_pk: string;
+  client_locktime: bigint;
+  client_unilateral_claim_delay: bigint;
+  client_unilateral_refund_delay: bigint;
+  client_unilateral_refund_without_receiver_delay: bigint;
+  server_vhtlc_address: string;
+  server_fund_amount_sats: bigint;
+  server_pk: string;
+  server_locktime: bigint;
+  server_unilateral_claim_delay: bigint;
+  server_unilateral_refund_delay: bigint;
+  server_unilateral_refund_without_receiver_delay: bigint;
+  arkade_server_pk: string;
+  preimage_hash: string;
+  fee_sats: bigint;
+  network: string;
+}
+
+/**
+ * Plain interface for SwapParams (matches serde serialization).
+ */
+interface SwapParamsPlain {
+  own_sk: string;
+  own_pk: string;
+  preimage: string;
+  preimage_hash: string;
+  user_id: string;
+  key_index: number;
+}
+
+/**
+ * Plain interface for ExtendedVtxoSwapStorageData (matches serde serialization).
+ */
+interface ExtendedVtxoSwapStorageDataPlain {
+  response: VtxoSwapResponsePlain;
+  swap_params: SwapParamsPlain;
+}
+
+/**
+ * Stored VTXO swap record in IndexedDB with primary key.
  */
 interface VtxoSwapRecord extends ExtendedVtxoSwapStorageDataPlain {
   id: string;
@@ -72,14 +118,14 @@ export class DexieVtxoSwapStorageProvider {
    * @param swapId - The swap ID
    * @returns The VTXO swap data, or null if not found
    */
-  async get(swapId: string): Promise<ExtendedVtxoSwapStorageDataPlain | null> {
+  async get(swapId: string): Promise<ExtendedVtxoSwapStorageData | null> {
     const record = await this.db.vtxoSwaps.get(swapId);
     if (!record) {
       return null;
     }
-    // Remove the id field before returning (it's not part of ExtendedVtxoSwapStorageDataPlain)
+    // Remove the id field before returning
     const { id: _, ...data } = record;
-    return data;
+    return data as ExtendedVtxoSwapStorageData;
   }
 
   /**
@@ -90,9 +136,15 @@ export class DexieVtxoSwapStorageProvider {
    */
   async store(
     swapId: string,
-    data: ExtendedVtxoSwapStorageDataPlain,
+    data: ExtendedVtxoSwapStorageData,
   ): Promise<void> {
-    await this.db.vtxoSwaps.put({ id: swapId, ...data });
+    // Data may be a WASM class or plain object - both have same property access
+    const record: VtxoSwapRecord = {
+      id: swapId,
+      response: data.response as VtxoSwapResponsePlain,
+      swap_params: data.swap_params as SwapParamsPlain,
+    };
+    await this.db.vtxoSwaps.put(record);
   }
 
   /**
@@ -125,10 +177,12 @@ export class DexieVtxoSwapStorageProvider {
    *
    * @returns Array of all VTXO swap data
    */
-  async getAll(): Promise<ExtendedVtxoSwapStorageDataPlain[]> {
+  async getAll(): Promise<ExtendedVtxoSwapStorageData[]> {
     const records = await this.db.vtxoSwaps.toArray();
     // Remove the id field from each record
-    return records.map(({ id: _, ...data }) => data);
+    return records.map(
+      ({ id: _, ...data }) => data as ExtendedVtxoSwapStorageData,
+    );
   }
 
   /**

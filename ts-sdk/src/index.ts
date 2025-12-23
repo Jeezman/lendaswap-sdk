@@ -38,14 +38,11 @@
  * @packageDocumentation
  */
 
+export type { NetworkInput } from "./api.js";
 // Re-export WASM types that are commonly used
 // Storage provider types for Client.create()
-export type {
-  ExtendedSwapStorageProvider,
-  QuoteResponse,
-  Version,
-} from "./api.js";
 // API client
+// Re-export WASM types and API types
 export {
   type AssetPair,
   type BtcToEvmSwapResponse,
@@ -57,31 +54,31 @@ export {
   type EvmToBtcSwapResponse,
   type EvmToLightningSwapRequest,
   type ExtendedSwapStorageData,
+  type ExtendedSwapStorageDataWasm,
+  type ExtendedSwapStorageProvider,
   ExtendedVtxoSwapStorageData,
-  type ExtendedVtxoSwapStorageDataPlain,
   type GelatoSubmitRequest,
   type GelatoSubmitResponse,
   type GetSwapResponse,
   getLogLevel,
   type LogLevel,
+  type Network,
   type QuoteRequest,
-  type QuoteResponseInfo,
+  QuoteResponse,
   type RecoveredSwap,
   type RecoverSwapsResponse,
-  type SwapCommonFields,
-  type SwapParamsData,
   type SwapRequest,
-  type SwapStatus,
+  SwapStatus,
   type SwapStorageProvider,
+  type SwapType,
   setLogLevel,
   TokenId,
   type TokenIdString,
   type TokenInfo,
-  type VersionInfo,
+  Version,
+  VhtlcAmounts,
   VtxoSwapParams,
   VtxoSwapResponse,
-  type VtxoSwapResponseData,
-  type VtxoSwapStatus,
   type VtxoSwapStorageProvider,
   type WalletStorageProvider,
 } from "./api.js";
@@ -105,7 +102,7 @@ export {
   DexieWalletStorageProvider,
   STORAGE_KEYS,
 } from "./storage/index.js";
-export type { Network, SwapData, SwapParams, VhtlcAmounts } from "./types.js";
+export type { SwapData, SwapParams } from "./types.js";
 export {
   type GetUsdPriceOptions,
   getCoinGeckoId,

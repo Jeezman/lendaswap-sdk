@@ -25,6 +25,77 @@ pub enum Chain {
     Ethereum,
 }
 
+/// Bitcoin network type.
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Network {
+    Bitcoin,
+    Testnet,
+    Regtest,
+    Mutinynet,
+}
+
+impl From<&str> for Network {
+    fn from(s: &str) -> Self {
+        match s {
+            "bitcoin" => Network::Bitcoin,
+            "testnet" => Network::Testnet,
+            "regtest" => Network::Regtest,
+            "mutinynet" => Network::Mutinynet,
+            _ => Network::Bitcoin, // default fallback
+        }
+    }
+}
+
+/// Swap status for BTC/EVM swaps.
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SwapStatus {
+    Pending,
+    ClientFunded,
+    ClientRefunded,
+    ServerFunded,
+    ClientRedeeming,
+    ClientRedeemed,
+    ServerRedeemed,
+    ClientFundedServerRefunded,
+    ClientRefundedServerFunded,
+    ClientRefundedServerRefunded,
+    Expired,
+    ClientInvalidFunded,
+    ClientFundedTooLate,
+    ClientRedeemedAndClientRefunded,
+}
+
+impl From<core_api::SwapStatus> for SwapStatus {
+    fn from(s: core_api::SwapStatus) -> Self {
+        match s {
+            core_api::SwapStatus::Pending => SwapStatus::Pending,
+            core_api::SwapStatus::ClientFunded => SwapStatus::ClientFunded,
+            core_api::SwapStatus::ClientRefunded => SwapStatus::ClientRefunded,
+            core_api::SwapStatus::ServerFunded => SwapStatus::ServerFunded,
+            core_api::SwapStatus::ClientRedeeming => SwapStatus::ClientRedeeming,
+            core_api::SwapStatus::ClientRedeemed => SwapStatus::ClientRedeemed,
+            core_api::SwapStatus::ServerRedeemed => SwapStatus::ServerRedeemed,
+            core_api::SwapStatus::ClientFundedServerRefunded => {
+                SwapStatus::ClientFundedServerRefunded
+            }
+            core_api::SwapStatus::ClientRefundedServerFunded => {
+                SwapStatus::ClientRefundedServerFunded
+            }
+            core_api::SwapStatus::ClientRefundedServerRefunded => {
+                SwapStatus::ClientRefundedServerRefunded
+            }
+            core_api::SwapStatus::Expired => SwapStatus::Expired,
+            core_api::SwapStatus::ClientInvalidFunded => SwapStatus::ClientInvalidFunded,
+            core_api::SwapStatus::ClientFundedTooLate => SwapStatus::ClientFundedTooLate,
+            core_api::SwapStatus::ClientRedeemedAndClientRefunded => {
+                SwapStatus::ClientRedeemedAndClientRefunded
+            }
+        }
+    }
+}
+
 impl From<core_api::Chain> for Chain {
     fn from(c: core_api::Chain) -> Self {
         match c {
@@ -40,7 +111,7 @@ impl From<core_api::Chain> for Chain {
 #[wasm_bindgen(getter_with_clone)]
 #[derive(Debug, Clone)]
 pub struct TokenInfo {
-    pub token_id: String,
+    pub token_id: TokenId,
     pub symbol: String,
     pub chain: Chain,
     pub name: String,
@@ -50,7 +121,7 @@ pub struct TokenInfo {
 impl From<core_api::TokenInfo> for TokenInfo {
     fn from(t: core_api::TokenInfo) -> Self {
         TokenInfo {
-            token_id: t.token_id.to_string(),
+            token_id: TokenId(t.token_id),
             symbol: t.symbol,
             chain: t.chain.into(),
             name: t.name,
@@ -220,6 +291,164 @@ impl From<core_api::VtxoSwapResponse> for VtxoSwapResponse {
     }
 }
 
+/// BTC to EVM swap response.
+/// Fields from SwapCommonFields are flattened.
+#[wasm_bindgen(getter_with_clone)]
+#[derive(Debug, Clone)]
+pub struct BtcToEvmSwapResponse {
+    // Common fields (flattened)
+    pub id: String,
+    pub status: SwapStatus,
+    pub hash_lock: String,
+    pub fee_sats: i64,
+    pub asset_amount: f64,
+    pub sender_pk: String,
+    pub receiver_pk: String,
+    pub server_pk: String,
+    pub refund_locktime: u32,
+    pub unilateral_claim_delay: i64,
+    pub unilateral_refund_delay: i64,
+    pub unilateral_refund_without_receiver_delay: i64,
+    pub network: Network,
+    pub created_at: String,
+    // BTC to EVM specific fields
+    pub htlc_address_evm: String,
+    pub htlc_address_arkade: String,
+    pub user_address_evm: String,
+    pub ln_invoice: String,
+    pub sats_receive: i64,
+    pub source_token: TokenId,
+    pub target_token: TokenId,
+    pub bitcoin_htlc_claim_txid: Option<String>,
+    pub bitcoin_htlc_fund_txid: Option<String>,
+    pub evm_htlc_claim_txid: Option<String>,
+    pub evm_htlc_fund_txid: Option<String>,
+}
+
+impl From<core_api::BtcToEvmSwapResponse> for BtcToEvmSwapResponse {
+    fn from(r: core_api::BtcToEvmSwapResponse) -> Self {
+        BtcToEvmSwapResponse {
+            id: r.common.id.to_string(),
+            status: r.common.status.into(),
+            hash_lock: r.common.hash_lock,
+            fee_sats: r.common.fee_sats,
+            asset_amount: r.common.asset_amount,
+            sender_pk: r.common.sender_pk,
+            receiver_pk: r.common.receiver_pk,
+            server_pk: r.common.server_pk,
+            refund_locktime: r.common.refund_locktime,
+            unilateral_claim_delay: r.common.unilateral_claim_delay,
+            unilateral_refund_delay: r.common.unilateral_refund_delay,
+            unilateral_refund_without_receiver_delay: r
+                .common
+                .unilateral_refund_without_receiver_delay,
+            network: r.common.network.as_str().into(),
+            created_at: r
+                .common
+                .created_at
+                .format(&time::format_description::well_known::Rfc3339)
+                .unwrap_or_default(),
+            htlc_address_evm: r.htlc_address_evm,
+            htlc_address_arkade: r.htlc_address_arkade,
+            user_address_evm: r.user_address_evm,
+            ln_invoice: r.ln_invoice,
+            sats_receive: r.sats_receive,
+            source_token: TokenId(r.source_token),
+            target_token: TokenId(r.target_token),
+            bitcoin_htlc_claim_txid: r.bitcoin_htlc_claim_txid,
+            bitcoin_htlc_fund_txid: r.bitcoin_htlc_fund_txid,
+            evm_htlc_claim_txid: r.evm_htlc_claim_txid,
+            evm_htlc_fund_txid: r.evm_htlc_fund_txid,
+        }
+    }
+}
+
+/// EVM to BTC swap response.
+/// Fields from SwapCommonFields are flattened.
+#[wasm_bindgen(getter_with_clone)]
+#[derive(Debug, Clone)]
+pub struct EvmToBtcSwapResponse {
+    // Common fields (flattened)
+    pub id: String,
+    pub status: SwapStatus,
+    pub hash_lock: String,
+    pub fee_sats: i64,
+    pub asset_amount: f64,
+    pub sender_pk: String,
+    pub receiver_pk: String,
+    pub server_pk: String,
+    pub refund_locktime: u32,
+    pub unilateral_claim_delay: i64,
+    pub unilateral_refund_delay: i64,
+    pub unilateral_refund_without_receiver_delay: i64,
+    pub network: Network,
+    pub created_at: String,
+    // EVM to BTC specific fields
+    pub htlc_address_evm: String,
+    pub htlc_address_arkade: String,
+    pub user_address_evm: String,
+    pub user_address_arkade: Option<String>,
+    pub ln_invoice: String,
+    pub source_token: TokenId,
+    pub target_token: TokenId,
+    pub sats_receive: i64,
+    pub bitcoin_htlc_fund_txid: Option<String>,
+    pub bitcoin_htlc_claim_txid: Option<String>,
+    pub evm_htlc_claim_txid: Option<String>,
+    pub evm_htlc_fund_txid: Option<String>,
+    pub create_swap_tx: Option<String>,
+    pub approve_tx: Option<String>,
+    pub gelato_forwarder_address: Option<String>,
+    pub gelato_user_nonce: Option<String>,
+    pub gelato_user_deadline: Option<String>,
+    pub source_token_address: String,
+}
+
+impl From<core_api::EvmToBtcSwapResponse> for EvmToBtcSwapResponse {
+    fn from(r: core_api::EvmToBtcSwapResponse) -> Self {
+        EvmToBtcSwapResponse {
+            id: r.common.id.to_string(),
+            status: r.common.status.into(),
+            hash_lock: r.common.hash_lock,
+            fee_sats: r.common.fee_sats,
+            asset_amount: r.common.asset_amount,
+            sender_pk: r.common.sender_pk,
+            receiver_pk: r.common.receiver_pk,
+            server_pk: r.common.server_pk,
+            refund_locktime: r.common.refund_locktime,
+            unilateral_claim_delay: r.common.unilateral_claim_delay,
+            unilateral_refund_delay: r.common.unilateral_refund_delay,
+            unilateral_refund_without_receiver_delay: r
+                .common
+                .unilateral_refund_without_receiver_delay,
+            network: r.common.network.as_str().into(),
+            created_at: r
+                .common
+                .created_at
+                .format(&time::format_description::well_known::Rfc3339)
+                .unwrap_or_default(),
+            htlc_address_evm: r.htlc_address_evm,
+            htlc_address_arkade: r.htlc_address_arkade,
+            user_address_evm: r.user_address_evm,
+            user_address_arkade: r.user_address_arkade,
+            ln_invoice: r.ln_invoice,
+            source_token: TokenId(r.source_token),
+            target_token: TokenId(r.target_token),
+            sats_receive: r.sats_receive,
+            bitcoin_htlc_fund_txid: r.bitcoin_htlc_fund_txid,
+            bitcoin_htlc_claim_txid: r.bitcoin_htlc_claim_txid,
+            evm_htlc_claim_txid: r.evm_htlc_claim_txid,
+            evm_htlc_fund_txid: r.evm_htlc_fund_txid,
+            create_swap_tx: r.create_swap_tx,
+            approve_tx: r.approve_tx,
+            gelato_forwarder_address: r.gelato_forwarder_address,
+            gelato_user_nonce: r.gelato_user_nonce,
+            gelato_user_deadline: r.gelato_user_deadline,
+            source_token_address: r.source_token_address,
+        }
+    }
+}
+
 impl TryFrom<&VtxoSwapResponse> for core_api::VtxoSwapResponse {
     type Error = String;
 
@@ -306,6 +535,73 @@ impl From<lendaswap_core::ExtendedVtxoSwapStorageData> for ExtendedVtxoSwapStora
     }
 }
 
+/// Extended swap storage data that combines the API response with client-side swap parameters.
+/// This is the data structure stored for each swap.
+///
+/// Note: The `response` field contains a `GetSwapResponse` enum which cannot be directly
+/// exposed via wasm-bindgen. It is serialized to a plain JS object via serde.
+#[wasm_bindgen]
+#[derive(Debug, Clone)]
+pub struct ExtendedSwapStorageData {
+    response: lendaswap_core::api::GetSwapResponse,
+    swap_params: lendaswap_core::SwapParams,
+}
+
+/// Swap type discriminator.
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SwapType {
+    BtcToEvm,
+    EvmToBtc,
+}
+
+#[wasm_bindgen]
+impl ExtendedSwapStorageData {
+    /// Get the swap type.
+    #[wasm_bindgen(js_name = "swapType", getter)]
+    pub fn swap_type(&self) -> SwapType {
+        match &self.response {
+            core_api::GetSwapResponse::BtcToEvm(_) => SwapType::BtcToEvm,
+            core_api::GetSwapResponse::EvmToBtc(_) => SwapType::EvmToBtc,
+        }
+    }
+
+    /// Get the BTC to EVM swap response, if this is a BTC to EVM swap.
+    /// Returns undefined if this is an EVM to BTC swap.
+    #[wasm_bindgen(js_name = "btcToEvmResponse", getter)]
+    pub fn btc_to_evm_response(&self) -> Option<BtcToEvmSwapResponse> {
+        match &self.response {
+            core_api::GetSwapResponse::BtcToEvm(r) => Some(r.clone().into()),
+            core_api::GetSwapResponse::EvmToBtc(_) => None,
+        }
+    }
+
+    /// Get the EVM to BTC swap response, if this is an EVM to BTC swap.
+    /// Returns undefined if this is a BTC to EVM swap.
+    #[wasm_bindgen(js_name = "evmToBtcResponse", getter)]
+    pub fn evm_to_btc_response(&self) -> Option<EvmToBtcSwapResponse> {
+        match &self.response {
+            core_api::GetSwapResponse::BtcToEvm(_) => None,
+            core_api::GetSwapResponse::EvmToBtc(r) => Some(r.clone().into()),
+        }
+    }
+
+    /// Get the swap parameters.
+    #[wasm_bindgen(js_name = "swapParams", getter)]
+    pub fn swap_params(&self) -> SwapParams {
+        self.swap_params.clone().into()
+    }
+}
+
+impl From<lendaswap_core::ExtendedSwapStorageData> for ExtendedSwapStorageData {
+    fn from(data: lendaswap_core::ExtendedSwapStorageData) -> Self {
+        ExtendedSwapStorageData {
+            response: data.response,
+            swap_params: data.swap_params,
+        }
+    }
+}
+
 /// Lendaswap client.
 #[wasm_bindgen]
 pub struct Client {
@@ -373,7 +669,7 @@ impl Client {
         target_token: String,
         target_chain: String,
         referral_code: Option<String>,
-    ) -> Result<JsValue, JsValue> {
+    ) -> Result<BtcToEvmSwapResponse, JsValue> {
         let target_token = match target_token.as_str() {
             "btc_lightning" => core_api::TokenId::BtcLightning,
             "btc_arkade" => core_api::TokenId::BtcArkade,
@@ -400,7 +696,7 @@ impl Client {
             .await
             .map_err(|e| JsValue::from_str(&format!("{:#}", e)))?;
 
-        to_js_value(&swap)
+        Ok(swap.into())
     }
 
     /// Create an EVM to Arkade swap.
@@ -413,7 +709,7 @@ impl Client {
         source_token: String,
         source_chain: String,
         referral_code: Option<String>,
-    ) -> Result<JsValue, JsValue> {
+    ) -> Result<EvmToBtcSwapResponse, JsValue> {
         let source_token = match source_token.as_str() {
             "btc_lightning" => core_api::TokenId::BtcLightning,
             "btc_arkade" => core_api::TokenId::BtcArkade,
@@ -441,7 +737,7 @@ impl Client {
             .await
             .map_err(|e| JsValue::from_str(&format!("{:#}", e)))?;
 
-        to_js_value(&swap)
+        Ok(swap.into())
     }
 
     /// Create an EVM to Lightning swap.
@@ -453,7 +749,7 @@ impl Client {
         source_token: String,
         source_chain: String,
         referral_code: Option<String>,
-    ) -> Result<JsValue, JsValue> {
+    ) -> Result<EvmToBtcSwapResponse, JsValue> {
         let source_token = match source_token.as_str() {
             "btc_lightning" => core_api::TokenId::BtcLightning,
             "btc_arkade" => core_api::TokenId::BtcArkade,
@@ -477,7 +773,7 @@ impl Client {
             .await
             .map_err(|e| JsValue::from_str(&format!("{:#}", e)))?;
 
-        to_js_value(&swap)
+        Ok(swap.into())
     }
 
     #[wasm_bindgen(js_name = "getAssetPairs")]
@@ -530,31 +826,27 @@ impl Client {
     }
 
     /// Get swap by ID.
-    ///
-    /// This function returns `[ExtendedSwapResponse]`. It's too complex for Wasm to handle.
     #[wasm_bindgen(js_name = "getSwap")]
-    pub async fn get_swap(&self, id: String) -> Result<JsValue, JsValue> {
+    pub async fn get_swap(&self, id: String) -> Result<ExtendedSwapStorageData, JsValue> {
         let swap = self
             .inner
             .get_swap(&id)
             .await
             .map_err(|e| JsValue::from_str(&format!("{:#}", e)))?;
 
-        to_js_value(&swap)
+        Ok(swap.into())
     }
 
     /// Get all swaps.
-    ///
-    /// This function returns `[ExtendedSwapResponse[]]`. It's too complex for Wasm to handle.
     #[wasm_bindgen(js_name = "listAll")]
-    pub async fn list_all(&self) -> Result<JsValue, JsValue> {
-        let swap = self
+    pub async fn list_all(&self) -> Result<Vec<ExtendedSwapStorageData>, JsValue> {
+        let swaps = self
             .inner
             .list_all()
             .await
             .map_err(|e| JsValue::from_str(&format!("{:#}", e)))?;
 
-        to_js_value(&swap)
+        Ok(swaps.into_iter().map(|s| s.into()).collect())
     }
 
     #[wasm_bindgen(js_name = "claimGelato")]
@@ -619,14 +911,14 @@ impl Client {
 
     /// Recover swaps using xpub.
     #[wasm_bindgen(js_name = "recoverSwaps")]
-    pub async fn recover_swaps(&self) -> Result<JsValue, JsValue> {
-        let response = self
+    pub async fn recover_swaps(&self) -> Result<Vec<ExtendedSwapStorageData>, JsValue> {
+        let swaps = self
             .inner
             .recover_swaps()
             .await
             .map_err(|e| JsValue::from_str(&format!("{:#}", e)))?;
 
-        to_js_value(&response)
+        Ok(swaps.into_iter().map(|s| s.into()).collect())
     }
 
     /// Get mnemonic

@@ -162,6 +162,17 @@ pub struct TokenId(core_api::TokenId);
 
 #[wasm_bindgen]
 impl TokenId {
+    /// Static constructor for BTC Lightning token
+    #[wasm_bindgen(js_name = "btcLightning")]
+    pub fn btc_lightning() -> TokenId {
+        TokenId(core_api::TokenId::BtcLightning)
+    }
+
+    /// Static constructor for BTC Arkade token
+    #[wasm_bindgen(js_name = "btcArkade")]
+    pub fn btc_arkade() -> TokenId {
+        TokenId(core_api::TokenId::BtcArkade)
+    }
     #[wasm_bindgen(js_name = "toString")]
     pub fn to_js_string(&self) -> String {
         self.0.to_string()
@@ -175,6 +186,35 @@ impl TokenId {
             // All other tokens use the Coin variant
             other => Ok(TokenId(core_api::TokenId::Coin(other.to_string()))),
         }
+    }
+
+    /// Returns true if this token equals another token
+    #[wasm_bindgen]
+    pub fn equals(&self, other: &TokenId) -> bool {
+        self.0 == other.0
+    }
+
+    /// Returns true if the token is Arkade
+    #[wasm_bindgen(js_name = "isArkade")]
+    pub fn is_arkade(&self) -> bool {
+        self.0 == core_api::TokenId::BtcArkade
+    }
+    /// Returns true if the token is Lightning
+    #[wasm_bindgen(js_name = "isLightning")]
+    pub fn is_lightning(&self) -> bool {
+        self.0 == core_api::TokenId::BtcLightning
+    }
+
+    /// Returns true if the token is either Arkade or Lightning
+    #[wasm_bindgen(js_name = "isBtc")]
+    pub fn is_btc(&self) -> bool {
+        self.is_arkade() || self.is_lightning()
+    }
+
+    /// Returns true if the token is not BTC on Arkade and not BTC on Lightning
+    #[wasm_bindgen(js_name = "isEvmToken")]
+    pub fn is_evm_token(&self) -> bool {
+        !self.is_btc()
     }
 }
 

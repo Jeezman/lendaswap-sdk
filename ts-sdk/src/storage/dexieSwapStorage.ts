@@ -119,10 +119,12 @@ export class DexieSwapStorageProvider {
   /**
    * Get all stored swaps.
    *
-   * @returns Array of all swap data with their IDs
+   * @returns Array of all swap data
    */
-  async getAll(): Promise<SwapRecord[]> {
-    return this.db.swaps.toArray();
+  async getAll(): Promise<ExtendedSwapStorageData[]> {
+    const records = await this.db.swaps.toArray();
+    // Remove the id field from each record
+    return records.map(({ id: _, ...data }) => data);
   }
 
   /**

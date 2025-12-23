@@ -8,35 +8,65 @@
 // Import WASM types for internal use
 // With --target bundler, WASM is automatically initialized via static import
 import {
+  type AssetPair,
+  type BtcToEvmSwapResponse,
   type CreateVtxoSwapResult,
   type EstimateVtxoSwapResponse,
+  type EvmToBtcSwapResponse,
+  type ExtendedSwapStorageData as WasmExtendedSwapStorageData,
   type ExtendedVtxoSwapStorageData,
   JsSwapStorageProvider,
   JsVtxoSwapStorageProvider,
   JsWalletStorageProvider,
+  type QuoteResponse,
   type SwapParams,
+  type TokenInfo,
+  type Version,
+  type VhtlcAmounts,
   type VtxoSwapResponse,
-  type AssetPair as WasmAssetPair,
-  Chain as WasmChain,
   Client as WasmClient,
-  type TokenInfo as WasmTokenInfo,
   getLogLevel as wasmGetLogLevel,
   setLogLevel as wasmSetLogLevel,
 } from "../wasm/lendaswap_wasm_sdk.js";
-import type { VhtlcAmounts } from "./types.js";
 
 // Re-export WASM types directly
 export {
+  AssetPair,
+  BtcToEvmSwapResponse,
+  Chain,
   CreateVtxoSwapResult,
   EstimateVtxoSwapResponse,
+  EvmToBtcSwapResponse,
+  ExtendedSwapStorageData as ExtendedSwapStorageDataWasm,
   ExtendedVtxoSwapStorageData,
+  Network,
   QuoteResponse,
   SwapParams as VtxoSwapParams,
+  SwapStatus,
+  SwapType,
   TokenId,
+  TokenInfo,
   Version,
   VhtlcAmounts,
   VtxoSwapResponse,
 } from "../wasm/lendaswap_wasm_sdk.js";
+
+/**
+ * Convert WASM ExtendedSwapStorageData to plain TypeScript interface.
+ * Returns undefined if the swap response type is unknown.
+ */
+function mapWasmSwapToInterface(
+  wasmSwap: WasmExtendedSwapStorageData,
+): ExtendedSwapStorageData | undefined {
+  const response = wasmSwap.btcToEvmResponse ?? wasmSwap.evmToBtcResponse;
+  if (!response) {
+    return undefined;
+  }
+  return {
+    response,
+    swap_params: wasmSwap.swapParams,
+  };
+}
 
 /**
  * Known token identifiers.
@@ -54,173 +84,18 @@ export type TokenIdString =
   | (string & {});
 
 /**
- * Blockchain network.
- * Uses (string & {}) to allow unknown chains while preserving autocomplete.
- */
-export type Chain =
-  | "Arkade"
-  | "Lightning"
-  | "Polygon"
-  | "Ethereum"
-  | (string & {});
-
-/**
- * Token information with typed token ID.
- */
-export interface TokenInfo {
-  tokenId: TokenIdString;
-  symbol: string;
-  chain: Chain;
-  name: string;
-  decimals: number;
-}
-
-/**
- * Asset pair with typed token info.
- */
-export interface AssetPair {
-  source: TokenInfo;
-  target: TokenInfo;
-}
-
-/**
- * Map WASM Chain enum to our Chain type.
- */
-function mapChain(wasmChain: WasmChain): Chain {
-  switch (wasmChain) {
-    case WasmChain.Arkade:
-      return "Arkade";
-    case WasmChain.Lightning:
-      return "Lightning";
-    case WasmChain.Polygon:
-      return "Polygon";
-    case WasmChain.Ethereum:
-      return "Ethereum";
-    default:
-      return String(wasmChain);
-  }
-}
-
-/**
- * Map WASM TokenInfo to our typed TokenInfo.
- */
-function mapTokenInfo(wasmToken: WasmTokenInfo): TokenInfo {
-  return {
-    tokenId: wasmToken.token_id as TokenIdString,
-    symbol: wasmToken.symbol,
-    chain: mapChain(wasmToken.chain),
-    name: wasmToken.name,
-    decimals: wasmToken.decimals,
-  };
-}
-
-/**
- * Map WASM AssetPair to our typed AssetPair.
- */
-function mapAssetPair(wasmPair: WasmAssetPair): AssetPair {
-  return {
-    source: mapTokenInfo(wasmPair.source),
-    target: mapTokenInfo(wasmPair.target),
-  };
-}
-
-/**
- * Swap status enumeration.
- * These match the server-side status values.
- */
-export type SwapStatus =
-  | "pending"
-  | "clientfunded"
-  | "clientrefunded"
-  | "serverfunded"
-  | "clientredeeming"
-  | "clientredeemed"
-  | "serverredeemed"
-  | "clientfundedserverrefunded"
-  | "clientrefundedserverfunded"
-  | "clientrefundedserverrefunded"
-  | "expired"
-  | "clientinvalidfunded"
-  | "clientfundedtoolate";
-
-/**
- * Common fields shared across all swap directions.
- * These fields are flattened into the response by serde.
- */
-export interface SwapCommonFields {
-  id: string;
-  status: SwapStatus;
-  hash_lock: string;
-  fee_sats: number;
-  asset_amount: number;
-  sender_pk: string;
-  receiver_pk: string;
-  server_pk: string;
-  refund_locktime: number;
-  unilateral_claim_delay: number;
-  unilateral_refund_delay: number;
-  unilateral_refund_without_receiver_delay: number;
-  network: string;
-  created_at: string;
-}
-
-/**
- * BTC to EVM swap response.
- * Note: direction field is added by the SDK, not returned by the server.
- */
-export interface BtcToEvmSwapResponse extends SwapCommonFields {
-  direction: "btc_to_evm";
-  htlc_address_evm: string;
-  htlc_address_arkade: string;
-  user_address_evm: string;
-  ln_invoice: string;
-  sats_receive: number;
-  source_token: TokenIdString;
-  target_token: TokenIdString;
-  bitcoin_htlc_claim_txid: string | null;
-  bitcoin_htlc_fund_txid: string | null;
-  evm_htlc_claim_txid: string | null;
-  evm_htlc_fund_txid: string | null;
-}
-
-/**
- * EVM to BTC swap response.
- * Note: direction field is added by the SDK, not returned by the server.
- */
-export interface EvmToBtcSwapResponse extends SwapCommonFields {
-  direction: "evm_to_btc";
-  htlc_address_evm: string;
-  htlc_address_arkade: string;
-  user_address_evm: string;
-  user_address_arkade: string | null;
-  ln_invoice: string;
-  source_token: TokenIdString;
-  target_token: TokenIdString;
-  sats_receive: number;
-  bitcoin_htlc_fund_txid: string | null;
-  bitcoin_htlc_claim_txid: string | null;
-  evm_htlc_claim_txid: string | null;
-  evm_htlc_fund_txid: string | null;
-  create_swap_tx: string | null;
-  approve_tx: string | null;
-  gelato_forwarder_address: string | null;
-  gelato_user_nonce: string | null;
-  gelato_user_deadline: string | null;
-  source_token_address: string;
-}
-
-/**
  * Union type for swap responses based on direction.
+ * Uses WASM types directly - BtcToEvmSwapResponse and EvmToBtcSwapResponse are
+ * exported from the WASM module.
  */
 export type GetSwapResponse = BtcToEvmSwapResponse | EvmToBtcSwapResponse;
 
 /**
- * Extended swap storage data that includes the swap response and optional secret.
- * Used for persisting swap data locally with the preimage secret.
+ * Extended swap storage data combining the API response with client-side swap parameters.
+ * Used for storage providers and as a common interface for swap data.
  */
 export interface ExtendedSwapStorageData {
-  // TODO: flatten this. No  need to return extended swap data
-  response: GetSwapResponse;
+  response: BtcToEvmSwapResponse | EvmToBtcSwapResponse;
   swap_params: SwapParams;
 }
 
@@ -295,108 +170,6 @@ export interface QuoteRequest {
 }
 
 /**
- * Version information (snake_case for consistency with other API types).
- */
-export interface VersionInfo {
-  tag: string;
-  commit_hash: string;
-}
-
-/**
- * Quote response (snake_case for consistency with other API types).
- */
-export interface QuoteResponseInfo {
-  exchange_rate: string;
-  network_fee: number;
-  protocol_fee: number;
-  protocol_fee_rate: number;
-  min_amount: number;
-  max_amount: number;
-}
-
-// VTXO Swap Types are now re-exported from WASM:
-// - VtxoSwapResponse
-// - CreateVtxoSwapResult
-// - SwapParams
-// - EstimateVtxoSwapResponse
-
-/**
- * VTXO swap status values.
- * Note: WASM returns status as lowercase string (e.g., "pending", "clientfunded")
- */
-export type VtxoSwapStatus =
-  | "pending"
-  | "clientfunded"
-  | "serverfunded"
-  | "clientredeemed"
-  | "serverredeemed"
-  | "clientrefunded"
-  | "clientfundedserverrefunded"
-  | "expired";
-
-/**
- * Plain interface for VtxoSwapResponse data (for storage).
- * Uses snake_case to match Rust/API conventions.
- */
-export interface VtxoSwapResponseData {
-  id: string;
-  status: VtxoSwapStatus;
-  created_at: string;
-  client_vhtlc_address: string;
-  client_fund_amount_sats: number;
-  client_pk: string;
-  client_locktime: number;
-  client_unilateral_claim_delay: number;
-  client_unilateral_refund_delay: number;
-  client_unilateral_refund_without_receiver_delay: number;
-  server_vhtlc_address: string;
-  server_fund_amount_sats: number;
-  server_pk: string;
-  server_locktime: number;
-  server_unilateral_claim_delay: number;
-  server_unilateral_refund_delay: number;
-  server_unilateral_refund_without_receiver_delay: number;
-  arkade_server_pk: string;
-  preimage_hash: string;
-  fee_sats: number;
-  network: string;
-}
-
-/**
- * Plain interface for SwapParams data (for storage).
- * Uses snake_case to match Rust conventions.
- */
-export interface SwapParamsData {
-  secret_key: string;
-  public_key: string;
-  preimage: string;
-  preimage_hash: string;
-  user_id: string;
-  key_index: number;
-}
-
-/**
- * Plain interface for ExtendedVtxoSwapStorageData (for storage).
- * This is a plain object version without WASM class methods.
- * Uses snake_case to match Rust conventions.
- */
-export interface ExtendedVtxoSwapStorageDataPlain {
-  response: VtxoSwapResponseData;
-  swap_params: SwapParamsData;
-}
-
-/**
- * Convert a value from WASM (which may be a Map) to a plain object.
- * serde_wasm_bindgen serializes structs as Maps by default.
- */
-function fromWasm<T>(value: unknown): T {
-  if (value instanceof Map) {
-    return Object.fromEntries(value) as T;
-  }
-  return value as T;
-}
-
-/**
  * Typed storage provider interface for wallet data (mnemonic, key index).
  * Provides typed async methods for wallet credential storage.
  */
@@ -413,8 +186,7 @@ export interface WalletStorageProvider {
 
 /**
  * Typed storage provider interface for swap data.
- * Uses ExtendedSwapStorageData objects directly, allowing implementations
- * to store them efficiently (e.g., as objects in IndexedDB via Dexie).
+ * Storage receives plain objects from serde serialization.
  */
 export interface SwapStorageProvider {
   /** Get swap data by swap ID. Returns null if not found. */
@@ -431,28 +203,25 @@ export interface SwapStorageProvider {
 
 /**
  * Typed storage provider interface for VTXO swap data.
- * Uses plain object types (not WASM classes) for storage compatibility.
+ * Storage receives plain objects matching ExtendedVtxoSwapStorageData structure.
  */
 export interface VtxoSwapStorageProvider {
   /** Get VTXO swap data by swap ID. Returns null if not found. */
-  get: (swapId: string) => Promise<ExtendedVtxoSwapStorageDataPlain | null>;
+  get: (swapId: string) => Promise<ExtendedVtxoSwapStorageData | null>;
   /** Store VTXO swap data. Overwrites any existing swap with the same ID. */
-  store: (
-    swapId: string,
-    data: ExtendedVtxoSwapStorageDataPlain,
-  ) => Promise<void>;
+  store: (swapId: string, data: ExtendedVtxoSwapStorageData) => Promise<void>;
   /** Delete VTXO swap data by swap ID. */
   delete: (swapId: string) => Promise<void>;
   /** List all stored VTXO swap IDs. */
   list: () => Promise<string[]>;
   /** List all stored VTXO swaps. */
-  getAll: () => Promise<ExtendedVtxoSwapStorageDataPlain[]>;
+  getAll: () => Promise<ExtendedVtxoSwapStorageData[]>;
 }
 
 /**
- * Network type for Bitcoin networks.
+ * Network input type for Bitcoin networks (string union for API convenience).
  */
-export type Network = "bitcoin" | "testnet" | "regtest" | "mutinynet";
+export type NetworkInput = "bitcoin" | "testnet" | "regtest" | "mutinynet";
 
 /**
  * Extended swap storage provider with repair capabilities.
@@ -517,7 +286,7 @@ export class Client {
     walletStorage: WalletStorageProvider,
     swapStorage: ExtendedSwapStorageProvider,
     vtxoSwapStorage: VtxoSwapStorageProvider,
-    network: Network,
+    network: NetworkInput,
     arkadeUrl: string,
   ): Promise<Client> {
     // Bind wallet storage methods to preserve 'this' context when called from WASM
@@ -570,16 +339,13 @@ export class Client {
     request: SwapRequest,
     targetNetwork: "ethereum" | "polygon",
   ): Promise<BtcToEvmSwapResponse> {
-    const response = await this.client.createArkadeToEvmSwap(
+    return await this.client.createArkadeToEvmSwap(
       request.target_address,
       request.target_amount,
       request.target_token,
       targetNetwork,
       request.referral_code,
     );
-    // serde_wasm_bindgen returns a Map for complex structs, convert to plain object
-    const obj = fromWasm<Omit<BtcToEvmSwapResponse, "direction">>(response);
-    return { ...obj, direction: "btc_to_evm" };
   }
 
   /**
@@ -593,7 +359,7 @@ export class Client {
     request: EvmToArkadeSwapRequest,
     sourceNetwork: "ethereum" | "polygon",
   ): Promise<EvmToBtcSwapResponse> {
-    const response = await this.client.createEvmToArkadeSwap(
+    return await this.client.createEvmToArkadeSwap(
       request.target_address,
       request.user_address,
       request.source_amount,
@@ -601,9 +367,6 @@ export class Client {
       sourceNetwork,
       request.referral_code,
     );
-    // serde_wasm_bindgen returns a Map for complex structs, convert to plain object
-    const obj = fromWasm<Omit<EvmToBtcSwapResponse, "direction">>(response);
-    return { ...obj, direction: "evm_to_btc" };
   }
 
   /**
@@ -617,26 +380,21 @@ export class Client {
     request: EvmToLightningSwapRequest,
     sourceNetwork: "ethereum" | "polygon",
   ): Promise<EvmToBtcSwapResponse> {
-    const response = await this.client.createEvmToLightningSwap(
+    return await this.client.createEvmToLightningSwap(
       request.bolt11_invoice,
       request.user_address,
       request.source_token,
       sourceNetwork,
       request.referral_code,
     );
-    // serde_wasm_bindgen returns a Map for complex structs, convert to plain object
-    const obj = fromWasm<Omit<EvmToBtcSwapResponse, "direction">>(response);
-    return { ...obj, direction: "evm_to_btc" };
   }
 
   async getAssetPairs(): Promise<AssetPair[]> {
-    const wasmPairs = await this.client.getAssetPairs();
-    return wasmPairs.map(mapAssetPair);
+    return await this.client.getAssetPairs();
   }
 
   async getTokens(): Promise<TokenInfo[]> {
-    const wasmTokens = await this.client.getTokens();
-    return wasmTokens.map(mapTokenInfo);
+    return await this.client.getTokens();
   }
 
   /**
@@ -651,35 +409,28 @@ export class Client {
     from: TokenIdString,
     to: TokenIdString,
     baseAmount: bigint,
-  ): Promise<QuoteResponseInfo> {
-    const quote = await this.client.getQuote(from, to, baseAmount);
-    return {
-      exchange_rate: quote.exchangeRate,
-      network_fee: Number(quote.networkFee),
-      protocol_fee: Number(quote.protocolFee),
-      protocol_fee_rate: quote.protocolFeeRate,
-      min_amount: Number(quote.minAmount),
-      max_amount: Number(quote.maxAmount),
-    };
+  ): Promise<QuoteResponse> {
+    return await this.client.getQuote(from, to, baseAmount);
   }
 
   /**
    * Get a swap by its ID.
    *
    * @param id - The swap ID
-   * @returns The swap response
+   * @returns The swap data, or undefined if the swap type is unknown
    */
-  async getSwap(id: string): Promise<ExtendedSwapStorageData> {
-    return (await this.client.getSwap(id)) as ExtendedSwapStorageData;
+  async getSwap(id: string): Promise<ExtendedSwapStorageData | undefined> {
+    return mapWasmSwapToInterface(await this.client.getSwap(id));
   }
 
   /**
    * Gets all stored swaps.
    *
-   * @returns A vec of swaps
+   * @returns Array of swaps (unknown types are filtered out)
    */
   async listAllSwaps(): Promise<ExtendedSwapStorageData[]> {
-    return (await this.client.listAll()) as ExtendedSwapStorageData[];
+    const wasmSwaps = await this.client.listAll();
+    return wasmSwaps.map(mapWasmSwapToInterface).filter((s) => s !== undefined);
   }
 
   /**
@@ -699,7 +450,7 @@ export class Client {
    * @returns VhtlcAmounts
    */
   async amountsForSwap(swapId: string): Promise<VhtlcAmounts> {
-    return (await this.client.amountsForSwap(swapId)) as VhtlcAmounts;
+    return await this.client.amountsForSwap(swapId);
   }
 
   /**
@@ -726,21 +477,18 @@ export class Client {
    *
    * @returns Version information
    */
-  async getVersion(): Promise<VersionInfo> {
-    const version = await this.client.getVersion();
-    return {
-      tag: version.tag,
-      commit_hash: version.commitHash,
-    };
+  async getVersion(): Promise<Version> {
+    return await this.client.getVersion();
   }
 
   /**
    * Recover swaps for the currently loaded mnemonic.
    *
-   * @returns Response containing recovered swaps
+   * @returns Array of recovered swaps (unknown types are filtered out)
    */
   async recoverSwaps(): Promise<ExtendedSwapStorageData[]> {
-    return (await this.client.recoverSwaps()) as ExtendedSwapStorageData[];
+    const wasmSwaps = await this.client.recoverSwaps();
+    return wasmSwaps.map(mapWasmSwapToInterface).filter((s) => s !== undefined);
   }
 
   /**
