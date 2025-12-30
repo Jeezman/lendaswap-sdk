@@ -671,6 +671,31 @@ impl Client {
         Ok(())
     }
 
+    /// Get the list of swap IDs that failed to deserialize during the last listAll() call.
+    /// These are "corrupted" entries that couldn't be loaded.
+    #[wasm_bindgen(js_name = "getCorruptedSwapIds")]
+    pub fn get_corrupted_swap_ids(&self) -> Vec<String> {
+        crate::storage_adapter::get_corrupted_swap_ids()
+    }
+
+    /// Delete all corrupted swap entries from storage.
+    /// Returns the number of entries deleted.
+    #[wasm_bindgen(js_name = "deleteCorruptedSwaps")]
+    pub async fn delete_corrupted_swaps(&self) -> Result<u32, JsValue> {
+        let ids = crate::storage_adapter::get_corrupted_swap_ids();
+        let count = ids.len() as u32;
+
+        for id in ids {
+            self.inner
+                .delete_swap(id)
+                .await
+                .map_err(|e| JsValue::from_str(&format!("{:#}", e)))?;
+        }
+
+        crate::storage_adapter::clear_corrupted_swap_ids();
+        Ok(count)
+    }
+
     // =========================================================================
     // VTXO Swap Methods
     // =========================================================================

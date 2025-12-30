@@ -7,8 +7,34 @@
 use js_sys::{Function, Promise};
 use lendaswap_core::ExtendedSwapStorageData;
 use lendaswap_core::storage::{StorageFuture, SwapStorage, WalletStorage};
+use serde::Serialize;
+use std::cell::RefCell;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
+
+thread_local! {
+    /// Stores IDs of swap entries that failed to deserialize.
+    /// This allows the frontend to know how many entries were skipped.
+    static CORRUPTED_SWAP_IDS: RefCell<Vec<String>> = RefCell::new(Vec::new());
+}
+
+/// Get the list of swap IDs that failed to deserialize.
+pub fn get_corrupted_swap_ids() -> Vec<String> {
+    CORRUPTED_SWAP_IDS.with(|ids| ids.borrow().clone())
+}
+
+/// Clear the list of corrupted swap IDs.
+pub fn clear_corrupted_swap_ids() {
+    CORRUPTED_SWAP_IDS.with(|ids| ids.borrow_mut().clear());
+}
+
+/// Serialize a value to JsValue using consistent settings.
+/// Uses `serialize_maps_as_objects(true)` to ensure internally tagged enums
+/// with flatten serialize correctly as plain JS objects.
+fn to_js_value<T: Serialize>(value: &T) -> Result<JsValue, serde_wasm_bindgen::Error> {
+    let serializer = serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true);
+    value.serialize(&serializer)
+}
 
 /// JavaScript wallet storage provider passed from TypeScript.
 ///
@@ -275,7 +301,7 @@ impl SwapStorage for JsSwapStorageAdapter {
 
     fn store(&self, swap_id: &str, data: &ExtendedSwapStorageData) -> StorageFuture<'_, ()> {
         let swap_id = JsValue::from_str(swap_id);
-        let data_js = serde_wasm_bindgen::to_value(data);
+        let data_js = to_js_value(data);
 
         Box::pin(async move {
             let data_js = data_js.map_err(|e| {
@@ -364,10 +390,54 @@ impl SwapStorage for JsSwapStorageAdapter {
                 lendaswap_core::Error::Storage(format!("list Promise rejected: {:?}", e))
             })?;
 
-            let swaps: Vec<ExtendedSwapStorageData> = serde_wasm_bindgen::from_value(value)
-                .map_err(|e| {
-                    lendaswap_core::Error::Storage(format!("Failed to deserialize swaps: {:?}", e))
-                })?;
+            // Try to deserialize the entire array first (fast path)
+            if let Ok(swaps) =
+                serde_wasm_bindgen::from_value::<Vec<ExtendedSwapStorageData>>(value.clone())
+            {
+                // Clear any stale corrupted IDs since fast path succeeded
+                clear_corrupted_swap_ids();
+                return Ok(swaps);
+            }
+
+            // If that fails, iterate over individual entries and skip failures
+            let array: js_sys::Array = value
+                .dyn_into()
+                .map_err(|_| lendaswap_core::Error::Storage("Expected Array from getAll".into()))?;
+
+            // Clear corrupted IDs right before iteration to avoid race conditions
+            // with React StrictMode calling this twice
+            clear_corrupted_swap_ids();
+
+            let mut swaps = Vec::new();
+
+            for i in 0..array.length() {
+                let entry = array.get(i);
+
+                // Try to extract the ID first for error tracking
+                let entry_id = js_sys::Reflect::get(&entry, &JsValue::from_str("id"))
+                    .ok()
+                    .and_then(|v| v.as_string())
+                    .unwrap_or_else(|| format!("unknown-{}", i));
+
+                match serde_wasm_bindgen::from_value::<ExtendedSwapStorageData>(entry) {
+                    Ok(swap) => swaps.push(swap),
+                    Err(e) => {
+                        log::warn!("Failed to deserialize swap entry '{}': {:?}", entry_id, e);
+                        CORRUPTED_SWAP_IDS.with(|ids| {
+                            ids.borrow_mut().push(entry_id);
+                        });
+                    }
+                }
+            }
+
+            let corrupted_count = CORRUPTED_SWAP_IDS.with(|ids| ids.borrow().len());
+            if corrupted_count > 0 {
+                log::warn!(
+                    "Skipped {} corrupted swap entries out of {} total",
+                    corrupted_count,
+                    array.length()
+                );
+            }
 
             Ok(swaps)
         })

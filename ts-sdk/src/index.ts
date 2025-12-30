@@ -38,6 +38,7 @@
 // Re-export WASM types that are commonly used
 // Storage provider types for Client.create()
 export type {
+  ExtendedSwapStorageProvider,
   QuoteResponse,
   QuoteResponseInfo,
   SwapStorageProvider,

@@ -380,11 +380,28 @@ export interface SwapStorageProvider {
  */
 export type Network = "bitcoin" | "testnet" | "regtest" | "mutinynet";
 
+/**
+ * Extended swap storage provider with repair capabilities.
+ */
+export interface ExtendedSwapStorageProvider extends SwapStorageProvider {
+  /** Get raw swap_params for a potentially corrupted entry. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  getRawSwapParams?: (swapId: string) => Promise<Record<string, any> | null>;
+}
+
 export class Client {
   private client: WasmClient;
+  private baseUrl: string;
+  private swapStorage: ExtendedSwapStorageProvider;
 
-  private constructor(client: WasmClient) {
+  private constructor(
+    client: WasmClient,
+    baseUrl: string,
+    swapStorage: ExtendedSwapStorageProvider,
+  ) {
     this.client = client;
+    this.baseUrl = baseUrl;
+    this.swapStorage = swapStorage;
   }
 
   /**
@@ -434,7 +451,7 @@ export class Client {
   static async create(
     baseUrl: string,
     walletStorage: WalletStorageProvider,
-    swapStorage: SwapStorageProvider,
+    swapStorage: ExtendedSwapStorageProvider,
     network: Network,
     arkadeUrl: string,
   ): Promise<Client> {
@@ -461,7 +478,7 @@ export class Client {
       arkadeUrl,
     );
 
-    return new Client(wasmClient);
+    return new Client(wasmClient, baseUrl, swapStorage);
   }
 
   async init(mnemonic?: string): Promise<void> {
@@ -679,6 +696,96 @@ export class Client {
    */
   async deleteSwap(id: string): Promise<void> {
     return await this.client.deleteSwap(id);
+  }
+
+  /**
+   * Get the list of swap IDs that failed to deserialize during the last listAllSwaps() call.
+   * These are "corrupted" entries that couldn't be loaded due to invalid or missing data.
+   *
+   * @returns Array of swap IDs that failed to load
+   */
+  getCorruptedSwapIds(): string[] {
+    return this.client.getCorruptedSwapIds();
+  }
+
+  /**
+   * Delete all corrupted swap entries from storage.
+   * Call this after listAllSwaps() to clean up entries that couldn't be deserialized.
+   *
+   * @returns The number of corrupted entries that were deleted
+   */
+  async deleteCorruptedSwaps(): Promise<number> {
+    return await this.client.deleteCorruptedSwaps();
+  }
+
+  /**
+   * Attempt to repair corrupted swap entries by fetching missing data from the server.
+   *
+   * For each corrupted swap ID:
+   * 1. Reads the raw swap_params from local storage
+   * 2. Fetches the swap response from the server via GET /swap/:id
+   * 3. Combines them and stores the repaired entry
+   *
+   * @returns Object with repaired count and any failed IDs
+   */
+  async repairCorruptedSwaps(): Promise<{
+    repaired: number;
+    failed: string[];
+  }> {
+    const corruptedIds = this.getCorruptedSwapIds();
+    if (corruptedIds.length === 0) {
+      return { repaired: 0, failed: [] };
+    }
+
+    // Check if storage provider supports raw access
+    if (!this.swapStorage.getRawSwapParams) {
+      console.warn(
+        "Storage provider does not support getRawSwapParams - cannot repair corrupted entries",
+      );
+      return { repaired: 0, failed: corruptedIds };
+    }
+
+    const failed: string[] = [];
+    let repaired = 0;
+
+    for (const swapId of corruptedIds) {
+      try {
+        // Get raw swap_params from storage
+        const swapParams = await this.swapStorage.getRawSwapParams(swapId);
+        if (!swapParams) {
+          console.warn(`No swap_params found for corrupted swap ${swapId}`);
+          failed.push(swapId);
+          continue;
+        }
+
+        // Fetch response from server
+        const response = await fetch(`${this.baseUrl}/swap/${swapId}`);
+        if (!response.ok) {
+          console.warn(
+            `Failed to fetch swap ${swapId} from server: ${response.status}`,
+          );
+          failed.push(swapId);
+          continue;
+        }
+
+        const serverResponse = await response.json();
+
+        // Combine and store
+        const repairedData: ExtendedSwapStorageData = {
+          response: serverResponse,
+          swap_params: swapParams as unknown as SwapParams,
+        };
+
+        await this.swapStorage.store(swapId, repairedData);
+        repaired++;
+        console.log(`Repaired swap ${swapId}`);
+      } catch (error) {
+        console.error(`Error repairing swap ${swapId}:`, error);
+        failed.push(swapId);
+      }
+    }
+
+    return { repaired, failed };
   }
 
   // =========================================================================

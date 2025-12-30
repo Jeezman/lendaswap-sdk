@@ -131,6 +131,26 @@ export class DexieSwapStorageProvider {
   close(): void {
     this.db.close();
   }
+
+  /**
+   * Get raw swap_params for a potentially corrupted entry.
+   *
+   * This method reads the raw data from IndexedDB and extracts just the swap_params,
+   * which can succeed even when the full ExtendedSwapStorageData fails to deserialize.
+   *
+   * @param swapId - The swap ID
+   * @returns The swap_params as raw object, or null if not found or invalid
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async getRawSwapParams(swapId: string): Promise<Record<string, any> | null> {
+    // Use raw IndexedDB access to avoid type checking issues
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const record = (await this.db.swaps.get(swapId)) as any;
+    if (!record || !record.swap_params) {
+      return null;
+    }
+    return record.swap_params;
+  }
 }
 
 /**
