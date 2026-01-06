@@ -43,6 +43,7 @@ export {
   QuoteResponse,
   SwapParams as VtxoSwapParams,
   SwapStatus,
+  swapStatusToString,
   SwapType,
   TokenId,
   TokenInfo,

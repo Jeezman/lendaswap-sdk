@@ -69,6 +69,7 @@ export {
   type RecoverSwapsResponse,
   type SwapRequest,
   SwapStatus,
+  swapStatusToString,
   type SwapStorageProvider,
   type SwapType,
   setLogLevel,

@@ -96,6 +96,27 @@ impl From<core_api::SwapStatus> for SwapStatus {
     }
 }
 
+/// Returns a human-readable string representation of the swap status.
+#[wasm_bindgen(js_name = "swapStatusToString")]
+pub fn swap_status_to_string(status: SwapStatus) -> String {
+    match status {
+        SwapStatus::Pending => "Pending".to_string(),
+        SwapStatus::ClientFunded => "Client Funded".to_string(),
+        SwapStatus::ClientRefunded => "Client Refunded".to_string(),
+        SwapStatus::ServerFunded => "Server Funded".to_string(),
+        SwapStatus::ClientRedeeming => "Client Redeeming".to_string(),
+        SwapStatus::ClientRedeemed => "Client Redeemed".to_string(),
+        SwapStatus::ServerRedeemed => "Server Redeemed".to_string(),
+        SwapStatus::ClientFundedServerRefunded => "Client Funded, Server Refunded".to_string(),
+        SwapStatus::ClientRefundedServerFunded => "Client Refunded, Server Funded".to_string(),
+        SwapStatus::ClientRefundedServerRefunded => "Client Refunded, Server Refunded".to_string(),
+        SwapStatus::Expired => "Expired".to_string(),
+        SwapStatus::ClientInvalidFunded => "Client Invalid Funded".to_string(),
+        SwapStatus::ClientFundedTooLate => "Client Funded Too Late".to_string(),
+        SwapStatus::ClientRedeemedAndClientRefunded => "Client Redeemed and Refunded".to_string(),
+    }
+}
+
 impl From<core_api::Chain> for Chain {
     fn from(c: core_api::Chain) -> Self {
         match c {
