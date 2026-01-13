@@ -24,7 +24,9 @@
 pub mod api;
 pub mod client;
 pub mod error;
+pub mod esplora;
 pub mod hd_wallet;
+pub mod onchain_htlc;
 pub mod storage;
 pub mod types;
 pub mod vhtlc;

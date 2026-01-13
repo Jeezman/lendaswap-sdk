@@ -88,7 +88,8 @@ impl HdWallet {
         // preimage = sha256(sha256(tag) || sha256(tag) || secret_key)
         let preimage = tagged_hash(PREIMAGE_TAG, &secret_key.secret_bytes());
 
-        // preimage_hash = sha256(preimage)
+        // preimage_hash = SHA256(preimage)
+        // For EVM HTLCs, this is used directly. For Bitcoin HTLCs, HASH160 is computed from preimage.
         let preimage_hash = Sha256::digest(preimage).into();
 
         // Derive user ID

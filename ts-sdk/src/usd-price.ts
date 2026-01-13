@@ -32,6 +32,7 @@ const TOKEN_TO_COINGECKO: Record<string, string> = {
   // Bitcoin variants
   btc_lightning: "bitcoin",
   btc_arkade: "bitcoin",
+  btc_onchain: "bitcoin",
 
   // Stablecoins on Polygon
   usdc_pol: "usd-coin",

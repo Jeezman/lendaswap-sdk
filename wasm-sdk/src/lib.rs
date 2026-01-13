@@ -168,6 +168,12 @@ impl TokenId {
         TokenId(core_api::TokenId::BtcLightning)
     }
 
+    /// Static constructor for BTC onchain token
+    #[wasm_bindgen(js_name = "btcOnchain")]
+    pub fn btc_onchain() -> TokenId {
+        TokenId(core_api::TokenId::BtcOnchain)
+    }
+
     /// Static constructor for BTC Arkade token
     #[wasm_bindgen(js_name = "btcArkade")]
     pub fn btc_arkade() -> TokenId {
@@ -183,6 +189,7 @@ impl TokenId {
         match s {
             "btc_lightning" => Ok(TokenId(core_api::TokenId::BtcLightning)),
             "btc_arkade" => Ok(TokenId(core_api::TokenId::BtcArkade)),
+            "btc_onchain" => Ok(TokenId(core_api::TokenId::BtcOnchain)),
             // All other tokens use the Coin variant
             other => Ok(TokenId(core_api::TokenId::Coin(other.to_string()))),
         }
@@ -199,16 +206,23 @@ impl TokenId {
     pub fn is_arkade(&self) -> bool {
         self.0 == core_api::TokenId::BtcArkade
     }
+
     /// Returns true if the token is Lightning
     #[wasm_bindgen(js_name = "isLightning")]
     pub fn is_lightning(&self) -> bool {
         self.0 == core_api::TokenId::BtcLightning
     }
 
+    /// Returns true if the token is onchain btc
+    #[wasm_bindgen(js_name = "isBtcOnchain")]
+    pub fn is_btc_onchain(&self) -> bool {
+        self.0 == core_api::TokenId::BtcOnchain
+    }
+
     /// Returns true if the token is either Arkade or Lightning
     #[wasm_bindgen(js_name = "isBtc")]
     pub fn is_btc(&self) -> bool {
-        self.is_arkade() || self.is_lightning()
+        self.is_arkade() || self.is_lightning() || self.is_btc_onchain()
     }
 
     /// Returns true if the token is not BTC on Arkade and not BTC on Lightning

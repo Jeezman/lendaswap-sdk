@@ -21,6 +21,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 pub enum Chain {
     Arkade,
     Lightning,
+    Bitcoin,
     Polygon,
     Ethereum,
 }
@@ -52,6 +53,7 @@ impl From<&str> for Network {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SwapStatus {
     Pending,
+    ClientFundingSeen,
     ClientFunded,
     ClientRefunded,
     ServerFunded,
@@ -71,6 +73,7 @@ impl From<core_api::SwapStatus> for SwapStatus {
     fn from(s: core_api::SwapStatus) -> Self {
         match s {
             core_api::SwapStatus::Pending => SwapStatus::Pending,
+            core_api::SwapStatus::ClientFundingSeen => SwapStatus::ClientFundingSeen,
             core_api::SwapStatus::ClientFunded => SwapStatus::ClientFunded,
             core_api::SwapStatus::ClientRefunded => SwapStatus::ClientRefunded,
             core_api::SwapStatus::ServerFunded => SwapStatus::ServerFunded,
@@ -101,6 +104,7 @@ impl From<core_api::SwapStatus> for SwapStatus {
 pub fn swap_status_to_string(status: SwapStatus) -> String {
     match status {
         SwapStatus::Pending => "Pending".to_string(),
+        SwapStatus::ClientFundingSeen => "Client Funding Seen".to_string(),
         SwapStatus::ClientFunded => "Client Funded".to_string(),
         SwapStatus::ClientRefunded => "Client Refunded".to_string(),
         SwapStatus::ServerFunded => "Server Funded".to_string(),
@@ -122,6 +126,7 @@ impl From<core_api::Chain> for Chain {
         match c {
             core_api::Chain::Arkade => Chain::Arkade,
             core_api::Chain::Lightning => Chain::Lightning,
+            core_api::Chain::Bitcoin => Chain::Bitcoin,
             core_api::Chain::Polygon => Chain::Polygon,
             core_api::Chain::Ethereum => Chain::Ethereum,
         }
@@ -357,7 +362,7 @@ impl From<core_api::BtcToEvmSwapResponse> for BtcToEvmSwapResponse {
             sender_pk: r.common.sender_pk,
             receiver_pk: r.common.receiver_pk,
             server_pk: r.common.server_pk,
-            refund_locktime: r.common.refund_locktime,
+            refund_locktime: r.common.vhtlc_refund_locktime,
             unilateral_claim_delay: r.common.unilateral_claim_delay,
             unilateral_refund_delay: r.common.unilateral_refund_delay,
             unilateral_refund_without_receiver_delay: r
@@ -436,7 +441,7 @@ impl From<core_api::EvmToBtcSwapResponse> for EvmToBtcSwapResponse {
             sender_pk: r.common.sender_pk,
             receiver_pk: r.common.receiver_pk,
             server_pk: r.common.server_pk,
-            refund_locktime: r.common.refund_locktime,
+            refund_locktime: r.common.vhtlc_refund_locktime,
             unilateral_claim_delay: r.common.unilateral_claim_delay,
             unilateral_refund_delay: r.common.unilateral_refund_delay,
             unilateral_refund_without_receiver_delay: r
@@ -466,6 +471,72 @@ impl From<core_api::EvmToBtcSwapResponse> for EvmToBtcSwapResponse {
             gelato_user_nonce: r.gelato_user_nonce,
             gelato_user_deadline: r.gelato_user_deadline,
             source_token_address: r.source_token_address,
+        }
+    }
+}
+
+// BTC to EVM swap response.
+/// Fields from SwapCommonFields are flattened.
+#[wasm_bindgen(getter_with_clone)]
+#[derive(Debug, Clone)]
+pub struct BtcToArkadeSwapResponse {
+    // Common fields (flattened)
+    pub id: String,
+    pub status: SwapStatus,
+    pub btc_htlc_address: String,
+    pub asset_amount: i64,
+    pub sats_receive: i64,
+    pub fee_sats: i64,
+    pub hash_lock: String,
+    pub btc_refund_locktime: i64,
+    pub arkade_vhtlc_address: String,
+    pub target_arkade_address: String,
+    pub btc_fund_txid: Option<String>,
+    pub btc_claim_txid: Option<String>,
+    pub arkade_fund_txid: Option<String>,
+    pub arkade_claim_txid: Option<String>,
+    pub network: String,
+    pub created_at: String,
+    pub server_vhtlc_pk: String,
+    pub arkade_server_pk: String,
+    pub vhtlc_refund_locktime: i64,
+    pub unilateral_claim_delay: i64,
+    pub unilateral_refund_delay: i64,
+    pub unilateral_refund_without_receiver_delay: i64,
+    pub source_token: TokenId,
+    pub target_token: TokenId,
+}
+
+impl From<core_api::BtcToArkadeSwapResponse> for BtcToArkadeSwapResponse {
+    fn from(r: core_api::BtcToArkadeSwapResponse) -> Self {
+        BtcToArkadeSwapResponse {
+            id: r.id.to_string(),
+            status: r.status.into(),
+            btc_htlc_address: r.btc_htlc_address,
+            asset_amount: r.asset_amount,
+            sats_receive: r.sats_receive,
+            fee_sats: r.fee_sats,
+            hash_lock: r.hash_lock,
+            btc_refund_locktime: r.btc_refund_locktime,
+            arkade_vhtlc_address: r.arkade_vhtlc_address,
+            target_arkade_address: r.target_arkade_address,
+            btc_fund_txid: r.btc_fund_txid,
+            btc_claim_txid: r.btc_claim_txid,
+            arkade_fund_txid: r.arkade_fund_txid,
+            arkade_claim_txid: r.arkade_claim_txid,
+            network: r.network,
+            created_at: r
+                .created_at
+                .format(&time::format_description::well_known::Rfc3339)
+                .unwrap_or_default(),
+            server_vhtlc_pk: r.server_vhtlc_pk,
+            arkade_server_pk: r.arkade_server_pk,
+            vhtlc_refund_locktime: r.vhtlc_refund_locktime,
+            unilateral_claim_delay: r.unilateral_claim_delay,
+            unilateral_refund_delay: r.unilateral_refund_delay,
+            unilateral_refund_without_receiver_delay: r.unilateral_refund_without_receiver_delay,
+            source_token: TokenId(r.source_token),
+            target_token: TokenId(r.target_token),
         }
     }
 }
@@ -574,6 +645,7 @@ pub struct ExtendedSwapStorageData {
 pub enum SwapType {
     BtcToEvm,
     EvmToBtc,
+    BtcToArkade,
 }
 
 #[wasm_bindgen]
@@ -584,6 +656,7 @@ impl ExtendedSwapStorageData {
         match &self.response {
             core_api::GetSwapResponse::BtcToEvm(_) => SwapType::BtcToEvm,
             core_api::GetSwapResponse::EvmToBtc(_) => SwapType::EvmToBtc,
+            core_api::GetSwapResponse::BtcToArkade(_) => SwapType::BtcToArkade,
         }
     }
 
@@ -594,6 +667,7 @@ impl ExtendedSwapStorageData {
         match &self.response {
             core_api::GetSwapResponse::BtcToEvm(r) => Some(r.clone().into()),
             core_api::GetSwapResponse::EvmToBtc(_) => None,
+            core_api::GetSwapResponse::BtcToArkade(_) => None,
         }
     }
 
@@ -604,6 +678,18 @@ impl ExtendedSwapStorageData {
         match &self.response {
             core_api::GetSwapResponse::BtcToEvm(_) => None,
             core_api::GetSwapResponse::EvmToBtc(r) => Some(r.clone().into()),
+            core_api::GetSwapResponse::BtcToArkade(_) => None,
+        }
+    }
+
+    /// Get the Onchain to Arkade swap response, if this is an Onchian to Arkade swap.
+    /// Returns undefined if not.
+    #[wasm_bindgen(js_name = "btcToArkadeResponse", getter)]
+    pub fn btc_to_arkade_response(&self) -> Option<BtcToArkadeSwapResponse> {
+        match &self.response {
+            core_api::GetSwapResponse::BtcToEvm(_) => None,
+            core_api::GetSwapResponse::EvmToBtc(_) => None,
+            core_api::GetSwapResponse::BtcToArkade(r) => Some(r.clone().into()),
         }
     }
 
@@ -644,6 +730,7 @@ impl Client {
     /// * `vtxo_swap_storage` - Storage provider for VTXO swap data
     /// * `network` - The Bitcoin network ("bitcoin" or "testnet")
     /// * `arkade_url` - The Arkade server URL
+    /// * `esplora_url` - The Esplora API URL for on-chain Bitcoin operations
     #[wasm_bindgen(constructor)]
     pub fn new(
         base_url: String,
@@ -652,6 +739,7 @@ impl Client {
         vtxo_swap_storage: JsVtxoSwapStorageProvider,
         network: String,
         arkade_url: String,
+        esplora_url: String,
     ) -> Result<Client, JsValue> {
         let network = network
             .parse()
@@ -668,6 +756,7 @@ impl Client {
                 vtxo_swap_adapter,
                 network,
                 arkade_url,
+                esplora_url,
             ),
         })
     }
@@ -914,6 +1003,51 @@ impl Client {
         let txid = self
             .inner
             .refund_vhtlc(swap_id.as_str(), refund_address.as_str())
+            .await
+            .map_err(|e| JsValue::from_str(&format!("{:#}", e)))?;
+
+        Ok(txid)
+    }
+
+    /// Create an on-chain Bitcoin to Arkade swap.
+    #[wasm_bindgen(js_name = "createBitcoinToArkadeSwap")]
+    pub async fn create_bitcoin_to_arkade_swap(
+        &self,
+        target_arkade_address: String,
+        sats_receive: i64,
+        referral_code: Option<String>,
+    ) -> Result<BtcToArkadeSwapResponse, JsValue> {
+        let swap = self
+            .inner
+            .create_btc_to_arkade_swap(target_arkade_address, sats_receive, referral_code)
+            .await
+            .map_err(|e| JsValue::from_str(&format!("{:#}", e)))?;
+
+        Ok(swap.into())
+    }
+
+    /// Claim the Arkade VHTLC for a BTC-to-Arkade swap.
+    #[wasm_bindgen(js_name = "claimBtcToArkadeVhtlc")]
+    pub async fn claim_btc_to_arkade_vhtlc(&self, swap_id: String) -> Result<String, JsValue> {
+        let txid = self
+            .inner
+            .claim_btc_to_arkade_vhtlc(swap_id.as_str())
+            .await
+            .map_err(|e| JsValue::from_str(&format!("{:#}", e)))?;
+
+        Ok(txid)
+    }
+
+    /// Refund from the on-chain Bitcoin HTLC after timeout.
+    #[wasm_bindgen(js_name = "refundOnchainHtlc")]
+    pub async fn refund_onchain_htlc(
+        &self,
+        swap_id: String,
+        refund_address: String,
+    ) -> Result<String, JsValue> {
+        let txid = self
+            .inner
+            .refund_onchain_htlc(swap_id.as_str(), refund_address.as_str())
             .await
             .map_err(|e| JsValue::from_str(&format!("{:#}", e)))?;
 

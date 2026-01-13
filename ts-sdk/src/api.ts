@@ -9,30 +9,32 @@
 // With --target bundler, WASM is automatically initialized via static import
 import {
   type AssetPair,
+  type BtcToArkadeSwapResponse,
   type BtcToEvmSwapResponse,
+  Client as WasmClient,
   type CreateVtxoSwapResult,
   type EstimateVtxoSwapResponse,
   type EvmToBtcSwapResponse,
   type ExtendedSwapStorageData as WasmExtendedSwapStorageData,
   type ExtendedVtxoSwapStorageData,
+  getLogLevel as wasmGetLogLevel,
   JsSwapStorageProvider,
   JsVtxoSwapStorageProvider,
   JsWalletStorageProvider,
   type QuoteResponse,
+  setLogLevel as wasmSetLogLevel,
   type SwapParams,
   type TokenInfo,
   type Version,
   type VhtlcAmounts,
   type VtxoSwapResponse,
-  Client as WasmClient,
-  getLogLevel as wasmGetLogLevel,
-  setLogLevel as wasmSetLogLevel,
 } from "../wasm/lendaswap_wasm_sdk.js";
 
 // Re-export WASM types directly
 export {
   AssetPair,
   BtcToEvmSwapResponse,
+  BtcToArkadeSwapResponse,
   Chain,
   CreateVtxoSwapResult,
   EstimateVtxoSwapResponse,
@@ -43,8 +45,8 @@ export {
   QuoteResponse,
   SwapParams as VtxoSwapParams,
   SwapStatus,
-  swapStatusToString,
   SwapType,
+  swapStatusToString,
   TokenId,
   TokenInfo,
   Version,
@@ -59,7 +61,10 @@ export {
 function mapWasmSwapToInterface(
   wasmSwap: WasmExtendedSwapStorageData,
 ): ExtendedSwapStorageData | undefined {
-  const response = wasmSwap.btcToEvmResponse ?? wasmSwap.evmToBtcResponse;
+  const response =
+    wasmSwap.btcToEvmResponse ??
+    wasmSwap.evmToBtcResponse ??
+    wasmSwap.btcToArkadeResponse;
   if (!response) {
     return undefined;
   }
@@ -77,6 +82,7 @@ function mapWasmSwapToInterface(
 export type TokenIdString =
   | "btc_lightning"
   | "btc_arkade"
+  | "btc_onchain"
   | "usdc_pol"
   | "usdt0_pol"
   | "usdc_eth"
@@ -89,14 +95,20 @@ export type TokenIdString =
  * Uses WASM types directly - BtcToEvmSwapResponse and EvmToBtcSwapResponse are
  * exported from the WASM module.
  */
-export type GetSwapResponse = BtcToEvmSwapResponse | EvmToBtcSwapResponse;
+export type GetSwapResponse =
+  | BtcToEvmSwapResponse
+  | EvmToBtcSwapResponse
+  | BtcToArkadeSwapResponse;
 
 /**
  * Extended swap storage data combining the API response with client-side swap parameters.
  * Used for storage providers and as a common interface for swap data.
  */
 export interface ExtendedSwapStorageData {
-  response: BtcToEvmSwapResponse | EvmToBtcSwapResponse;
+  response:
+    | BtcToEvmSwapResponse
+    | EvmToBtcSwapResponse
+    | BtcToArkadeSwapResponse;
   swap_params: SwapParams;
 }
 
@@ -128,6 +140,18 @@ export interface EvmToLightningSwapRequest {
   bolt11_invoice: string;
   source_token: TokenIdString;
   user_address: string;
+  referral_code?: string;
+}
+
+/**
+ * Request to create an on-chain Bitcoin to Arkade swap.
+ */
+export interface BtcToArkadeSwapRequest {
+  /** User's target Arkade address to receive VTXOs */
+  target_arkade_address: string;
+  /** Amount user wants to receive on Arkade in satoshis */
+  sats_receive: number;
+  /** Optional referral code */
   referral_code?: string;
 }
 
@@ -257,6 +281,7 @@ export class Client {
    * @param vtxoSwapStorage - Storage provider for persisting VTXO swap data (uses Dexie/IndexedDB)
    * @param network - Bitcoin network ("bitcoin", "testnet", "regtest", "mutinynet")
    * @param arkadeUrl - Arkade's server url
+   * @param esploraUrl - Esplora API URL for on-chain Bitcoin operations (e.g., "https://mempool.space/api")
    * @returns A new Client instance
    *
    * @example
@@ -278,7 +303,8 @@ export class Client {
    *   swapStorage,
    *   vtxoSwapStorage,
    *   'bitcoin',
-   *   'https://arkade.computer'
+   *   'https://arkade.computer',
+   *   'https://mempool.space/api'
    * );
    * ```
    */
@@ -289,6 +315,7 @@ export class Client {
     vtxoSwapStorage: VtxoSwapStorageProvider,
     network: NetworkInput,
     arkadeUrl: string,
+    esploraUrl: string,
   ): Promise<Client> {
     // Bind wallet storage methods to preserve 'this' context when called from WASM
     const jsWalletStorageProvider = new JsWalletStorageProvider(
@@ -320,6 +347,7 @@ export class Client {
       jsVtxoSwapStorageProvider,
       network,
       arkadeUrl,
+      esploraUrl,
     );
 
     return new Client(wasmClient, baseUrl, swapStorage);
@@ -691,6 +719,52 @@ export class Client {
    */
   async listAllVtxoSwaps(): Promise<ExtendedVtxoSwapStorageData[]> {
     return await this.client.listAllVtxoSwaps();
+  }
+
+  /**
+   * Create an on-chain Bitcoin to Arkade swap.
+   *
+   * User sends on-chain BTC to a P2WSH HTLC address, and receives Arkade VTXOs.
+   *
+   * @param request - The swap request parameters
+   * @returns The created swap response with P2WSH address to fund
+   */
+  async createBitcoinToArkadeSwap(
+    request: BtcToArkadeSwapRequest,
+  ): Promise<BtcToArkadeSwapResponse> {
+    return await this.client.createBitcoinToArkadeSwap(
+      request.target_arkade_address,
+      BigInt(request.sats_receive),
+      request.referral_code,
+    );
+  }
+
+  /**
+   * Claim the Arkade VHTLC for a BTC-to-Arkade swap.
+   *
+   * This reveals the preimage/secret to claim funds on Arkade.
+   *
+   * @param swapId - The swap ID
+   * @returns The Arkade claim transaction ID
+   */
+  async claimBtcToArkadeVhtlc(swapId: string): Promise<string> {
+    return await this.client.claimBtcToArkadeVhtlc(swapId);
+  }
+
+  /**
+   * Refund from the on-chain Bitcoin HTLC after timeout.
+   *
+   * This spends from the P2WSH HTLC back to the user's address.
+   *
+   * @param swapId - The swap ID
+   * @param refundAddress - The Bitcoin address to receive the refund
+   * @returns The refund transaction ID
+   */
+  async refundOnchainHtlc(
+    swapId: string,
+    refundAddress: string,
+  ): Promise<string> {
+    return await this.client.refundOnchainHtlc(swapId, refundAddress);
   }
 }
 

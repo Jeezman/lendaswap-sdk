@@ -120,6 +120,18 @@ impl ApiClient {
         self.post_json(&url, request).await
     }
 
+    /// Create an on-chain Bitcoin to Arkade swap (BTC → Arkade).
+    ///
+    /// # Arguments
+    /// * `request` - Swap request parameters
+    pub async fn create_btc_to_arkade_swap(
+        &self,
+        request: &BtcToArkadeSwapRequest,
+    ) -> Result<BtcToArkadeSwapResponse> {
+        let url = format!("{}/swap/bitcoin/arkade", self.base_url);
+        self.post_json(&url, request).await
+    }
+
     /// Claim a swap via Gelato relay.
     pub async fn claim_gelato(&self, swap_id: &str, secret: &str) -> Result<()> {
         let url = format!("{}/swap/{}/claim-gelato", self.base_url, swap_id);

@@ -13,6 +13,7 @@ use uuid::Uuid;
 pub enum TokenId {
     BtcLightning,
     BtcArkade,
+    BtcOnchain,
     /// Dynamic coin identifier for EVM tokens
     #[serde(untagged)]
     Coin(String),
@@ -24,6 +25,7 @@ impl TokenId {
         match self {
             TokenId::BtcLightning => "btc_lightning",
             TokenId::BtcArkade => "btc_arkade",
+            TokenId::BtcOnchain => "btc_onchain",
             TokenId::Coin(s) => s,
         }
     }
@@ -40,6 +42,7 @@ impl std::fmt::Display for TokenId {
 pub enum Chain {
     Arkade,
     Lightning,
+    Bitcoin,
     Polygon,
     Ethereum,
 }
@@ -110,9 +113,19 @@ pub enum SwapStatus {
     /// Initial state when swap is created. Waiting for client to fund BTC.
     ///
     /// **Transitions:**
-    /// - → `ClientFunded`: Client sends BTC to server
+    /// - → `ClientFundedingSeen`: Client tx has been seen but not confirmed yet
+    /// - → `ClientFunded`: Client sends BTC to server and confirmed
     /// - → `Expired`: No funding within 30 minutes
     Pending,
+
+    /// Client's tx has been seen but not confirmed. This is mostly relevant for on-chain transactions but not for Arkade or Lightning
+    ///
+    /// Server has received and verified the BTC payment. We are still waiting for this transaction to be confirmed
+    ///
+    /// **Transitions:**
+    /// - → `ClientFunded`: Client sends BTC to server and confirmed
+    /// - → `ClientRefunded`: Client refunds BTC before server creates HTLC
+    ClientFundingSeen,
 
     /// Client has funded BTC (via Lightning or Arkade).
     ///
@@ -297,8 +310,10 @@ pub struct SwapCommonFields {
     pub receiver_pk: String,
     /// Arkade server's public key
     pub server_pk: String,
-    /// Timestamp past which refund is permitted
-    pub refund_locktime: u32,
+    /// Timestamp past which refund is permitted on the EVM chain
+    pub evm_refund_locktime: u32,
+    /// Timestamp past which refund is permitted on Arkade
+    pub vhtlc_refund_locktime: u32,
     /// Relative timelock for claim in seconds
     pub unilateral_claim_delay: i64,
     /// Relative timelock for refund in seconds
@@ -390,6 +405,7 @@ pub struct EvmToBtcSwapResponse {
 pub enum SwapDirection {
     BtcToEvm,
     EvmToBtc,
+    BtcToArkade,
 }
 
 /// Tagged union for swap responses.
@@ -398,6 +414,7 @@ pub enum SwapDirection {
 pub enum GetSwapResponse {
     BtcToEvm(BtcToEvmSwapResponse),
     EvmToBtc(EvmToBtcSwapResponse),
+    BtcToArkade(BtcToArkadeSwapResponse),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -432,21 +449,33 @@ impl std::str::FromStr for EvmChain {
 
 impl GetSwapResponse {
     /// Get the common fields regardless of swap direction.
-    pub fn common(&self) -> &SwapCommonFields {
+    ///
+    /// Note: Only available for BtcToEvm and EvmToBtc swaps.
+    /// BtcToArkade swaps have a different structure.
+    pub fn common(&self) -> Option<&SwapCommonFields> {
         match self {
-            GetSwapResponse::BtcToEvm(r) => &r.common,
-            GetSwapResponse::EvmToBtc(r) => &r.common,
+            GetSwapResponse::BtcToEvm(r) => Some(&r.common),
+            GetSwapResponse::EvmToBtc(r) => Some(&r.common),
+            GetSwapResponse::BtcToArkade(_) => None,
         }
     }
 
     /// Get the swap ID.
     pub fn id(&self) -> String {
-        self.common().id.to_string()
+        match self {
+            GetSwapResponse::BtcToEvm(r) => r.common.id.to_string(),
+            GetSwapResponse::EvmToBtc(r) => r.common.id.to_string(),
+            GetSwapResponse::BtcToArkade(r) => r.id.to_string(),
+        }
     }
 
     /// Get the swap status.
     pub fn status(&self) -> SwapStatus {
-        self.common().status
+        match self {
+            GetSwapResponse::BtcToEvm(r) => r.common.status,
+            GetSwapResponse::EvmToBtc(r) => r.common.status,
+            GetSwapResponse::BtcToArkade(r) => r.status,
+        }
     }
 
     /// Get the direction of the swap.
@@ -454,6 +483,7 @@ impl GetSwapResponse {
         match self {
             GetSwapResponse::BtcToEvm(_) => SwapDirection::BtcToEvm,
             GetSwapResponse::EvmToBtc(_) => SwapDirection::EvmToBtc,
+            GetSwapResponse::BtcToArkade(_) => SwapDirection::BtcToArkade,
         }
     }
 }
@@ -653,4 +683,80 @@ pub struct VtxoSwapResponse {
     pub fee_sats: i64,
     /// Bitcoin network
     pub network: String,
+}
+
+/// Request to create an on-chain Bitcoin to Arkade swap.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BtcToArkadeSwapRequest {
+    /// User's target Arkade address to receive VTXOs.
+    pub target_arkade_address: String,
+    /// Amount user wants to receive on Arkade in satoshis.
+    pub sats_receive: i64,
+    /// User's claim public key for the Arkade VHTLC.
+    pub claim_pk: String,
+    /// User's refund public key for the on-chain Bitcoin HTLC.
+    pub refund_pk: String,
+    /// Hash lock (32-byte hex string, no 0x prefix).
+    pub hash_lock: String,
+    /// User ID derived from wallet for recovery.
+    pub user_id: String,
+    /// Optional referral code.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub referral_code: Option<String>,
+}
+
+/// BTC (on-chain) to Arkade swap response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BtcToArkadeSwapResponse {
+    /// Swap ID.
+    pub id: uuid::Uuid,
+    /// Current status of the swap.
+    pub status: SwapStatus,
+    /// P2WSH HTLC address for user to send on-chain BTC.
+    pub btc_htlc_address: String,
+    /// Amount user must send in satoshis (includes fee).
+    pub asset_amount: i64,
+    /// Amount user will receive on Arkade in satoshis.
+    pub sats_receive: i64,
+    /// Protocol fee in satoshis.
+    pub fee_sats: i64,
+    /// Hash lock.
+    pub hash_lock: String,
+    /// Timestamp after which user can refund on-chain BTC.
+    pub btc_refund_locktime: i64,
+    /// Arkade VHTLC address where user will claim funds.
+    pub arkade_vhtlc_address: String,
+    /// User's target Arkade address.
+    pub target_arkade_address: String,
+    /// On-chain BTC funding transaction ID.
+    pub btc_fund_txid: Option<String>,
+    /// On-chain BTC claim transaction ID.
+    pub btc_claim_txid: Option<String>,
+    /// Arkade VHTLC funding transaction ID.
+    pub arkade_fund_txid: Option<String>,
+    /// Arkade VHTLC claim transaction ID.
+    pub arkade_claim_txid: Option<String>,
+    /// Bitcoin network.
+    pub network: String,
+    /// Timestamp of when the swap was created.
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: time::OffsetDateTime,
+
+    // VHTLC parameters for client-side claim
+    /// Server's VHTLC public key (sender in the VHTLC).
+    pub server_vhtlc_pk: String,
+    /// Arkade server's public key.
+    pub arkade_server_pk: String,
+    /// VHTLC refund locktime (unix timestamp).
+    pub vhtlc_refund_locktime: i64,
+    /// Unilateral claim delay in seconds.
+    pub unilateral_claim_delay: i64,
+    /// Unilateral refund delay in seconds.
+    pub unilateral_refund_delay: i64,
+    /// Unilateral refund without receiver delay in seconds.
+    pub unilateral_refund_without_receiver_delay: i64,
+    /// Source token (always btc_onchain for this swap type).
+    pub source_token: TokenId,
+    /// Target token (always btc_arkade for this swap type).
+    pub target_token: TokenId,
 }

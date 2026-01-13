@@ -52,6 +52,33 @@ pub async fn claim(
     let lendaswap_pk = parse_public_key(&swap_data.lendaswap_pk)?;
     let arkade_server_pk = parse_public_key(&swap_data.arkade_server_pk)?;
 
+    // Parse unilateral delays
+    let unilateral_claim_delay = parse_sequence_number(swap_data.unilateral_claim_delay)
+        .map_err(|e| Error::Vhtlc(format!("Invalid unilateral claim delay: {}", e)))?;
+    let unilateral_refund_delay = parse_sequence_number(swap_data.unilateral_refund_delay)
+        .map_err(|e| Error::Vhtlc(format!("Invalid unilateral refund delay: {}", e)))?;
+    let unilateral_refund_without_receiver_delay =
+        parse_sequence_number(swap_data.unilateral_refund_without_receiver_delay).map_err(|e| {
+            Error::Vhtlc(format!(
+                "Invalid unilateral refund without receiver delay: {}",
+                e
+            ))
+        })?;
+
+    // Log VHTLC parameters for debugging
+    log::info!(
+        "[CLIENT] VHTLC claim parameters: sender={}, receiver={}, server={}, preimage_hash={}, refund_locktime={}, unilateral_claim_delay={:?}, unilateral_refund_delay={:?}, unilateral_refund_without_receiver_delay={:?}, network={:?}",
+        lendaswap_pk,
+        own_pk,
+        arkade_server_pk,
+        ripemd160_hash,
+        swap_data.refund_locktime,
+        unilateral_claim_delay,
+        unilateral_refund_delay,
+        unilateral_refund_without_receiver_delay,
+        bitcoin_network,
+    );
+
     // Construct VHTLC
     let vhtlc = VhtlcScript::new(
         VhtlcOptions {
@@ -60,25 +87,22 @@ pub async fn claim(
             server: arkade_server_pk.into(),
             preimage_hash: ripemd160_hash,
             refund_locktime: swap_data.refund_locktime,
-            unilateral_claim_delay: parse_sequence_number(swap_data.unilateral_claim_delay)
-                .map_err(|e| Error::Vhtlc(format!("Invalid unilateral claim delay: {}", e)))?,
-            unilateral_refund_delay: parse_sequence_number(swap_data.unilateral_refund_delay)
-                .map_err(|e| Error::Vhtlc(format!("Invalid unilateral refund delay: {}", e)))?,
-            unilateral_refund_without_receiver_delay: parse_sequence_number(
-                swap_data.unilateral_refund_without_receiver_delay,
-            )
-            .map_err(|e| {
-                Error::Vhtlc(format!(
-                    "Invalid unilateral refund without receiver delay: {}",
-                    e
-                ))
-            })?,
+            unilateral_claim_delay,
+            unilateral_refund_delay,
+            unilateral_refund_without_receiver_delay,
         },
         bitcoin_network,
     )
     .map_err(|e| Error::Vhtlc(format!("Failed to construct VHTLC script: {}", e)))?;
 
     let vhtlc_address = vhtlc.address();
+
+    // Log computed address for comparison
+    log::info!(
+        "[CLIENT] VHTLC computed address: {}, expected address: {}",
+        vhtlc_address.encode(),
+        swap_data.vhtlc_address
+    );
 
     // Verify address matches
     if vhtlc_address.encode() != swap_data.vhtlc_address {

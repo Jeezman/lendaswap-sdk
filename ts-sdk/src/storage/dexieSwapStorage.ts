@@ -24,9 +24,54 @@ class LendaswapDatabase extends Dexie {
 
   constructor(dbName = "lendaswap") {
     super(dbName);
+
+    // Version 1: Original schema
     this.version(1).stores({
       swaps: "id", // Primary key only, no additional indexes needed
     });
+
+    // Version 2: Migrate refund_locktime field names
+    // - btc_to_evm: refund_locktime -> vhtlc_refund_locktime, add evm_refund_locktime
+    // - evm_to_btc: refund_locktime -> evm_refund_locktime, add vhtlc_refund_locktime
+    this.version(2)
+      .stores({
+        swaps: "id",
+      })
+      .upgrade(async (tx) => {
+        const TWELVE_HOURS_SECONDS = 43200;
+
+        await tx
+          .table("swaps")
+          .toCollection()
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .modify((record: any) => {
+            const response = record.response;
+            if (!response || !("refund_locktime" in response)) return;
+
+            // Skip BtcToArkade swaps - they already have correct field names
+            if ("btc_htlc_address" in response) return;
+
+            const oldLocktime = response.refund_locktime;
+
+            // Detect swap type: evm_to_btc has source_token_address field
+            const isEvmToBtc = "source_token_address" in response;
+
+            if (isEvmToBtc) {
+              // evm_to_btc: refund_locktime -> evm_refund_locktime
+              // vhtlc_refund_locktime = evm_refund_locktime - 12h
+              response.evm_refund_locktime = oldLocktime;
+              response.vhtlc_refund_locktime =
+                oldLocktime - TWELVE_HOURS_SECONDS;
+            } else {
+              // btc_to_evm: refund_locktime -> vhtlc_refund_locktime
+              // evm_refund_locktime = vhtlc_refund_locktime - 12h
+              response.vhtlc_refund_locktime = oldLocktime;
+              response.evm_refund_locktime = oldLocktime - TWELVE_HOURS_SECONDS;
+            }
+
+            delete response.refund_locktime;
+          });
+      });
   }
 }
 

@@ -87,6 +87,8 @@ pub struct SwapParams {
     pub public_key: PublicKey,
     #[serde(with = "hex_bytes32")]
     pub preimage: [u8; 32],
+    /// SHA256 hash of the preimage.
+    /// For EVM swaps, this is used directly. For Bitcoin HTLCs, HASH160 is computed from preimage.
     #[serde(with = "hex_bytes32")]
     pub preimage_hash: [u8; 32],
     pub user_id: PublicKey,

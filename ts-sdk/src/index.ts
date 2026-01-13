@@ -45,6 +45,8 @@ export type { NetworkInput } from "./api.js";
 // Re-export WASM types and API types
 export {
   type AssetPair,
+  type BtcToArkadeSwapRequest,
+  type BtcToArkadeSwapResponse,
   type BtcToEvmSwapResponse,
   type Chain,
   Client,
@@ -90,6 +92,12 @@ export {
   type PriceUpdateMessage,
   type TradingPairPrices,
 } from "./price-feed.js";
+export {
+  calculateSourceAmount,
+  calculateTargetAmount,
+  computeExchangeRate,
+  selectTierRate,
+} from "./price-calculations.js";
 // Storage (wallet data)
 // Swap storage (typed swap data using Dexie/IndexedDB)
 // VTXO swap storage (typed VTXO swap data using Dexie/IndexedDB)

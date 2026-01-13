@@ -52,6 +52,14 @@ pub enum Error {
     #[error("Arkade error: {0}")]
     Arkade(String),
 
+    /// Esplora client error.
+    #[error("Esplora error: {0}")]
+    Esplora(String),
+
+    /// UTXO not found for HTLC address.
+    #[error("UTXO not found: {0}")]
+    UtxoNotFound(String),
+
     /// Generic error with context.
     #[error("{0}")]
     Other(String),

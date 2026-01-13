@@ -184,6 +184,7 @@ async fn test_create_arkade_to_evm_swap() {
         vtxo_swap_storage,
         Network::Bitcoin,
         "https://arkade.computer".to_string(),
+        "https://mempool.space/api".to_string(),
     );
 
     // we need to ensure there is a mnemonic
@@ -296,6 +297,11 @@ async fn test_get_swap() {
                     println!("  ID: {}", s.common.id);
                     println!("  Status: {:?}", s.common.status);
                 }
+                GetSwapResponse::BtcToArkade(s) => {
+                    println!("  Direction: EVM -> BTC");
+                    println!("  ID: {}", s.id);
+                    println!("  Status: {:?}", s.status);
+                }
             }
         }
         Err(e) => println!("Failed to get swap: {:#}", e),
@@ -322,6 +328,7 @@ async fn test_get_version() {
 // ============================================================================
 
 const ARKADE_URL: &str = "http://localhost:7070";
+const ESPLORA_URL: &str = "http://localhost:3000";
 
 /// Full E2E test for VTXO swap happy path.
 ///
@@ -352,6 +359,7 @@ async fn test_vtxo_swap_e2e_happy_path() {
         vtxo_swap_storage,
         Network::Regtest,
         ARKADE_URL.to_string(),
+        ESPLORA_URL.to_string(),
     );
 
     // Initialize wallet
@@ -467,6 +475,7 @@ async fn test_vtxo_swap_client_refund() {
         vtxo_swap_storage,
         Network::Regtest,
         ARKADE_URL.to_string(),
+        ESPLORA_URL.to_string(),
     );
 
     // Initialize wallet

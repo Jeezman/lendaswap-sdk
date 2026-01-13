@@ -20,6 +20,8 @@
  * ```
  */
 
+import type { TokenIdString } from "./api";
+
 /**
  * Price tiers for different quote asset amounts.
  * Different rates apply based on swap volume (in units of the quote asset).
@@ -41,6 +43,8 @@ export interface PriceTiers {
 export interface TradingPairPrices {
   /** Trading pair identifier, e.g., "USDC_POL-BTC" or "USDT0_POL-BTC" */
   pair: string;
+  source: TokenIdString;
+  target: TokenIdString;
   /** Price tiers for this pair */
   tiers: PriceTiers;
 }
