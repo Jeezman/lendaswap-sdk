@@ -83,19 +83,23 @@ import {
   Client,
   createDexieWalletStorage,
   createDexieSwapStorage,
+  createDexieVtxoSwapStorage,
 } from '@lendasat/lendaswap-sdk';
 
 // Create storage providers (uses IndexedDB via Dexie)
 const walletStorage = createDexieWalletStorage();
 const swapStorage = createDexieSwapStorage();
+const vtxoSwapStorage = createDexieVtxoSwapStorage();
 
 // Create client
 const client = await Client.create(
   'https://apilendaswap.lendasat.com',
   walletStorage,
   swapStorage,
+  vtxoSwapStorage,
   'bitcoin',
-  'https://arkade.computer'
+  'https://arkade.computer',
+  'https://mempool.space/api'
 );
 
 // Initialize wallet (generates or loads mnemonic)
@@ -122,17 +126,21 @@ import {
   Client,
   createDexieWalletStorage,
   createDexieSwapStorage,
+  createDexieVtxoSwapStorage,
 } from '@lendasat/lendaswap-sdk';
 
 const walletStorage = createDexieWalletStorage();
 const swapStorage = createDexieSwapStorage();
+const vtxoSwapStorage = createDexieVtxoSwapStorage();
 
 const client = await Client.create(
   'https://apilendaswap.lendasat.com',
   walletStorage,
   swapStorage,
+  vtxoSwapStorage,
   'bitcoin',
-  'https://arkade.computer'
+  'https://arkade.computer',
+  'https://mempool.space/api'
 );
 
 await client.init();
@@ -169,17 +177,21 @@ import {
   Client,
   createDexieWalletStorage,
   createDexieSwapStorage,
+  createDexieVtxoSwapStorage,
 } from '@lendasat/lendaswap-sdk';
 
 const walletStorage = createDexieWalletStorage();
 const swapStorage = createDexieSwapStorage();
+const vtxoSwapStorage = createDexieVtxoSwapStorage();
 
 const client = await Client.create(
   'https://apilendaswap.lendasat.com',
   walletStorage,
   swapStorage,
+  vtxoSwapStorage,
   'bitcoin',
-  'https://arkade.computer'
+  'https://arkade.computer',
+  'https://mempool.space/api'
 );
 
 await client.init();
@@ -254,7 +266,9 @@ unsubscribe();
 - **Client** - Full-featured client for the Lendaswap API with WASM-powered cryptography
 - **Wallet Management** - HD wallet derivation for swap parameters
 - **Price Feed** - Real-time WebSocket price updates with auto-reconnection
-- **Storage Providers** - Dexie (IndexedDB) storage for wallet and swap data
+- **Price Calculations** - Helper functions for computing exchange rates and amounts
+- **USD Prices** - Fetch current USD prices from CoinGecko
+- **Storage Providers** - Dexie (IndexedDB) storage for wallet, swap, and VTXO swap data
 - **Configurable Logging** - Set log level via code or localStorage
 
 ## API Reference
@@ -266,17 +280,21 @@ const client = await Client.create(
   baseUrl,
   walletStorage,
   swapStorage,
+  vtxoSwapStorage,
   network,
-  arkadeUrl
+  arkadeUrl,
+  esploraUrl
 );
 
 // Initialize wallet
 await client.init();
 await client.init('your mnemonic phrase'); // Or with existing mnemonic
 
-// Trading pairs and quotes
+// Trading pairs, tokens, and quotes
 await client.getAssetPairs();
+await client.getTokens();
 await client.getQuote(from, to, amount);
+await client.getVersion();
 
 // Swap operations
 await client.createArkadeToEvmSwap(request, targetNetwork);
@@ -284,11 +302,27 @@ await client.createEvmToArkadeSwap(request, sourceNetwork);
 await client.createEvmToLightningSwap(request, sourceNetwork);
 await client.getSwap(id);
 await client.listAllSwaps();
+await client.deleteSwap(id);
+await client.clearSwapStorage();
 
 // Claiming and refunding
 await client.claimGelato(swapId);        // Gasless EVM claim via Gelato
 await client.claimVhtlc(swapId);         // Claim Arkade VHTLC
 await client.refundVhtlc(swapId, addr);  // Refund expired VHTLC
+await client.amountsForSwap(swapId);     // Get VHTLC amounts
+
+// On-chain Bitcoin to Arkade swaps
+await client.createBitcoinToArkadeSwap(request);
+await client.claimBtcToArkadeVhtlc(swapId);
+await client.refundOnchainHtlc(swapId, refundAddress);
+
+// VTXO swaps (refresh VTXOs)
+await client.estimateVtxoSwap(vtxos);
+await client.createVtxoSwap(vtxos);
+await client.getVtxoSwap(id);
+await client.claimVtxoSwap(swap, swapParams, claimAddress);
+await client.refundVtxoSwap(swapId, refundAddress);
+await client.listAllVtxoSwaps();
 
 // Recovery
 await client.recoverSwaps();
@@ -304,11 +338,13 @@ await client.getUserIdXpub();
 import {
   createDexieWalletStorage,
   createDexieSwapStorage,
+  createDexieVtxoSwapStorage,
 } from '@lendasat/lendaswap-sdk';
 
 // Pre-built Dexie (IndexedDB) storage providers
 const walletStorage = createDexieWalletStorage();
 const swapStorage = createDexieSwapStorage();
+const vtxoSwapStorage = createDexieVtxoSwapStorage();
 ```
 
 Or implement custom storage:
@@ -317,6 +353,7 @@ Or implement custom storage:
 import type {
   WalletStorageProvider,
   SwapStorageProvider,
+  VtxoSwapStorageProvider,
 } from '@lendasat/lendaswap-sdk';
 
 const walletStorage: WalletStorageProvider = {
@@ -327,6 +364,14 @@ const walletStorage: WalletStorageProvider = {
 };
 
 const swapStorage: SwapStorageProvider = {
+  get: async (id) => /* fetch from your storage */,
+  store: async (id, data) => /* store to your storage */,
+  delete: async (id) => /* delete from your storage */,
+  list: async () => /* return all swap IDs */,
+  getAll: async () => /* return all swap data */,
+};
+
+const vtxoSwapStorage: VtxoSwapStorageProvider = {
   get: async (id) => /* fetch from your storage */,
   store: async (id, data) => /* store to your storage */,
   delete: async (id) => /* delete from your storage */,
@@ -371,16 +416,61 @@ localStorage.setItem('lendaswap_log_level', 'debug');
 // Reload page for changes to take effect
 ```
 
+### Price Calculations
+
+```typescript
+import {
+  calculateSourceAmount,
+  calculateTargetAmount,
+  computeExchangeRate,
+  selectTierRate,
+} from '@lendasat/lendaswap-sdk';
+
+// Select the appropriate tier rate based on amount
+const rate = selectTierRate(priceTiers, amount);
+
+// Calculate target amount from source
+const targetAmount = calculateTargetAmount(sourceAmount, exchangeRate);
+
+// Calculate source amount from target
+const sourceAmount = calculateSourceAmount(targetAmount, exchangeRate);
+
+// Compute exchange rate from price tiers
+const exchangeRate = computeExchangeRate(priceTiers, amount);
+```
+
+### USD Prices
+
+```typescript
+import {
+  getUsdPrice,
+  getUsdPrices,
+  getSupportedTokensForUsdPrice,
+} from '@lendasat/lendaswap-sdk';
+
+// Get USD price for a single token
+const btcPrice = await getUsdPrice('btc_arkade');
+console.log('BTC price:', btcPrice.usd);
+
+// Get USD prices for multiple tokens
+const prices = await getUsdPrices(['btc_arkade', 'usdc_pol']);
+
+// Get list of supported tokens for USD price lookup
+const supported = getSupportedTokensForUsdPrice();
+```
+
 ## Supported Tokens
 
 | Token | Chain     | ID              |
 | ----- | --------- | --------------- |
 | BTC   | Lightning | `btc_lightning` |
 | BTC   | Arkade    | `btc_arkade`    |
+| BTC   | On-chain  | `btc_onchain`   |
 | USDC  | Polygon   | `usdc_pol`      |
 | USDT  | Polygon   | `usdt0_pol`     |
 | USDC  | Ethereum  | `usdc_eth`      |
 | USDT  | Ethereum  | `usdt_eth`      |
+| XAUT  | Ethereum  | `xaut_eth`      |
 
 ## License
 
