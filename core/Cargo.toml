@@ -34,8 +34,8 @@ bitcoin = { version = "0.32.2", features = ["secp-recovery"] }
 miniscript = "12"
 
 # Arkade
-ark-rest = { git = "https://github.com/arkade-os/rust-sdk", package = "ark-rest", rev = "09b073269c944a25eef5e1f92fd2ae2a5ef2ea28" }
-ark-rs = { git = "https://github.com/arkade-os/rust-sdk", rev = "09b073269c944a25eef5e1f92fd2ae2a5ef2ea28" }
+ark-rest = { git = "https://github.com/arkade-os/rust-sdk", package = "ark-rest", rev = "220bbf33" }
+ark-rs = { git = "https://github.com/arkade-os/rust-sdk", rev = "220bbf33" }
 
 # Nostr (for key derivation compatibility)
 nostr = { version = "0.40.0", default-features = false, features = ["std"] }
