@@ -43,6 +43,75 @@ impl SqliteStorageHandle {
 }
 
 // ============================================================================
+// Enums
+// ============================================================================
+
+/// Swap status enum with all possible states.
+#[napi(string_enum)]
+pub enum SwapStatus {
+    /// Initial state - waiting for client to fund
+    Pending,
+    /// Client's funding transaction seen but not confirmed
+    ClientFundingSeen,
+    /// Client has funded BTC
+    ClientFunded,
+    /// Client refunded before server created HTLC
+    ClientRefunded,
+    /// Server has locked funds in HTLC
+    ServerFunded,
+    /// Client is claiming by revealing the secret
+    ClientRedeeming,
+    /// Client has claimed by revealing the secret
+    ClientRedeemed,
+    /// Server has redeemed using the revealed secret (swap complete)
+    ServerRedeemed,
+    /// Client funded, server funded, but HTLC timed out
+    ClientFundedServerRefunded,
+    /// Error state: client refunded while server still has funds locked
+    ClientRefundedServerFunded,
+    /// Both parties refunded after error state
+    ClientRefundedServerRefunded,
+    /// Swap expired before client funded
+    Expired,
+    /// Client funded with wrong parameters
+    ClientInvalidFunded,
+    /// Client funded too late (after timeout)
+    ClientFundedTooLate,
+    /// Critical error: client redeemed and refunded (took all money)
+    ClientRedeemedAndClientRefunded,
+}
+
+impl From<core_api::SwapStatus> for SwapStatus {
+    fn from(s: core_api::SwapStatus) -> Self {
+        match s {
+            core_api::SwapStatus::Pending => SwapStatus::Pending,
+            core_api::SwapStatus::ClientFundingSeen => SwapStatus::ClientFundingSeen,
+            core_api::SwapStatus::ClientFunded => SwapStatus::ClientFunded,
+            core_api::SwapStatus::ClientRefunded => SwapStatus::ClientRefunded,
+            core_api::SwapStatus::ServerFunded => SwapStatus::ServerFunded,
+            core_api::SwapStatus::ClientRedeeming => SwapStatus::ClientRedeeming,
+            core_api::SwapStatus::ClientRedeemed => SwapStatus::ClientRedeemed,
+            core_api::SwapStatus::ServerRedeemed => SwapStatus::ServerRedeemed,
+            core_api::SwapStatus::ClientFundedServerRefunded => {
+                SwapStatus::ClientFundedServerRefunded
+            }
+            core_api::SwapStatus::ClientRefundedServerFunded => {
+                SwapStatus::ClientRefundedServerFunded
+            }
+            core_api::SwapStatus::ClientRefundedServerRefunded => {
+                SwapStatus::ClientRefundedServerRefunded
+            }
+            core_api::SwapStatus::Expired => SwapStatus::Expired,
+            core_api::SwapStatus::ClientInvalidFunded => SwapStatus::ClientInvalidFunded,
+            core_api::SwapStatus::ClientFundedTooLate => SwapStatus::ClientFundedTooLate,
+            core_api::SwapStatus::ClientRedeemedAndClientRefunded => {
+                SwapStatus::ClientRedeemedAndClientRefunded
+            }
+        }
+    }
+}
+
+// ============================================================================
 // Response Types
 // ============================================================================
 
@@ -112,7 +181,7 @@ impl From<core_api::AssetPair> for AssetPair {
 #[napi(object)]
 pub struct BtcToEvmSwapResponse {
     pub id: String,
-    pub status: String,
+    pub status: SwapStatus,
     pub hash_lock: String,
     pub fee_sats: i64,
     pub asset_amount: f64,
@@ -125,13 +194,21 @@ pub struct BtcToEvmSwapResponse {
     pub target_token: String,
     pub network: String,
     pub created_at: String,
+    /// Bitcoin HTLC claim transaction ID
+    pub bitcoin_htlc_claim_txid: Option<String>,
+    /// Bitcoin HTLC fund transaction ID
+    pub bitcoin_htlc_fund_txid: Option<String>,
+    /// EVM HTLC claim transaction ID
+    pub evm_htlc_claim_txid: Option<String>,
+    /// EVM HTLC fund transaction ID
+    pub evm_htlc_fund_txid: Option<String>,
 }
 
 impl From<core_api::BtcToEvmSwapResponse> for BtcToEvmSwapResponse {
     fn from(r: core_api::BtcToEvmSwapResponse) -> Self {
         BtcToEvmSwapResponse {
             id: r.common.id.to_string(),
-            status: format!("{:?}", r.common.status),
+            status: r.common.status.into(),
             hash_lock: r.common.hash_lock,
             fee_sats: r.common.fee_sats,
             asset_amount: r.common.asset_amount,
@@ -148,6 +225,10 @@ impl From<core_api::BtcToEvmSwapResponse> for BtcToEvmSwapResponse {
                 .created_at
                 .format(&time::format_description::well_known::Rfc3339)
                 .unwrap_or_default(),
+            bitcoin_htlc_claim_txid: r.bitcoin_htlc_claim_txid,
+            bitcoin_htlc_fund_txid: r.bitcoin_htlc_fund_txid,
+            evm_htlc_claim_txid: r.evm_htlc_claim_txid,
+            evm_htlc_fund_txid: r.evm_htlc_fund_txid,
         }
     }
 }
@@ -156,7 +237,7 @@ impl From<core_api::BtcToEvmSwapResponse> for BtcToEvmSwapResponse {
 #[napi(object)]
 pub struct EvmToBtcSwapResponse {
     pub id: String,
-    pub status: String,
+    pub status: SwapStatus,
     pub hash_lock: String,
     pub fee_sats: i64,
     pub asset_amount: f64,
@@ -170,13 +251,20 @@ pub struct EvmToBtcSwapResponse {
     pub network: String,
     pub created_at: String,
     pub source_token_address: String,
+    pub bitcoin_htlc_fund_txid: Option<String>,
+    /// Bitcoin HTLC claim transaction ID
+    pub bitcoin_htlc_claim_txid: Option<String>,
+    /// EVM HTLC claim transaction ID
+    pub evm_htlc_claim_txid: Option<String>,
+    /// EVM HTLC fund transaction ID
+    pub evm_htlc_fund_txid: Option<String>,
 }
 
 impl From<core_api::EvmToBtcSwapResponse> for EvmToBtcSwapResponse {
     fn from(r: core_api::EvmToBtcSwapResponse) -> Self {
         EvmToBtcSwapResponse {
             id: r.common.id.to_string(),
-            status: format!("{:?}", r.common.status),
+            status: r.common.status.into(),
             hash_lock: r.common.hash_lock,
             fee_sats: r.common.fee_sats,
             asset_amount: r.common.asset_amount,
@@ -194,6 +282,10 @@ impl From<core_api::EvmToBtcSwapResponse> for EvmToBtcSwapResponse {
                 .format(&time::format_description::well_known::Rfc3339)
                 .unwrap_or_default(),
             source_token_address: r.source_token_address,
+            bitcoin_htlc_fund_txid: r.bitcoin_htlc_fund_txid,
+            bitcoin_htlc_claim_txid: r.bitcoin_htlc_claim_txid,
+            evm_htlc_claim_txid: r.evm_htlc_claim_txid,
+            evm_htlc_fund_txid: r.evm_htlc_fund_txid,
         }
     }
 }
@@ -202,7 +294,7 @@ impl From<core_api::EvmToBtcSwapResponse> for EvmToBtcSwapResponse {
 #[napi(object)]
 pub struct BtcToArkadeSwapResponse {
     pub id: String,
-    pub status: String,
+    pub status: SwapStatus,
     pub btc_htlc_address: String,
     pub asset_amount: i64,
     pub sats_receive: i64,
@@ -214,13 +306,20 @@ pub struct BtcToArkadeSwapResponse {
     pub created_at: String,
     pub source_token: String,
     pub target_token: String,
+    pub btc_fund_txid: Option<String>,
+    /// On-chain BTC claim transaction ID.
+    pub btc_claim_txid: Option<String>,
+    /// Arkade VHTLC funding transaction ID.
+    pub arkade_fund_txid: Option<String>,
+    /// Arkade VHTLC claim transaction ID.
+    pub arkade_claim_txid: Option<String>,
 }
 
 impl From<core_api::BtcToArkadeSwapResponse> for BtcToArkadeSwapResponse {
     fn from(r: core_api::BtcToArkadeSwapResponse) -> Self {
         BtcToArkadeSwapResponse {
             id: r.id.to_string(),
-            status: format!("{:?}", r.status),
+            status: r.status.into(),
             btc_htlc_address: r.btc_htlc_address,
             asset_amount: r.asset_amount,
             sats_receive: r.sats_receive,
@@ -235,6 +334,10 @@ impl From<core_api::BtcToArkadeSwapResponse> for BtcToArkadeSwapResponse {
                 .unwrap_or_default(),
             source_token: r.source_token.to_string(),
             target_token: r.target_token.to_string(),
+            btc_fund_txid: r.btc_fund_txid,
+            btc_claim_txid: r.btc_claim_txid,
+            arkade_fund_txid: r.arkade_fund_txid,
+            arkade_claim_txid: r.arkade_claim_txid,
         }
     }
 }

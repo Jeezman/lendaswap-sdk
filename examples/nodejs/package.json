@@ -1,12 +1,20 @@
 {
   "name": "lendaswap-nodejs-example",
   "version": "1.0.0",
-  "description": "Example Node.js application using Lendaswap Native SDK with SQLite",
+  "description": "Example Node.js CLI using Lendaswap Native SDK with SQLite",
   "type": "module",
   "main": "index.js",
+  "bin": {
+    "lendaswap": "./index.js"
+  },
   "scripts": {
     "start": "node index.js",
-    "dev": "node --watch index.js"
+    "pairs": "node index.js pairs",
+    "tokens": "node index.js tokens",
+    "quote": "node index.js quote",
+    "swap": "node index.js swap",
+    "swaps": "node index.js swaps",
+    "info": "node index.js info"
   },
   "dependencies": {
     "@lendasat/lendaswap-sdk-native": "file:../../node-sdk"
