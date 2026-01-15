@@ -64,3 +64,11 @@ build-all: build-native build-sdk
 bump-version version:
     cd ts-sdk && pnpm version {{ version }} --no-git-tag-version
     cd node-sdk && npm version {{ version }} --no-git-tag-version
+
+# =============================================================================
+# Examples
+# =============================================================================
+
+# Run Node.js example (requires build-native first)
+run-nodejs-example: build-native
+    cd examples/nodejs && npm install && npm start
