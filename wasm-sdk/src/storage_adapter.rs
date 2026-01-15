@@ -412,6 +412,7 @@ impl SwapStorage for JsSwapStorageAdapter {
 
             for i in 0..array.length() {
                 let entry = array.get(i);
+                let entry_string = entry.as_string();
 
                 // Try to extract the ID first for error tracking
                 let entry_id = js_sys::Reflect::get(&entry, &JsValue::from_str("id"))
@@ -422,7 +423,11 @@ impl SwapStorage for JsSwapStorageAdapter {
                 match serde_wasm_bindgen::from_value::<ExtendedSwapStorageData>(entry) {
                     Ok(swap) => swaps.push(swap),
                     Err(e) => {
-                        log::warn!("Failed to deserialize swap entry '{}': {:?}", entry_id, e);
+                        log::warn!(
+                            "Failed to deserialize swap entry '{}': {:?}. Full json {entry_string:?}",
+                            entry_id,
+                            e
+                        );
                         CORRUPTED_SWAP_IDS.with(|ids| {
                             ids.borrow_mut().push(entry_id);
                         });
@@ -435,7 +440,7 @@ impl SwapStorage for JsSwapStorageAdapter {
                 log::warn!(
                     "Skipped {} corrupted swap entries out of {} total",
                     corrupted_count,
-                    array.length()
+                    array.length(),
                 );
             }
 

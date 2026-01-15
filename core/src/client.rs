@@ -1,8 +1,8 @@
 use crate::api::{
-    AssetPair, BtcToArkadeSwapRequest, BtcToArkadeSwapResponse, BtcToEvmSwapResponse,
-    CreateVtxoSwapRequest, EstimateVtxoSwapResponse, EvmChain, EvmToArkadeSwapRequest,
-    EvmToBtcSwapResponse, EvmToLightningSwapRequest, GetSwapResponse, QuoteRequest, QuoteResponse,
-    SwapRequest, TokenId, TokenInfo, Version, VtxoSwapResponse,
+    AssetPair, BtcToArkadeSwapRequest, BtcToArkadeSwapResponse, BtcToEvmSwapRequest,
+    BtcToEvmSwapResponse, CreateVtxoSwapRequest, EstimateVtxoSwapResponse, EvmChain,
+    EvmToArkadeSwapRequest, EvmToBtcSwapResponse, EvmToLightningSwapRequest, GetSwapResponse,
+    QuoteRequest, QuoteResponse, TokenId, TokenInfo, Version, VtxoSwapResponse,
 };
 use crate::esplora::EsploraClient;
 use crate::onchain_htlc::{
@@ -111,16 +111,18 @@ impl<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> Client<S, SS, VSS>
     pub async fn create_arkade_to_evm_swap(
         &self,
         target_address: String,
-        target_amount: Decimal,
+        source_amount: Option<u64>,
+        target_amount: Option<Decimal>,
         target_token: TokenId,
         target_chain: EvmChain,
         referral_code: Option<String>,
     ) -> crate::Result<BtcToEvmSwapResponse> {
         let swap_params = self.wallet.derive_swap_params().await?;
 
-        let request = SwapRequest {
+        let request = BtcToEvmSwapRequest {
             target_address,
             target_amount,
+            source_amount,
             target_token,
             hash_lock: format!("0x{}", hex::encode(swap_params.preimage_hash)),
             refund_pk: hex::encode(swap_params.public_key.serialize()),
@@ -131,6 +133,43 @@ impl<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> Client<S, SS, VSS>
         let response = self
             .api_client
             .create_arkade_to_evm_swap(&request, target_chain)
+            .await?;
+
+        let swap_id = response.common.id.to_string();
+        let swap_data = ExtendedSwapStorageData {
+            response: GetSwapResponse::BtcToEvm(response.clone()),
+            swap_params,
+        };
+
+        self.swap_storage.store(&swap_id, &swap_data).await?;
+
+        Ok(response)
+    }
+    pub async fn create_lightning_to_evm_swap(
+        &self,
+        target_address: String,
+        source_amount: Option<u64>,
+        target_amount: Option<Decimal>,
+        target_token: TokenId,
+        target_chain: EvmChain,
+        referral_code: Option<String>,
+    ) -> crate::Result<BtcToEvmSwapResponse> {
+        let swap_params = self.wallet.derive_swap_params().await?;
+
+        let request = BtcToEvmSwapRequest {
+            target_address,
+            source_amount,
+            target_amount,
+            target_token,
+            hash_lock: format!("0x{}", hex::encode(swap_params.preimage_hash)),
+            refund_pk: hex::encode(swap_params.public_key.serialize()),
+            user_id: hex::encode(swap_params.user_id.serialize()),
+            referral_code,
+        };
+
+        let response = self
+            .api_client
+            .create_lightning_to_evm_swap(&request, target_chain)
             .await?;
 
         let swap_id = response.common.id.to_string();

@@ -253,11 +253,12 @@ pub enum SwapStatus {
     ClientRedeemedAndClientRefunded,
 }
 
-/// Request to create an Arkade to EVM swap (BTC → Token).
+/// Request to create an Arkade/Lightning to EVM swap (BTC → Token).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SwapRequest {
+pub struct BtcToEvmSwapRequest {
+    pub source_amount: Option<u64>,
     pub target_address: String,
-    pub target_amount: Decimal,
+    pub target_amount: Option<Decimal>,
     pub target_token: TokenId,
     pub hash_lock: String,
     pub refund_pk: String,
@@ -325,6 +326,10 @@ pub struct SwapCommonFields {
     /// Timestamp of when the swap was created
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
+    /// Token being sent (source)
+    pub source_token: TokenId,
+    /// Token being received (target)
+    pub target_token: TokenId,
 }
 
 /// BTC → EVM swap response.
@@ -342,10 +347,6 @@ pub struct BtcToEvmSwapResponse {
     pub ln_invoice: String,
     /// The amount of satoshis we expect to receive
     pub sats_receive: i64,
-    /// Token being sent (source)
-    pub source_token: TokenId,
-    /// Token being received (target)
-    pub target_token: TokenId,
     /// Bitcoin HTLC claim transaction ID
     pub bitcoin_htlc_claim_txid: Option<String>,
     /// Bitcoin HTLC fund transaction ID
@@ -371,10 +372,6 @@ pub struct EvmToBtcSwapResponse {
     pub user_address_arkade: Option<String>,
     /// Lightning invoice for payment
     pub ln_invoice: String,
-    /// Token being sent (source)
-    pub source_token: TokenId,
-    /// Token being received (target)
-    pub target_token: TokenId,
     /// Net satoshis user will receive
     pub sats_receive: i64,
     /// Bitcoin HTLC fund transaction ID

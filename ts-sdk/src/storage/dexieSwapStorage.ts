@@ -72,6 +72,33 @@ class LendaswapDatabase extends Dexie {
             delete response.refund_locktime;
           });
       });
+
+    // Version 3: Add source_asset and target_asset fields
+    // These are new fields added to SwapCommonFields for tracking swap pairs
+    this.version(3)
+      .stores({
+        swaps: "id",
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table("swaps")
+          .toCollection()
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .modify((record: any) => {
+            const response = record.response;
+            if (!response) return;
+
+            // Add source_asset if not present
+            if (!("source_asset" in response)) {
+              response.source_asset = "unknown";
+            }
+
+            // Add target_asset if not present
+            if (!("target_asset" in response)) {
+              response.target_asset = "unknown";
+            }
+          });
+      });
   }
 }
 

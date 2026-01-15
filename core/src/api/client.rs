@@ -85,10 +85,24 @@ impl ApiClient {
     /// * `target_network` - Target EVM network (e.g., "polygon", "ethereum")
     pub async fn create_arkade_to_evm_swap(
         &self,
-        request: &SwapRequest,
+        request: &BtcToEvmSwapRequest,
         target_network: EvmChain,
     ) -> Result<BtcToEvmSwapResponse> {
         let url = format!("{}/swap/arkade/{}", self.base_url, target_network);
+        self.post_json(&url, request).await
+    }
+
+    /// Create a Lightning to EVM swap (BTC → Token).
+    ///
+    /// # Arguments
+    /// * `request` - Swap request parameters
+    /// * `target_network` - Target EVM network (e.g., "polygon", "ethereum")
+    pub async fn create_lightning_to_evm_swap(
+        &self,
+        request: &BtcToEvmSwapRequest,
+        target_network: EvmChain,
+    ) -> Result<BtcToEvmSwapResponse> {
+        let url = format!("{}/swap/lightning/{}", self.base_url, target_network);
         self.post_json(&url, request).await
     }
 

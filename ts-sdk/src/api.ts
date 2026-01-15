@@ -116,8 +116,11 @@ export interface ExtendedSwapStorageData {
  * Request to create an Arkade to EVM swap (BTC → Token).
  */
 export interface SwapRequest {
+  // Source amount in sats
+  source_amount?: bigint;
   target_address: string;
-  target_amount: number;
+  // Target amount in the asset of choice, e.g. $1 = 1
+  target_amount?: number;
   target_token: TokenIdString;
   referral_code?: string;
 }
@@ -368,8 +371,46 @@ export class Client {
     request: SwapRequest,
     targetNetwork: "ethereum" | "polygon",
   ): Promise<BtcToEvmSwapResponse> {
+    if (
+      request.source_amount &&
+      request.target_amount &&
+      request.source_amount > 0 &&
+      request.target_amount > 0
+    ) {
+      throw Error("Cannot have source amount and target amount defined");
+    }
     return await this.client.createArkadeToEvmSwap(
       request.target_address,
+      request.source_amount,
+      request.target_amount,
+      request.target_token,
+      targetNetwork,
+      request.referral_code,
+    );
+  }
+  /**
+   * Create a Lightning to EVM swap (BTC → Token).
+   *
+   * @param request - The swap request parameters
+   * @param targetNetwork - Target EVM network (e.g., 'polygon', 'ethereum')
+   * @returns The created swap response
+   */
+  async createLightningToEvmSwap(
+    request: SwapRequest,
+    targetNetwork: "ethereum" | "polygon",
+  ): Promise<BtcToEvmSwapResponse> {
+    if (
+      request.source_amount &&
+      request.target_amount &&
+      request.source_amount > 0 &&
+      request.target_amount > 0
+    ) {
+      throw Error("Cannot have source amount and target amount defined");
+    }
+
+    return await this.client.createLightningToEvmSwap(
+      request.target_address,
+      request.source_amount,
       request.target_amount,
       request.target_token,
       targetNetwork,

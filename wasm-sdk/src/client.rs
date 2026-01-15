@@ -379,8 +379,8 @@ impl From<core_api::BtcToEvmSwapResponse> for BtcToEvmSwapResponse {
             user_address_evm: r.user_address_evm,
             ln_invoice: r.ln_invoice,
             sats_receive: r.sats_receive,
-            source_token: TokenId(r.source_token),
-            target_token: TokenId(r.target_token),
+            source_token: TokenId(r.common.source_token),
+            target_token: TokenId(r.common.target_token),
             bitcoin_htlc_claim_txid: r.bitcoin_htlc_claim_txid,
             bitcoin_htlc_fund_txid: r.bitcoin_htlc_fund_txid,
             evm_htlc_claim_txid: r.evm_htlc_claim_txid,
@@ -458,8 +458,8 @@ impl From<core_api::EvmToBtcSwapResponse> for EvmToBtcSwapResponse {
             user_address_evm: r.user_address_evm,
             user_address_arkade: r.user_address_arkade,
             ln_invoice: r.ln_invoice,
-            source_token: TokenId(r.source_token),
-            target_token: TokenId(r.target_token),
+            source_token: TokenId(r.common.source_token),
+            target_token: TokenId(r.common.target_token),
             sats_receive: r.sats_receive,
             bitcoin_htlc_fund_txid: r.bitcoin_htlc_fund_txid,
             bitcoin_htlc_claim_txid: r.bitcoin_htlc_claim_txid,
@@ -775,7 +775,8 @@ impl Client {
     pub async fn create_arkade_to_evm_swap(
         &self,
         target_address: String,
-        target_amount: f64,
+        source_amount: Option<u64>,
+        target_amount: Option<f64>,
         target_token: String,
         target_chain: String,
         referral_code: Option<String>,
@@ -787,8 +788,14 @@ impl Client {
             other => core_api::TokenId::Coin(other.to_string()),
         };
 
-        let target_amount = Decimal::from_f64(target_amount)
-            .ok_or_else(|| JsValue::from_str("Could not parse target amount"))?;
+        let target_amount = match target_amount {
+            Some(target_amount) => {
+                let t = Decimal::from_f64(target_amount)
+                    .ok_or_else(|| JsValue::from_str("Could not parse target amount"))?;
+                Some(t)
+            }
+            None => None,
+        };
 
         let target_chain: core_api::EvmChain = target_chain
             .parse()
@@ -798,6 +805,54 @@ impl Client {
             .inner
             .create_arkade_to_evm_swap(
                 target_address,
+                source_amount,
+                target_amount,
+                target_token,
+                target_chain,
+                referral_code,
+            )
+            .await
+            .map_err(|e| JsValue::from_str(&format!("{:#}", e)))?;
+
+        Ok(swap.into())
+    }
+
+    /// Create a Lightning to EVM swap.
+    #[wasm_bindgen(js_name = "createLightningToEvmSwap")]
+    pub async fn create_lightning_to_evm_swap(
+        &self,
+        target_address: String,
+        source_amount: Option<u64>,
+        target_amount: Option<f64>,
+        target_token: String,
+        target_chain: String,
+        referral_code: Option<String>,
+    ) -> Result<BtcToEvmSwapResponse, JsValue> {
+        let target_token = match target_token.as_str() {
+            "btc_lightning" => core_api::TokenId::BtcLightning,
+            "btc_arkade" => core_api::TokenId::BtcArkade,
+            // All other tokens use the Coin variant
+            other => core_api::TokenId::Coin(other.to_string()),
+        };
+
+        let target_amount = match target_amount {
+            Some(target_amount) => {
+                let t = Decimal::from_f64(target_amount)
+                    .ok_or_else(|| JsValue::from_str("Could not parse target amount"))?;
+                Some(t)
+            }
+            None => None,
+        };
+
+        let target_chain: core_api::EvmChain = target_chain
+            .parse()
+            .map_err(|e: String| JsValue::from_str(&e))?;
+
+        let swap = self
+            .inner
+            .create_lightning_to_evm_swap(
+                target_address,
+                source_amount,
                 target_amount,
                 target_token,
                 target_chain,
