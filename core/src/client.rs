@@ -45,6 +45,8 @@ pub struct ExtendedVtxoSwapStorageData {
 /// - `S`: Typed storage for wallet data (mnemonic, key index)
 /// - `SS`: Typed storage for swap data
 /// - `VSS`: Typed storage for vtxo swap data
+///
+/// Use [`ClientBuilder`] for a more ergonomic way to construct a client.
 pub struct Client<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> {
     api_client: ApiClient,
     wallet: Wallet<S>,
@@ -54,7 +56,141 @@ pub struct Client<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> {
     esplora_url: String,
 }
 
+/// Builder for constructing a [`Client`] with a fluent API.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use lendaswap_core::{ClientBuilder, Network};
+///
+/// let client = ClientBuilder::new()
+///     .url("https://api.lendaswap.com")
+///     .network(Network::Bitcoin)
+///     .wallet_storage(my_wallet_storage)
+///     .swap_storage(my_swap_storage)
+///     .vtxo_swap_storage(my_vtxo_swap_storage)
+///     .arkade_url("https://arkade.example.com")
+///     .esplora_url("https://mempool.space/api")
+///     .build()?;
+/// ```
+pub struct ClientBuilder<S, SS, VSS> {
+    url: Option<String>,
+    wallet_storage: Option<S>,
+    swap_storage: Option<SS>,
+    vtxo_swap_storage: Option<VSS>,
+    network: Option<Network>,
+    arkade_url: Option<String>,
+    esplora_url: Option<String>,
+}
+
+impl<S, SS, VSS> Default for ClientBuilder<S, SS, VSS> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<S, SS, VSS> ClientBuilder<S, SS, VSS> {
+    /// Create a new client builder with all fields unset.
+    pub fn new() -> Self {
+        Self {
+            url: None,
+            wallet_storage: None,
+            swap_storage: None,
+            vtxo_swap_storage: None,
+            network: None,
+            arkade_url: None,
+            esplora_url: None,
+        }
+    }
+
+    /// Set the Lendaswap API URL.
+    pub fn url(mut self, url: impl Into<String>) -> Self {
+        self.url = Some(url.into());
+        self
+    }
+
+    /// Set the wallet storage backend.
+    pub fn wallet_storage(mut self, storage: S) -> Self {
+        self.wallet_storage = Some(storage);
+        self
+    }
+
+    /// Set the swap storage backend.
+    pub fn swap_storage(mut self, storage: SS) -> Self {
+        self.swap_storage = Some(storage);
+        self
+    }
+
+    /// Set the VTXO swap storage backend.
+    pub fn vtxo_swap_storage(mut self, storage: VSS) -> Self {
+        self.vtxo_swap_storage = Some(storage);
+        self
+    }
+
+    /// Set the Bitcoin network.
+    pub fn network(mut self, network: Network) -> Self {
+        self.network = Some(network);
+        self
+    }
+
+    /// Set the Arkade server URL.
+    pub fn arkade_url(mut self, url: impl Into<String>) -> Self {
+        self.arkade_url = Some(url.into());
+        self
+    }
+
+    /// Set the Esplora API URL for on-chain Bitcoin operations.
+    pub fn esplora_url(mut self, url: impl Into<String>) -> Self {
+        self.esplora_url = Some(url.into());
+        self
+    }
+}
+
+impl<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> ClientBuilder<S, SS, VSS> {
+    /// Build the client, consuming the builder.
+    ///
+    /// Returns an error if any required field is missing.
+    pub fn build(self) -> crate::Result<Client<S, SS, VSS>> {
+        let url = self
+            .url
+            .ok_or_else(|| Error::Config("url is required".to_string()))?;
+        let wallet_storage = self
+            .wallet_storage
+            .ok_or_else(|| Error::Config("wallet_storage is required".to_string()))?;
+        let swap_storage = self
+            .swap_storage
+            .ok_or_else(|| Error::Config("swap_storage is required".to_string()))?;
+        let vtxo_swap_storage = self
+            .vtxo_swap_storage
+            .ok_or_else(|| Error::Config("vtxo_swap_storage is required".to_string()))?;
+        let network = self
+            .network
+            .ok_or_else(|| Error::Config("network is required".to_string()))?;
+        let arkade_url = self
+            .arkade_url
+            .ok_or_else(|| Error::Config("arkade_url is required".to_string()))?;
+        let esplora_url = self
+            .esplora_url
+            .ok_or_else(|| Error::Config("esplora_url is required".to_string()))?;
+
+        Ok(Client::new(
+            url,
+            wallet_storage,
+            swap_storage,
+            vtxo_swap_storage,
+            network,
+            arkade_url,
+            esplora_url,
+        ))
+    }
+}
+
 impl<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> Client<S, SS, VSS> {
+    /// Create a new [`ClientBuilder`] for constructing a client.
+    pub fn builder() -> ClientBuilder<S, SS, VSS> {
+        ClientBuilder::new()
+    }
+
     /// Create a new client with separate wallet and swap storage.
     ///
     /// # Arguments

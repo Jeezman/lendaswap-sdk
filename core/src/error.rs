@@ -60,6 +60,10 @@ pub enum Error {
     #[error("UTXO not found: {0}")]
     UtxoNotFound(String),
 
+    /// Configuration error (e.g., missing required builder field).
+    #[error("Configuration error: {0}")]
+    Config(String),
+
     /// Generic error with context.
     #[error("{0}")]
     Other(String),

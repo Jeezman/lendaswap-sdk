@@ -1,0 +1,11 @@
+# Build outputs
+*.node
+index.js
+index.d.ts
+artifacts/
+
+# Dependencies
+node_modules/
+
+# Rust build cache (handled by workspace)
+target/

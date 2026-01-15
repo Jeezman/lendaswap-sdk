@@ -6,26 +6,27 @@
  *
  * @example
  * ```typescript
- * import {
- *   Client,
- *   createDexieWalletStorage,
- *   createDexieSwapStorage,
- *   createDexieVtxoSwapStorage,
- * } from '@lendasat/lendaswap-sdk';
+ * import { Client, ClientBuilder, openIdbDatabase } from '@lendasat/lendaswap-sdk';
  *
- * // Create storage providers using Dexie (IndexedDB)
- * const walletStorage = createDexieWalletStorage();
- * const swapStorage = createDexieSwapStorage();
- * const vtxoSwapStorage = createDexieVtxoSwapStorage();
+ * // Open the IndexedDB database
+ * const storage = await openIdbDatabase();
  *
- * // Create client
- * const client = await Client.create(
+ * // Create client using builder (recommended)
+ * const client = Client.builder()
+ *   .url('https://apilendaswap.lendasat.com')
+ *   .storage(storage)
+ *   .network('bitcoin')
+ *   .arkadeUrl('https://arkade.computer')
+ *   .esploraUrl('https://mempool.space/api')
+ *   .build();
+ *
+ * // Or use the static create method
+ * const client2 = await Client.create(
  *   'https://apilendaswap.lendasat.com',
- *   walletStorage,
- *   swapStorage,
- *   vtxoSwapStorage,
+ *   storage,
  *   'bitcoin',
- *   'https://arkade.computer'
+ *   'https://arkade.computer',
+ *   'https://mempool.space/api'
  * );
  *
  * // Initialize wallet (generates mnemonic if needed)
@@ -39,9 +40,6 @@
  */
 
 export type { NetworkInput } from "./api.js";
-// Re-export WASM types that are commonly used
-// Storage provider types for Client.create()
-// API client
 // Re-export WASM types and API types
 export {
   type AssetPair,
@@ -50,6 +48,7 @@ export {
   type BtcToEvmSwapResponse,
   type Chain,
   Client,
+  ClientBuilder,
   CreateVtxoSwapResult,
   EstimateVtxoSwapResponse,
   type EvmToArkadeSwapRequest,
@@ -57,14 +56,15 @@ export {
   type EvmToLightningSwapRequest,
   type ExtendedSwapStorageData,
   type ExtendedSwapStorageDataWasm,
-  type ExtendedSwapStorageProvider,
   ExtendedVtxoSwapStorageData,
   type GelatoSubmitRequest,
   type GelatoSubmitResponse,
   type GetSwapResponse,
   getLogLevel,
+  type IdbStorageHandle,
   type LogLevel,
   type Network,
+  openIdbDatabase,
   type QuoteRequest,
   QuoteResponse,
   type RecoveredSwap,
@@ -72,7 +72,6 @@ export {
   type SwapRequest,
   SwapStatus,
   swapStatusToString,
-  type SwapStorageProvider,
   type SwapType,
   setLogLevel,
   TokenId,
@@ -82,8 +81,6 @@ export {
   VhtlcAmounts,
   VtxoSwapParams,
   VtxoSwapResponse,
-  type VtxoSwapStorageProvider,
-  type WalletStorageProvider,
 } from "./api.js";
 export {
   PriceFeedService,
@@ -98,19 +95,6 @@ export {
   computeExchangeRate,
   selectTierRate,
 } from "./price-calculations.js";
-// Storage (wallet data)
-// Swap storage (typed swap data using Dexie/IndexedDB)
-// VTXO swap storage (typed VTXO swap data using Dexie/IndexedDB)
-// Wallet storage (typed wallet data using Dexie/IndexedDB)
-export {
-  createDexieSwapStorage,
-  createDexieVtxoSwapStorage,
-  createDexieWalletStorage,
-  DexieSwapStorageProvider,
-  DexieVtxoSwapStorageProvider,
-  DexieWalletStorageProvider,
-  STORAGE_KEYS,
-} from "./storage/index.js";
 export type { SwapData, SwapParams } from "./types.js";
 export {
   type GetUsdPriceOptions,

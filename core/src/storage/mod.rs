@@ -232,6 +232,18 @@ pub trait VtxoSwapStorage: Send + Sync {
     fn get_all(&self) -> StorageFuture<'_, Vec<ExtendedVtxoSwapStorageData>>;
 }
 
+/// SQLite storage implementation with flat database schema.
+///
+/// Available when the `sqlite` feature is enabled. Uses proper columnar storage
+/// for better queryability and migration support.
+#[cfg(feature = "sqlite")]
+mod sqlite_impl;
+
+#[cfg(feature = "sqlite")]
+pub mod sqlite {
+    pub use super::sqlite_impl::SqliteStorage;
+}
+
 /// In-memory wallet storage implementation for testing.
 #[cfg(test)]
 pub mod memory {

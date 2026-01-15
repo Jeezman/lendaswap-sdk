@@ -8,27 +8,28 @@
 //! # Usage from JavaScript/TypeScript
 //!
 //! ```javascript
-//! import init, { Wallet, JsWalletStorageProvider } from '@lendasat/lendaswap-sdk';
+//! import init, { openIdbDatabase, Client } from '@lendasat/lendaswap-sdk';
 //!
 //! // Initialize WASM
 //! await init();
 //!
-//! // Create wallet storage provider with typed callbacks
-//! const walletStorage = new JsWalletStorageProvider(
-//!     async () => localStorage.getItem('mnemonic'),
-//!     async (mnemonic) => localStorage.setItem('mnemonic', mnemonic),
-//!     async () => parseInt(localStorage.getItem('key_index') ?? '0'),
-//!     async (index) => localStorage.setItem('key_index', index.toString())
+//! // Open the IndexedDB database
+//! const storage = await openIdbDatabase();
+//!
+//! // Create the client
+//! const client = new Client(
+//!     'https://api.lendaswap.com',
+//!     storage,
+//!     'bitcoin',
+//!     'https://arkade.computer',
+//!     'https://mempool.space/api'
 //! );
 //!
-//! // Create wallet
-//! const wallet = new Wallet(walletStorage, 'bitcoin');
+//! // Initialize wallet (generates mnemonic if needed)
+//! await client.init();
 //!
-//! // Generate or get mnemonic
-//! const mnemonic = await wallet.generate_or_get_mnemonic();
-//!
-//! // Derive swap parameters
-//! const params = await wallet.derive_swap_params();
+//! // Get all swaps
+//! const swaps = await client.listAll();
 //! ```
 
 // This crate only compiles for WASM targets
@@ -36,16 +37,16 @@
 
 mod client;
 mod error;
+pub mod idb_storage;
 mod js_types;
-mod storage_adapter;
 
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
 pub use client::*;
 pub use error::*;
+pub use idb_storage::{IdbStorageHandle, open_idb_database};
 pub use js_types::*;
-pub use storage_adapter::*;
 
 use lendaswap_core::api as core_api;
 

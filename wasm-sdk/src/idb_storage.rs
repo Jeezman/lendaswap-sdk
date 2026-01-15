@@ -133,8 +133,8 @@ pub async fn open_idb_database(db_name: Option<String>) -> Result<IdbStorageHand
 /// This function checks if the old wallet database exists and if so,
 /// copies the mnemonic and key index to the new database.
 async fn migrate_wallet_from_old_database(main_db: &Database) -> Result<(), JsValue> {
-    let factory = Factory::new()
-        .map_err(|e| JsValue::from_str(&format!("Factory error: {:?}", e)))?;
+    let factory =
+        Factory::new().map_err(|e| JsValue::from_str(&format!("Factory error: {:?}", e)))?;
 
     // Try to open the old wallet database (without version = opens latest)
     let old_db_req = match factory.open(OLD_WALLET_DB_NAME, None) {

@@ -1,0 +1,36 @@
+[package]
+name = "lendaswap-node-sdk"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Lendaswap Client SDK - Native Node.js bindings with SQLite storage"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# Core library with SQLite
+lendaswap-core = { path = "../core", features = ["sqlite"] }
+
+# napi-rs for Node.js bindings
+napi = { version = "2", default-features = false, features = ["napi8", "async", "tokio_rt"] }
+napi-derive = "2"
+
+# Async runtime
+tokio = { version = "1", features = ["rt-multi-thread"] }
+
+# Error handling
+thiserror = "1.0"
+
+# Decimal for amounts
+rust_decimal = "1"
+
+# Time for formatting
+time = "0.3"
+
+[build-dependencies]
+napi-build = "2"
+
+[profile.release]
+lto = true
+strip = "symbols"

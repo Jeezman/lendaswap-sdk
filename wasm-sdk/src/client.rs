@@ -1,11 +1,6 @@
-use crate::JsSwapStorageAdapter;
-use crate::JsSwapStorageProvider;
-use crate::JsVtxoSwapStorageAdapter;
-use crate::JsVtxoSwapStorageProvider;
-use crate::JsWalletStorageAdapter;
-use crate::JsWalletStorageProvider;
 use crate::TokenId;
 use crate::Version;
+use crate::idb_storage::{IdbStorageHandle, IdbSwapStorage, IdbVtxoSwapStorage, IdbWalletStorage};
 use crate::js_types::SwapParams;
 use crate::to_js_value;
 use lendaswap_core;
@@ -709,34 +704,175 @@ impl From<lendaswap_core::ExtendedSwapStorageData> for ExtendedSwapStorageData {
     }
 }
 
-/// Lendaswap client.
+/// Builder for constructing a [`Client`] with a fluent API.
+///
+/// # Example
+///
+/// ```javascript
+/// import init, { openIdbDatabase, ClientBuilder } from '@lendasat/lendaswap-sdk';
+///
+/// await init();
+///
+/// const storage = await openIdbDatabase();
+///
+/// const client = await ClientBuilder.new()
+///     .url('https://api.lendaswap.com')
+///     .storage(storage)
+///     .network('bitcoin')
+///     .arkadeUrl('https://arkade.computer')
+///     .esploraUrl('https://mempool.space/api')
+///     .build();
+///
+/// await client.init();
+/// ```
+#[wasm_bindgen]
+pub struct ClientBuilder {
+    url: Option<String>,
+    storage: Option<IdbStorageHandle>,
+    network: Option<String>,
+    arkade_url: Option<String>,
+    esplora_url: Option<String>,
+}
+
+#[wasm_bindgen]
+impl ClientBuilder {
+    /// Create a new client builder with all fields unset.
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> ClientBuilder {
+        ClientBuilder {
+            url: None,
+            storage: None,
+            network: None,
+            arkade_url: None,
+            esplora_url: None,
+        }
+    }
+
+    /// Set the Lendaswap API URL.
+    #[wasm_bindgen]
+    pub fn url(mut self, url: String) -> ClientBuilder {
+        self.url = Some(url);
+        self
+    }
+
+    /// Set the storage handle from `openIdbDatabase()`.
+    #[wasm_bindgen]
+    pub fn storage(mut self, storage: &IdbStorageHandle) -> ClientBuilder {
+        self.storage = Some(storage.clone());
+        self
+    }
+
+    /// Set the Bitcoin network ("bitcoin", "testnet", "regtest", or "mutinynet").
+    #[wasm_bindgen]
+    pub fn network(mut self, network: String) -> ClientBuilder {
+        self.network = Some(network);
+        self
+    }
+
+    /// Set the Arkade server URL.
+    #[wasm_bindgen(js_name = "arkadeUrl")]
+    pub fn arkade_url(mut self, url: String) -> ClientBuilder {
+        self.arkade_url = Some(url);
+        self
+    }
+
+    /// Set the Esplora API URL for on-chain Bitcoin operations.
+    #[wasm_bindgen(js_name = "esploraUrl")]
+    pub fn esplora_url(mut self, url: String) -> ClientBuilder {
+        self.esplora_url = Some(url);
+        self
+    }
+
+    /// Build the client, consuming the builder.
+    ///
+    /// Returns an error if any required field is missing.
+    #[wasm_bindgen]
+    pub fn build(self) -> Result<Client, JsValue> {
+        let url = self
+            .url
+            .ok_or_else(|| JsValue::from_str("url is required"))?;
+        let storage = self
+            .storage
+            .ok_or_else(|| JsValue::from_str("storage is required"))?;
+        let network = self
+            .network
+            .ok_or_else(|| JsValue::from_str("network is required"))?;
+        let arkade_url = self
+            .arkade_url
+            .ok_or_else(|| JsValue::from_str("arkadeUrl is required"))?;
+        let esplora_url = self
+            .esplora_url
+            .ok_or_else(|| JsValue::from_str("esploraUrl is required"))?;
+
+        Client::new(url, &storage, network, arkade_url, esplora_url)
+    }
+}
+
+impl Default for ClientBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Lendaswap client using IndexedDB storage.
+///
+/// This client uses native Rust IndexedDB storage via the `idb` crate.
+///
+/// # Example
+///
+/// ```javascript
+/// import init, { openIdbDatabase, Client, ClientBuilder } from '@lendasat/lendaswap-sdk';
+///
+/// await init();
+///
+/// // Open the IndexedDB database
+/// const storage = await openIdbDatabase();
+///
+/// // Create the client using the builder (recommended)
+/// const client = new ClientBuilder()
+///     .url('https://api.lendaswap.com')
+///     .storage(storage)
+///     .network('bitcoin')
+///     .arkadeUrl('https://arkade.computer')
+///     .esploraUrl('https://mempool.space/api')
+///     .build();
+///
+/// // Or use the constructor directly
+/// const client2 = new Client(
+///     'https://api.lendaswap.com',
+///     storage,
+///     'bitcoin',
+///     'https://arkade.computer',
+///     'https://mempool.space/api'
+/// );
+///
+/// await client.init();
+/// ```
 #[wasm_bindgen]
 pub struct Client {
-    inner: lendaswap_core::Client<
-        JsWalletStorageAdapter,
-        JsSwapStorageAdapter,
-        JsVtxoSwapStorageAdapter,
-    >,
+    inner: lendaswap_core::Client<IdbWalletStorage, IdbSwapStorage, IdbVtxoSwapStorage>,
 }
 
 #[wasm_bindgen]
 impl Client {
-    /// Create a new client with separate wallet, swap, and VTXO swap storage.
+    /// Create a new [`ClientBuilder`] for constructing a client.
+    #[wasm_bindgen]
+    pub fn builder() -> ClientBuilder {
+        ClientBuilder::new()
+    }
+
+    /// Create a new client with IndexedDB storage.
     ///
     /// # Arguments
     /// * `base_url` - The Lendaswap API URL
-    /// * `wallet_storage` - Storage provider for wallet data (mnemonic, key index)
-    /// * `swap_storage` - Storage provider for swap data
-    /// * `vtxo_swap_storage` - Storage provider for VTXO swap data
+    /// * `storage` - Storage handle from `openIdbDatabase()`
     /// * `network` - The Bitcoin network ("bitcoin" or "testnet")
     /// * `arkade_url` - The Arkade server URL
     /// * `esplora_url` - The Esplora API URL for on-chain Bitcoin operations
     #[wasm_bindgen(constructor)]
     pub fn new(
         base_url: String,
-        wallet_storage: JsWalletStorageProvider,
-        swap_storage: JsSwapStorageProvider,
-        vtxo_swap_storage: JsVtxoSwapStorageProvider,
+        storage: &IdbStorageHandle,
         network: String,
         arkade_url: String,
         esplora_url: String,
@@ -744,16 +880,17 @@ impl Client {
         let network = network
             .parse()
             .map_err(|e: lendaswap_core::Error| JsValue::from_str(&format!("{}", e)))?;
-        let wallet_adapter = JsWalletStorageAdapter::new(wallet_storage);
-        let swap_adapter = JsSwapStorageAdapter::new(swap_storage);
-        let vtxo_swap_adapter = JsVtxoSwapStorageAdapter::new(vtxo_swap_storage);
+
+        let wallet_storage = IdbWalletStorage::new(storage);
+        let swap_storage = IdbSwapStorage::new(storage);
+        let vtxo_swap_storage = IdbVtxoSwapStorage::new(storage);
 
         Ok(Client {
             inner: lendaswap_core::Client::new(
                 base_url,
-                wallet_adapter,
-                swap_adapter,
-                vtxo_swap_adapter,
+                wallet_storage,
+                swap_storage,
+                vtxo_swap_storage,
                 network,
                 arkade_url,
                 esplora_url,
@@ -1175,31 +1312,6 @@ impl Client {
             .map_err(|e| JsValue::from_str(&format!("{:#}", e)))?;
 
         Ok(())
-    }
-
-    /// Get the list of swap IDs that failed to deserialize during the last listAll() call.
-    /// These are "corrupted" entries that couldn't be loaded.
-    #[wasm_bindgen(js_name = "getCorruptedSwapIds")]
-    pub fn get_corrupted_swap_ids(&self) -> Vec<String> {
-        crate::storage_adapter::get_corrupted_swap_ids()
-    }
-
-    /// Delete all corrupted swap entries from storage.
-    /// Returns the number of entries deleted.
-    #[wasm_bindgen(js_name = "deleteCorruptedSwaps")]
-    pub async fn delete_corrupted_swaps(&self) -> Result<u32, JsValue> {
-        let ids = crate::storage_adapter::get_corrupted_swap_ids();
-        let count = ids.len() as u32;
-
-        for id in ids {
-            self.inner
-                .delete_swap(id)
-                .await
-                .map_err(|e| JsValue::from_str(&format!("{:#}", e)))?;
-        }
-
-        crate::storage_adapter::clear_corrupted_swap_ids();
-        Ok(count)
     }
 
     // =========================================================================
