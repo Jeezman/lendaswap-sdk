@@ -1,6 +1,6 @@
 {
   "name": "@lendasat/lendaswap-sdk-native",
-  "version": "0.0.67",
+  "version": "0.1.66",
   "description": "Lendaswap Client SDK - Native Node.js bindings with SQLite storage",
   "main": "index.js",
   "types": "index.d.ts",
