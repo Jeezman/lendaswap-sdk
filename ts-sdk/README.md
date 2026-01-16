@@ -5,7 +5,8 @@ TypeScript/JavaScript SDK for Lendaswap - Bitcoin-to-stablecoin atomic swaps.
 ## Overview
 
 This SDK provides a high-level interface for interacting with the Lendaswap API, enabling atomic swaps between Bitcoin (
-Lightning/Arkade) and EVM stablecoins (USDC, USDT on Polygon/Ethereum).
+Lightning/Arkade/On-chain) and EVM stablecoins (USDC, USDT on Polygon/Ethereum). Built with WebAssembly for browser
+environments and IndexedDB for persistent storage.
 
 ## Installation
 
@@ -29,7 +30,7 @@ pnpm add -D vite-plugin-wasm vite-plugin-top-level-await
 // vite.config.ts
 import wasm from 'vite-plugin-wasm';
 import topLevelAwait from 'vite-plugin-top-level-await';
-import { defineConfig } from 'vite';
+import {defineConfig} from 'vite';
 
 export default defineConfig({
   plugins: [wasm(), topLevelAwait()],
@@ -45,17 +46,17 @@ pnpm add -D wasm-loader
 ```javascript
 // webpack.config.js
 module.exports = {
-  experiments: {
-    asyncWebAssembly: true,
-  },
-  module: {
-    rules: [
-      {
-        test: /\.wasm$/,
-        type: 'webassembly/async',
-      },
-    ],
-  },
+    experiments: {
+        asyncWebAssembly: true,
+    },
+    module: {
+        rules: [
+            {
+                test: /\.wasm$/,
+                type: 'webassembly/async',
+            },
+        ],
+    },
 };
 ```
 
@@ -64,13 +65,13 @@ module.exports = {
 ```javascript
 // next.config.js
 module.exports = {
-  webpack: (config) => {
-    config.experiments = {
-      ...config.experiments,
-      asyncWebAssembly: true,
-    };
-    return config;
-  },
+    webpack: (config) => {
+        config.experiments = {
+            ...config.experiments,
+            asyncWebAssembly: true,
+        };
+        return config;
+    },
 };
 ```
 
@@ -114,6 +115,49 @@ const quote = await client.getQuote('btc_arkade', 'usdc_pol', 100_000n);
 console.log('Exchange rate:', quote.exchange_rate);
 console.log('You receive:', quote.min_amount, 'USDC');
 console.log('Protocol fee:', quote.protocol_fee);
+```
+
+### Lightning to USDC (Polygon) Swap
+
+This example shows how to swap BTC via Lightning to USDC on Polygon.
+
+```typescript
+import {
+  Client,
+  createDexieWalletStorage,
+  createDexieSwapStorage,
+} from '@lendasat/lendaswap-sdk';
+
+const walletStorage = createDexieWalletStorage();
+const swapStorage = createDexieSwapStorage();
+
+const client = await Client.create(
+  'https://apilendaswap.lendasat.com',
+  walletStorage,
+  swapStorage,
+  'bitcoin',
+  'https://arkade.computer'
+);
+
+await client.init();
+
+// Create Lightning → USDC (Polygon) swap
+const swap = await client.createLightningToEvmSwap(
+  {
+    target_address: '0xYourPolygonAddress',
+    source_amount: 100000, // 100,000 sats
+    target_token: 'usdc_pol',
+  },
+  'polygon'
+);
+
+console.log('Swap created:', swap.swap_id);
+console.log('Pay this Lightning invoice:', swap.ln_invoice);
+console.log('You will receive:', swap.asset_amount, 'USDC');
+
+// After paying the invoice, claim via Gelato (gasless)
+await client.claimGelato(swap.swap_id);
+console.log('Swap claimed via Gelato relay!');
 ```
 
 ### Arkade to Polygon Swap (with Gelato Auto-Redeem)
@@ -403,7 +447,7 @@ unsubscribe();
 ### Logging
 
 ```typescript
-import { setLogLevel, getLogLevel } from '@lendasat/lendaswap-sdk';
+import {setLogLevel, getLogLevel} from '@lendasat/lendaswap-sdk';
 
 // Set log level programmatically
 setLogLevel('debug'); // 'trace' | 'debug' | 'info' | 'warn' | 'error'
@@ -471,6 +515,17 @@ const supported = getSupportedTokensForUsdPrice();
 | USDC  | Ethereum  | `usdc_eth`      |
 | USDT  | Ethereum  | `usdt_eth`      |
 | XAUT  | Ethereum  | `xaut_eth`      |
+
+## Comparison with Native SDK
+
+| Feature  | WASM/TS SDK               | Native SDK                       |
+| -------- | ------------------------- | -------------------------------- |
+| Storage  | IndexedDB (Dexie)         | SQLite                           |
+| Platform | Browser + Node.js         | Node.js only                     |
+| Use case | Web apps, frontends       | Servers, CLI, backends           |
+| Package  | `@lendasat/lendaswap-sdk` | `@lendasat/lendaswap-sdk-native` |
+
+For server-side applications, CLI tools, or backends requiring SQLite storage, consider using the Native SDK instead.
 
 ## License
 
