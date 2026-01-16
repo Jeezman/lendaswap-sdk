@@ -4,15 +4,17 @@ Native Node.js bindings for Lendaswap with SQLite storage.
 
 ## Overview
 
-This package provides native Node.js bindings via [napi-rs](https://napi.rs/) for the Lendaswap client with SQLite storage. It's designed for server-side applications, CLI tools, and backend services.
+This package provides native Node.js bindings via [napi-rs](https://napi.rs/) for the Lendaswap client with SQLite
+storage. It's designed for server-side applications, CLI tools, and backend services.
 
-**Recommended:** Use this package through `@lendasat/lendaswap-sdk` with `.withSqliteStorage()` for a unified API across browser and Node.js.
+**Recommended:** Use this package through `@lendasat/lendaswap-sdk` with `.withSqliteStorage()` for a unified API across
+browser and Node.js.
 
 ## Installation
 
 ```bash
-# Install both packages
-pnpm add @lendasat/lendaswap-sdk @lendasat/lendaswap-sdk-native
+# Install
+pnpm add @lendasat/lendaswap-sdk-native
 ```
 
 ### Platform Support
@@ -28,7 +30,7 @@ Pre-built binaries are available for:
 Use the main SDK with SQLite storage:
 
 ```javascript
-import { Client } from "@lendasat/lendaswap-sdk";
+import {Client} from "@lendasat/lendaswap-sdk";
 
 const client = await Client.builder()
     .url("https://apilendaswap.lendasat.com")
@@ -98,7 +100,7 @@ Commands:
 ## Supported Tokens
 
 | Token | Chain     | ID              |
-| ----- | --------- | --------------- |
+|-------|-----------|-----------------|
 | BTC   | Lightning | `btc_lightning` |
 | BTC   | Arkade    | `btc_arkade`    |
 | BTC   | On-chain  | `btc_onchain`   |
