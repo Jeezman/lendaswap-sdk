@@ -100,7 +100,7 @@ Commands:
 ## Supported Tokens
 
 | Token | Chain     | ID              |
-|-------|-----------|-----------------|
+| ----- | --------- | --------------- |
 | BTC   | Lightning | `btc_lightning` |
 | BTC   | Arkade    | `btc_arkade`    |
 | BTC   | On-chain  | `btc_onchain`   |
