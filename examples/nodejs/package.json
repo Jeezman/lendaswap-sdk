@@ -1,7 +1,7 @@
 {
   "name": "lendaswap-nodejs-example",
   "version": "1.0.0",
-  "description": "Example Node.js CLI using Lendaswap Native SDK with SQLite",
+  "description": "Example Node.js CLI using Lendaswap Native SDK with SQLite storage",
   "type": "module",
   "main": "index.js",
   "bin": {

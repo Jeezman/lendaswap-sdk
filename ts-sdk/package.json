@@ -28,9 +28,7 @@
     "publish:npm": "pnpm run build:release && pnpm publish --access public",
     "publish:npm:dry-run": "pnpm run build:release && pnpm publish --access public --dry-run"
   },
-  "dependencies": {
-    "dexie": "^4.0.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@biomejs/biome": "2.3.7",
     "@types/node": "^20.0.0",

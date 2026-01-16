@@ -2,7 +2,7 @@
 /**
  * Lendaswap Native SDK - Node.js CLI Example
  *
- * This CLI demonstrates how to use the Lendaswap SDK with SQLite storage
+ * This CLI demonstrates how to use the Lendaswap Native SDK with SQLite storage
  * for server-side Node.js applications.
  *
  * Usage:

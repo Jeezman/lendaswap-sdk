@@ -8,6 +8,8 @@ This SDK provides a high-level interface for interacting with the Lendaswap API,
 Lightning/Arkade/On-chain) and EVM stablecoins (USDC, USDT on Polygon/Ethereum). Built with WebAssembly for browser
 environments and IndexedDB for persistent storage.
 
+**For Node.js server-side applications**, use `@lendasat/lendaswap-sdk-native` instead.
+
 ## Installation
 
 ```bash
@@ -77,33 +79,37 @@ module.exports = {
 
 ## Quick Start
 
+### Create a Client
+
+```typescript
+import { Client } from '@lendasat/lendaswap-sdk';
+
+// Create client using the builder pattern
+const client = await Client.builder()
+  .url('https://apilendaswap.lendasat.com')
+  .withIdbStorage()  // Uses IndexedDB for browser storage
+  .network('bitcoin')
+  .arkadeUrl('https://arkade.computer')
+  .esploraUrl('https://mempool.space/api')
+  .build();
+
+// Initialize wallet (generates or loads mnemonic)
+await client.init();
+```
+
 ### Get Asset Pairs and Quote
 
 ```typescript
-import {
-  Client,
-  createDexieWalletStorage,
-  createDexieSwapStorage,
-  createDexieVtxoSwapStorage,
-} from '@lendasat/lendaswap-sdk';
+import { Client } from '@lendasat/lendaswap-sdk';
 
-// Create storage providers (uses IndexedDB via Dexie)
-const walletStorage = createDexieWalletStorage();
-const swapStorage = createDexieSwapStorage();
-const vtxoSwapStorage = createDexieVtxoSwapStorage();
+const client = await Client.builder()
+  .url('https://apilendaswap.lendasat.com')
+  .withIdbStorage()
+  .network('bitcoin')
+  .arkadeUrl('https://arkade.computer')
+  .esploraUrl('https://mempool.space/api')
+  .build();
 
-// Create client
-const client = await Client.create(
-  'https://apilendaswap.lendasat.com',
-  walletStorage,
-  swapStorage,
-  vtxoSwapStorage,
-  'bitcoin',
-  'https://arkade.computer',
-  'https://mempool.space/api'
-);
-
-// Initialize wallet (generates or loads mnemonic)
 await client.init();
 
 // Get available trading pairs
@@ -122,22 +128,15 @@ console.log('Protocol fee:', quote.protocol_fee);
 This example shows how to swap BTC via Lightning to USDC on Polygon.
 
 ```typescript
-import {
-  Client,
-  createDexieWalletStorage,
-  createDexieSwapStorage,
-} from '@lendasat/lendaswap-sdk';
+import { Client } from '@lendasat/lendaswap-sdk';
 
-const walletStorage = createDexieWalletStorage();
-const swapStorage = createDexieSwapStorage();
-
-const client = await Client.create(
-  'https://apilendaswap.lendasat.com',
-  walletStorage,
-  swapStorage,
-  'bitcoin',
-  'https://arkade.computer'
-);
+const client = await Client.builder()
+  .url('https://apilendaswap.lendasat.com')
+  .withIdbStorage()
+  .network('bitcoin')
+  .arkadeUrl('https://arkade.computer')
+  .esploraUrl('https://mempool.space/api')
+  .build();
 
 await client.init();
 
@@ -145,18 +144,18 @@ await client.init();
 const swap = await client.createLightningToEvmSwap(
   {
     target_address: '0xYourPolygonAddress',
-    source_amount: 100000, // 100,000 sats
+    source_amount: 100000n, // 100,000 sats
     target_token: 'usdc_pol',
   },
   'polygon'
 );
 
-console.log('Swap created:', swap.swap_id);
-console.log('Pay this Lightning invoice:', swap.ln_invoice);
-console.log('You will receive:', swap.asset_amount, 'USDC');
+console.log('Swap created:', swap.id);
+console.log('Pay this Lightning invoice:', swap.lnInvoice);
+console.log('You will receive:', swap.assetAmount, 'USDC');
 
 // After paying the invoice, claim via Gelato (gasless)
-await client.claimGelato(swap.swap_id);
+await client.claimGelato(swap.id);
 console.log('Swap claimed via Gelato relay!');
 ```
 
@@ -166,26 +165,15 @@ This example shows how to swap BTC from Arkade to USDC on Polygon. The swap uses
 the EVM side.
 
 ```typescript
-import {
-  Client,
-  createDexieWalletStorage,
-  createDexieSwapStorage,
-  createDexieVtxoSwapStorage,
-} from '@lendasat/lendaswap-sdk';
+import { Client } from '@lendasat/lendaswap-sdk';
 
-const walletStorage = createDexieWalletStorage();
-const swapStorage = createDexieSwapStorage();
-const vtxoSwapStorage = createDexieVtxoSwapStorage();
-
-const client = await Client.create(
-  'https://apilendaswap.lendasat.com',
-  walletStorage,
-  swapStorage,
-  vtxoSwapStorage,
-  'bitcoin',
-  'https://arkade.computer',
-  'https://mempool.space/api'
-);
+const client = await Client.builder()
+  .url('https://apilendaswap.lendasat.com')
+  .withIdbStorage()
+  .network('bitcoin')
+  .arkadeUrl('https://arkade.computer')
+  .esploraUrl('https://mempool.space/api')
+  .build();
 
 await client.init();
 
@@ -199,12 +187,12 @@ const swap = await client.createArkadeToEvmSwap(
   'polygon'
 );
 
-console.log('Swap created:', swap.swap_id);
+console.log('Swap created:', swap.id);
 console.log('Send BTC to Arkade VHTLC to proceed');
 
 // After sending BTC, claim via Gelato (gasless)
 // The secret is automatically derived from your wallet
-await client.claimGelato(swap.swap_id);
+await client.claimGelato(swap.id);
 console.log('Swap claimed via Gelato relay!');
 ```
 
@@ -217,26 +205,15 @@ We recommend using [wagmi](https://wagmi.sh/) with [viem](https://viem.sh/) for 
 or [ethers.js](https://docs.ethers.org/) for vanilla JS/TS.
 
 ```typescript
-import {
-  Client,
-  createDexieWalletStorage,
-  createDexieSwapStorage,
-  createDexieVtxoSwapStorage,
-} from '@lendasat/lendaswap-sdk';
+import { Client } from '@lendasat/lendaswap-sdk';
 
-const walletStorage = createDexieWalletStorage();
-const swapStorage = createDexieSwapStorage();
-const vtxoSwapStorage = createDexieVtxoSwapStorage();
-
-const client = await Client.create(
-  'https://apilendaswap.lendasat.com',
-  walletStorage,
-  swapStorage,
-  vtxoSwapStorage,
-  'bitcoin',
-  'https://arkade.computer',
-  'https://mempool.space/api'
-);
+const client = await Client.builder()
+  .url('https://apilendaswap.lendasat.com')
+  .withIdbStorage()
+  .network('bitcoin')
+  .arkadeUrl('https://arkade.computer')
+  .esploraUrl('https://mempool.space/api')
+  .build();
 
 await client.init();
 
@@ -250,9 +227,9 @@ const swap = await client.createEvmToLightningSwap(
   'ethereum'
 );
 
-console.log('Swap created:', swap.swap_id);
-console.log('Contract address:', swap.contract_address);
-console.log('Amount to send:', swap.source_amount);
+console.log('Swap created:', swap.id);
+console.log('Contract address:', swap.contractAddress);
+console.log('Amount to send:', swap.sourceAmount);
 
 // Now use your wallet to send the transaction to the HTLC contract
 // Example with wagmi/viem:
@@ -261,18 +238,18 @@ console.log('Amount to send:', swap.source_amount);
 // const { writeContract } = useWriteContract();
 //
 // await writeContract({
-//   address: swap.contract_address,
+//   address: swap.contractAddress,
 //   abi: htlcAbi,
 //   functionName: 'deposit',
-//   args: [swap.hash_lock, swap.timelock, ...],
-//   value: swap.source_amount,
+//   args: [swap.hashLock, swap.timelock, ...],
+//   value: swap.sourceAmount,
 // });
 //
 // Example with ethers.js:
 //
 // const signer = await provider.getSigner();
-// const contract = new ethers.Contract(swap.contract_address, htlcAbi, signer);
-// await contract.deposit(swap.hash_lock, swap.timelock, ...);
+// const contract = new ethers.Contract(swap.contractAddress, htlcAbi, signer);
+// await contract.deposit(swap.hashLock, swap.timelock, ...);
 ```
 
 ### Real-time Price Feed (WebSocket)
@@ -280,7 +257,7 @@ console.log('Amount to send:', swap.source_amount);
 Subscribe to real-time price updates via WebSocket:
 
 ```typescript
-import {PriceFeedService} from '@lendasat/lendaswap-sdk';
+import { PriceFeedService } from '@lendasat/lendaswap-sdk';
 
 const priceFeed = new PriceFeedService('https://apilendaswap.lendasat.com');
 
@@ -312,7 +289,7 @@ unsubscribe();
 - **Price Feed** - Real-time WebSocket price updates with auto-reconnection
 - **Price Calculations** - Helper functions for computing exchange rates and amounts
 - **USD Prices** - Fetch current USD prices from CoinGecko
-- **Storage Providers** - Dexie (IndexedDB) storage for wallet, swap, and VTXO swap data
+- **IndexedDB Storage** - Automatic storage via native Rust IndexedDB implementation
 - **Configurable Logging** - Set log level via code or localStorage
 
 ## API Reference
@@ -320,15 +297,14 @@ unsubscribe();
 ### Client
 
 ```typescript
-const client = await Client.create(
-  baseUrl,
-  walletStorage,
-  swapStorage,
-  vtxoSwapStorage,
-  network,
-  arkadeUrl,
-  esploraUrl
-);
+// Create client using builder pattern
+const client = await Client.builder()
+  .url('https://apilendaswap.lendasat.com')
+  .withIdbStorage()
+  .network('bitcoin')
+  .arkadeUrl('https://arkade.computer')
+  .esploraUrl('https://mempool.space/api')
+  .build();
 
 // Initialize wallet
 await client.init();
@@ -342,6 +318,7 @@ await client.getVersion();
 
 // Swap operations
 await client.createArkadeToEvmSwap(request, targetNetwork);
+await client.createLightningToEvmSwap(request, targetNetwork);
 await client.createEvmToArkadeSwap(request, sourceNetwork);
 await client.createEvmToLightningSwap(request, sourceNetwork);
 await client.getSwap(id);
@@ -376,58 +353,10 @@ await client.getMnemonic();
 await client.getUserIdXpub();
 ```
 
-### Storage Providers
-
-```typescript
-import {
-  createDexieWalletStorage,
-  createDexieSwapStorage,
-  createDexieVtxoSwapStorage,
-} from '@lendasat/lendaswap-sdk';
-
-// Pre-built Dexie (IndexedDB) storage providers
-const walletStorage = createDexieWalletStorage();
-const swapStorage = createDexieSwapStorage();
-const vtxoSwapStorage = createDexieVtxoSwapStorage();
-```
-
-Or implement custom storage:
-
-```typescript
-import type {
-  WalletStorageProvider,
-  SwapStorageProvider,
-  VtxoSwapStorageProvider,
-} from '@lendasat/lendaswap-sdk';
-
-const walletStorage: WalletStorageProvider = {
-  getMnemonic: async () => localStorage.getItem('mnemonic'),
-  setMnemonic: async (m) => localStorage.setItem('mnemonic', m),
-  getKeyIndex: async () => parseInt(localStorage.getItem('idx') ?? '0'),
-  setKeyIndex: async (i) => localStorage.setItem('idx', i.toString()),
-};
-
-const swapStorage: SwapStorageProvider = {
-  get: async (id) => /* fetch from your storage */,
-  store: async (id, data) => /* store to your storage */,
-  delete: async (id) => /* delete from your storage */,
-  list: async () => /* return all swap IDs */,
-  getAll: async () => /* return all swap data */,
-};
-
-const vtxoSwapStorage: VtxoSwapStorageProvider = {
-  get: async (id) => /* fetch from your storage */,
-  store: async (id, data) => /* store to your storage */,
-  delete: async (id) => /* delete from your storage */,
-  list: async () => /* return all swap IDs */,
-  getAll: async () => /* return all swap data */,
-};
-```
-
 ### PriceFeedService
 
 ```typescript
-import {PriceFeedService} from '@lendasat/lendaswap-sdk';
+import { PriceFeedService } from '@lendasat/lendaswap-sdk';
 
 const priceFeed = new PriceFeedService('https://apilendaswap.lendasat.com');
 
@@ -447,7 +376,7 @@ unsubscribe();
 ### Logging
 
 ```typescript
-import {setLogLevel, getLogLevel} from '@lendasat/lendaswap-sdk';
+import { setLogLevel, getLogLevel } from '@lendasat/lendaswap-sdk';
 
 // Set log level programmatically
 setLogLevel('debug'); // 'trace' | 'debug' | 'info' | 'warn' | 'error'
@@ -518,14 +447,14 @@ const supported = getSupportedTokensForUsdPrice();
 
 ## Comparison with Native SDK
 
-| Feature  | WASM/TS SDK               | Native SDK                       |
+| Feature  | This SDK (Browser)        | Native SDK (Node.js)             |
 | -------- | ------------------------- | -------------------------------- |
-| Storage  | IndexedDB (Dexie)         | SQLite                           |
-| Platform | Browser + Node.js         | Node.js only                     |
+| Storage  | IndexedDB                 | SQLite                           |
+| Platform | Browser                   | Node.js                          |
 | Use case | Web apps, frontends       | Servers, CLI, backends           |
 | Package  | `@lendasat/lendaswap-sdk` | `@lendasat/lendaswap-sdk-native` |
 
-For server-side applications, CLI tools, or backends requiring SQLite storage, consider using the Native SDK instead.
+For server-side applications, CLI tools, or backends requiring SQLite storage, use `@lendasat/lendaswap-sdk-native`.
 
 ## License
 

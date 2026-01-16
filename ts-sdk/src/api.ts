@@ -29,9 +29,6 @@ import {
   type VtxoSwapResponse,
 } from "../wasm/lendaswap_wasm_sdk.js";
 
-// Import native client types (declaration only)
-import type { Client as NativeClient } from "@lendasat/lendaswap-sdk-native";
-
 // Re-export WASM types directly
 export {
   AssetPair,
@@ -75,33 +72,6 @@ function mapWasmSwapToInterface(
   return {
     response,
     swap_params: wasmSwap.swapParams,
-  };
-}
-
-// Import native types for the mapper function
-import type { ExtendedSwapStorageData as NativeExtendedSwapStorageData } from "@lendasat/lendaswap-sdk-native";
-
-/**
- * Convert Native ExtendedSwapStorageData to plain TypeScript interface.
- * Returns undefined if the swap response type is unknown.
- */
-function mapNativeSwapToInterface(
-  nativeSwap: NativeExtendedSwapStorageData,
-): ExtendedSwapStorageData | undefined {
-  const response =
-    nativeSwap.btcToEvmResponse ??
-    nativeSwap.evmToBtcResponse ??
-    nativeSwap.btcToArkadeResponse;
-  if (!response) {
-    return undefined;
-  }
-  // Cast to the expected types - the data structure is compatible
-  return {
-    response: response as unknown as
-      | BtcToEvmSwapResponse
-      | EvmToBtcSwapResponse
-      | BtcToArkadeSwapResponse,
-    swap_params: {} as SwapParams, // Native doesn't include swap_params in the response
   };
 }
 
@@ -234,22 +204,14 @@ export interface QuoteRequest {
 export type NetworkInput = "bitcoin" | "testnet" | "regtest" | "mutinynet";
 
 /**
- * Storage configuration type for the builder.
- */
-type StorageConfig =
-  | { type: "idb"; storage: IdbStorageHandle }
-  | { type: "sqlite"; path: string };
-
-/**
  * Builder for constructing a Client with a fluent API.
  *
- * Supports two storage backends:
- * - **IndexedDB** (browser): Use `.withIdbStorage()` for browser applications
- * - **SQLite** (Node.js): Use `.withSqliteStorage(path)` for server-side applications
+ * Uses IndexedDB storage via `.withIdbStorage()` for browser applications.
+ * For Node.js server-side applications, use `@lendasat/lendaswap-sdk-native` instead.
  *
- * @example Browser usage:
+ * @example
  * ```typescript
- * import { Client, openIdbDatabase } from '@lendasat/lendaswap-sdk';
+ * import { Client } from '@lendasat/lendaswap-sdk';
  *
  * const client = await Client.builder()
  *   .url('https://api.lendaswap.com')
@@ -259,23 +221,10 @@ type StorageConfig =
  *   .esploraUrl('https://mempool.space/api')
  *   .build();
  * ```
- *
- * @example Node.js usage:
- * ```typescript
- * import { Client } from '@lendasat/lendaswap-sdk';
- *
- * const client = await Client.builder()
- *   .url('https://api.lendaswap.com')
- *   .withSqliteStorage('./lendaswap.db')
- *   .network('bitcoin')
- *   .arkadeUrl('https://arkade.computer')
- *   .esploraUrl('https://mempool.space/api')
- *   .build();
- * ```
  */
 export class ClientBuilder {
   private _url?: string;
-  private _storage?: StorageConfig;
+  private _storage?: IdbStorageHandle;
   private _network?: NetworkInput;
   private _arkadeUrl?: string;
   private _esploraUrl?: string;
@@ -291,11 +240,9 @@ export class ClientBuilder {
   }
 
   /**
-   * Use IndexedDB storage (browser only).
+   * Use IndexedDB storage.
    *
    * This will automatically open the IndexedDB database when `build()` is called.
-   *
-   * @throws Error if not running in a browser environment
    *
    * @example
    * ```typescript
@@ -309,56 +256,16 @@ export class ClientBuilder {
    * ```
    */
   withIdbStorage(): this {
-    // Check for browser environment
-    if (typeof window === "undefined" && typeof indexedDB === "undefined") {
-      throw new Error(
-        "IndexedDB storage is only available in browser environments. " +
-          "Use .withSqliteStorage(path) for Node.js.",
-      );
-    }
-    // We'll open the database in build() - for now just mark the type
-    this._storage = {
-      type: "idb",
-      storage: undefined as unknown as IdbStorageHandle,
-    };
-    return this;
-  }
-
-  /**
-   * Use SQLite storage (Node.js only).
-   *
-   * @param path - Path to SQLite database file (will be created if it doesn't exist)
-   * @throws Error if running in a browser environment
-   *
-   * @example
-   * ```typescript
-   * const client = await Client.builder()
-   *   .url('https://api.lendaswap.com')
-   *   .withSqliteStorage('./lendaswap.db')
-   *   .network('bitcoin')
-   *   .arkadeUrl('...')
-   *   .esploraUrl('...')
-   *   .build();
-   * ```
-   */
-  withSqliteStorage(path: string): this {
-    // Check for Node.js environment
-    if (typeof window !== "undefined") {
-      throw new Error(
-        "SQLite storage is not available in browser environments. " +
-          "Use .withIdbStorage() for browser.",
-      );
-    }
-    this._storage = { type: "sqlite", path };
+    // We'll open the database in build() - storage will be set then
     return this;
   }
 
   /**
    * Set the storage handle directly (for advanced use cases).
-   * @deprecated Use `.withIdbStorage()` or `.withSqliteStorage(path)` instead.
+   * @deprecated Use `.withIdbStorage()` instead.
    */
   storage(storage: IdbStorageHandle): this {
-    this._storage = { type: "idb", storage };
+    this._storage = storage;
     return this;
   }
 
@@ -396,11 +303,6 @@ export class ClientBuilder {
     if (!this._url) {
       throw new Error("url is required - call .url(url)");
     }
-    if (!this._storage) {
-      throw new Error(
-        "storage is required - call .withIdbStorage() for browser or .withSqliteStorage(path) for Node.js",
-      );
-    }
     if (!this._network) {
       throw new Error("network is required - call .network(network)");
     }
@@ -411,55 +313,24 @@ export class ClientBuilder {
       throw new Error("esploraUrl is required - call .esploraUrl(url)");
     }
 
-    if (this._storage.type === "idb") {
-      // Browser path - use WASM SDK with IndexedDB
-      const { openIdbDatabase } = await import("../wasm/lendaswap_wasm_sdk.js");
+    const { openIdbDatabase } = await import("../wasm/lendaswap_wasm_sdk.js");
 
-      // If storage handle wasn't provided directly, open it now
-      let storageHandle = this._storage.storage;
-      if (
-        !storageHandle ||
-        storageHandle === (undefined as unknown as IdbStorageHandle)
-      ) {
-        storageHandle = await openIdbDatabase();
-      }
-
-      const wasmBuilder = new WasmClientBuilder();
-      const wasmClient = wasmBuilder
-        .url(this._url)
-        .storage(storageHandle)
-        .network(this._network)
-        .arkadeUrl(this._arkadeUrl)
-        .esploraUrl(this._esploraUrl)
-        .build();
-
-      return Client.fromWasmClient(wasmClient);
-    } else {
-      // Node.js path - use native addon with SQLite
-      try {
-        // Dynamic import of the native addon
-        // This will be available when @lendasat/lendaswap-sdk-native is installed
-        // Using variable to prevent Vite from statically analyzing this Node.js-only import
-        const nativeModule = "@lendasat/lendaswap-sdk-native";
-        const native = await import(/* @vite-ignore */ nativeModule);
-        const storage = native.SqliteStorageHandle.open(this._storage.path);
-        const nativeClient = new native.Client(
-          storage,
-          this._url,
-          this._network,
-          this._arkadeUrl,
-          this._esploraUrl,
-        );
-        return Client.fromNativeClient(nativeClient);
-      } catch (e) {
-        const error = e as Error;
-        throw new Error(
-          `SQLite storage failed to initialize: ${error.message}\n` +
-            "Make sure the native addon (@lendasat/lendaswap-sdk-native) is installed for your platform.\n" +
-            "Run: npm install @lendasat/lendaswap-sdk-native",
-        );
-      }
+    // If storage handle wasn't provided directly, open it now
+    let storageHandle = this._storage;
+    if (!storageHandle) {
+      storageHandle = await openIdbDatabase();
     }
+
+    const wasmBuilder = new WasmClientBuilder();
+    const wasmClient = wasmBuilder
+      .url(this._url)
+      .storage(storageHandle)
+      .network(this._network)
+      .arkadeUrl(this._arkadeUrl)
+      .esploraUrl(this._esploraUrl)
+      .build();
+
+    return Client.fromWasmClient(wasmClient);
   }
 }
 
@@ -492,45 +363,11 @@ export class ClientBuilder {
  * const swaps = await client.listAllSwaps();
  * ```
  */
-/**
- * Internal client type - either WASM (browser) or Native (Node.js).
- */
-type InternalClient =
-  | { type: "wasm"; client: WasmClient }
-  | { type: "native"; client: NativeClient };
-
 export class Client {
-  private internal: InternalClient;
+  private wasmClient: WasmClient;
 
-  private constructor(internal: InternalClient) {
-    this.internal = internal;
-  }
-
-  /**
-   * Get the WASM client (throws if using native backend).
-   */
-  private getWasmClient(): WasmClient {
-    if (this.internal.type !== "wasm") {
-      throw new Error("This method requires WASM backend");
-    }
-    return this.internal.client;
-  }
-
-  /**
-   * Get the native client (throws if using WASM backend).
-   */
-  private getNativeClient(): NativeClient {
-    if (this.internal.type !== "native") {
-      throw new Error("This method requires native backend");
-    }
-    return this.internal.client;
-  }
-
-  /**
-   * Check if using native backend.
-   */
-  private isNative(): boolean {
-    return this.internal.type === "native";
+  private constructor(wasmClient: WasmClient) {
+    this.wasmClient = wasmClient;
   }
 
   /**
@@ -540,7 +377,7 @@ export class Client {
    * ```typescript
    * const client = Client.builder()
    *   .url('https://api.lendaswap.com')
-   *   .storage(storage)
+   *   .withIdbStorage()
    *   .network('bitcoin')
    *   .arkadeUrl('https://arkade.computer')
    *   .esploraUrl('https://mempool.space/api')
@@ -556,15 +393,7 @@ export class Client {
    * Used internally by ClientBuilder.
    */
   static fromWasmClient(wasmClient: WasmClient): Client {
-    return new Client({ type: "wasm", client: wasmClient });
-  }
-
-  /**
-   * Create a Client from a native client instance (Node.js with SQLite).
-   * Used internally by ClientBuilder.
-   */
-  static fromNativeClient(nativeClient: NativeClient): Client {
-    return new Client({ type: "native", client: nativeClient });
+    return new Client(wasmClient);
   }
 
   /**
@@ -610,11 +439,7 @@ export class Client {
   }
 
   async init(mnemonic?: string): Promise<void> {
-    if (this.internal.type === "native") {
-      await this.internal.client.init(mnemonic);
-    } else {
-      await this.internal.client.init(mnemonic);
-    }
+    await this.wasmClient.init(mnemonic);
   }
 
   /**
@@ -636,17 +461,7 @@ export class Client {
     ) {
       throw Error("Cannot have source amount and target amount defined");
     }
-    if (this.isNative()) {
-      return (await this.getNativeClient().createArkadeToEvmSwap(
-        request.target_address,
-        request.source_amount ? Number(request.source_amount) : null,
-        request.target_amount ?? null,
-        request.target_token,
-        targetNetwork,
-        request.referral_code,
-      )) as unknown as BtcToEvmSwapResponse;
-    }
-    return await this.getWasmClient().createArkadeToEvmSwap(
+    return await this.wasmClient.createArkadeToEvmSwap(
       request.target_address,
       request.source_amount,
       request.target_amount,
@@ -655,6 +470,7 @@ export class Client {
       request.referral_code,
     );
   }
+
   /**
    * Create a Lightning to EVM swap (BTC → Token).
    *
@@ -674,18 +490,7 @@ export class Client {
     ) {
       throw Error("Cannot have source amount and target amount defined");
     }
-
-    if (this.isNative()) {
-      return (await this.getNativeClient().createLightningToEvmSwap(
-        request.target_address,
-        request.source_amount ? Number(request.source_amount) : null,
-        request.target_amount ?? null,
-        request.target_token,
-        targetNetwork,
-        request.referral_code,
-      )) as unknown as BtcToEvmSwapResponse;
-    }
-    return await this.getWasmClient().createLightningToEvmSwap(
+    return await this.wasmClient.createLightningToEvmSwap(
       request.target_address,
       request.source_amount,
       request.target_amount,
@@ -706,17 +511,7 @@ export class Client {
     request: EvmToArkadeSwapRequest,
     sourceNetwork: "ethereum" | "polygon",
   ): Promise<EvmToBtcSwapResponse> {
-    if (this.isNative()) {
-      return (await this.getNativeClient().createEvmToArkadeSwap(
-        request.target_address,
-        request.user_address,
-        request.source_amount,
-        request.source_token,
-        sourceNetwork,
-        request.referral_code,
-      )) as unknown as EvmToBtcSwapResponse;
-    }
-    return await this.getWasmClient().createEvmToArkadeSwap(
+    return await this.wasmClient.createEvmToArkadeSwap(
       request.target_address,
       request.user_address,
       request.source_amount,
@@ -737,16 +532,7 @@ export class Client {
     request: EvmToLightningSwapRequest,
     sourceNetwork: "ethereum" | "polygon",
   ): Promise<EvmToBtcSwapResponse> {
-    if (this.isNative()) {
-      return (await this.getNativeClient().createEvmToLightningSwap(
-        request.bolt11_invoice,
-        request.user_address,
-        request.source_token,
-        sourceNetwork,
-        request.referral_code,
-      )) as unknown as EvmToBtcSwapResponse;
-    }
-    return await this.getWasmClient().createEvmToLightningSwap(
+    return await this.wasmClient.createEvmToLightningSwap(
       request.bolt11_invoice,
       request.user_address,
       request.source_token,
@@ -756,19 +542,11 @@ export class Client {
   }
 
   async getAssetPairs(): Promise<AssetPair[]> {
-    if (this.isNative()) {
-      // Native returns compatible data structure, cast for type compatibility
-      return (await this.getNativeClient().getAssetPairs()) as unknown as AssetPair[];
-    }
-    return await this.getWasmClient().getAssetPairs();
+    return await this.wasmClient.getAssetPairs();
   }
 
   async getTokens(): Promise<TokenInfo[]> {
-    if (this.isNative()) {
-      // Native returns compatible data structure, cast for type compatibility
-      return (await this.getNativeClient().getTokens()) as unknown as TokenInfo[];
-    }
-    return await this.getWasmClient().getTokens();
+    return await this.wasmClient.getTokens();
   }
 
   /**
@@ -784,14 +562,7 @@ export class Client {
     to: TokenIdString,
     baseAmount: bigint,
   ): Promise<QuoteResponse> {
-    if (this.isNative()) {
-      return (await this.getNativeClient().getQuote(
-        from,
-        to,
-        Number(baseAmount),
-      )) as unknown as QuoteResponse;
-    }
-    return await this.getWasmClient().getQuote(from, to, baseAmount);
+    return await this.wasmClient.getQuote(from, to, baseAmount);
   }
 
   /**
@@ -801,11 +572,7 @@ export class Client {
    * @returns The swap data, or undefined if the swap type is unknown
    */
   async getSwap(id: string): Promise<ExtendedSwapStorageData | undefined> {
-    if (this.isNative()) {
-      const nativeSwap = await this.getNativeClient().getSwap(id);
-      return mapNativeSwapToInterface(nativeSwap);
-    }
-    return mapWasmSwapToInterface(await this.getWasmClient().getSwap(id));
+    return mapWasmSwapToInterface(await this.wasmClient.getSwap(id));
   }
 
   /**
@@ -814,13 +581,7 @@ export class Client {
    * @returns Array of swaps (unknown types are filtered out)
    */
   async listAllSwaps(): Promise<ExtendedSwapStorageData[]> {
-    if (this.isNative()) {
-      const nativeSwaps = await this.getNativeClient().listAll();
-      return nativeSwaps
-        .map(mapNativeSwapToInterface)
-        .filter((s) => s !== undefined);
-    }
-    const wasmSwaps = await this.getWasmClient().listAll();
+    const wasmSwaps = await this.wasmClient.listAll();
     return wasmSwaps.map(mapWasmSwapToInterface).filter((s) => s !== undefined);
   }
 
@@ -831,11 +592,7 @@ export class Client {
    * @param secret - The preimage secret (hex-encoded)
    */
   async claimGelato(swapId: string, secret?: string): Promise<void> {
-    if (this.isNative()) {
-      await this.getNativeClient().claimGelato(swapId, secret);
-      return;
-    }
-    await this.getWasmClient().claimGelato(swapId, secret);
+    await this.wasmClient.claimGelato(swapId, secret);
   }
 
   /**
@@ -845,7 +602,7 @@ export class Client {
    * @returns VhtlcAmounts
    */
   async amountsForSwap(swapId: string): Promise<VhtlcAmounts> {
-    return await this.getWasmClient().amountsForSwap(swapId);
+    return await this.wasmClient.amountsForSwap(swapId);
   }
 
   /**
@@ -854,25 +611,18 @@ export class Client {
    * @param swapId - The swap ID
    */
   async claimVhtlc(swapId: string): Promise<void> {
-    if (this.isNative()) {
-      await this.getNativeClient().claimVhtlc(swapId);
-      return;
-    }
-    await this.getWasmClient().claimVhtlc(swapId);
+    await this.wasmClient.claimVhtlc(swapId);
   }
 
   /**
-   * Claim a swap VHTLC
+   * Refund a swap VHTLC
    *
    * @param swapId - The swap ID
    * @param refundAddress - The address to receive the refund
    * @returns The TXID of the Ark transaction which refunded the VHTLC.
    */
   async refundVhtlc(swapId: string, refundAddress: string): Promise<string> {
-    if (this.isNative()) {
-      return await this.getNativeClient().refundVhtlc(swapId, refundAddress);
-    }
-    return await this.getWasmClient().refundVhtlc(swapId, refundAddress);
+    return await this.wasmClient.refundVhtlc(swapId, refundAddress);
   }
 
   /**
@@ -881,10 +631,7 @@ export class Client {
    * @returns Version information
    */
   async getVersion(): Promise<Version> {
-    if (this.isNative()) {
-      return (await this.getNativeClient().getVersion()) as unknown as Version;
-    }
-    return await this.getWasmClient().getVersion();
+    return await this.wasmClient.getVersion();
   }
 
   /**
@@ -893,13 +640,7 @@ export class Client {
    * @returns Array of recovered swaps (unknown types are filtered out)
    */
   async recoverSwaps(): Promise<ExtendedSwapStorageData[]> {
-    if (this.isNative()) {
-      const nativeSwaps = await this.getNativeClient().recoverSwaps();
-      return nativeSwaps
-        .map(mapNativeSwapToInterface)
-        .filter((s) => s !== undefined);
-    }
-    const wasmSwaps = await this.getWasmClient().recoverSwaps();
+    const wasmSwaps = await this.wasmClient.recoverSwaps();
     return wasmSwaps.map(mapWasmSwapToInterface).filter((s) => s !== undefined);
   }
 
@@ -908,42 +649,29 @@ export class Client {
    * @returns The mnemonic as string
    */
   async getMnemonic(): Promise<string> {
-    if (this.internal.type === "native") {
-      return await this.internal.client.getMnemonic();
-    }
-    return await this.internal.client.getMnemonic();
+    return await this.wasmClient.getMnemonic();
   }
+
   /**
    * Get current loaded user id xpub
    * @returns The xpub as string
    */
   async getUserIdXpub(): Promise<string> {
-    if (this.internal.type === "native") {
-      return await this.internal.client.getUserIdXpub();
-    }
-    return await this.internal.client.getUserIdXpub();
+    return await this.wasmClient.getUserIdXpub();
   }
 
   /**
    * Deletes all stored swaps
    */
   async clearSwapStorage(): Promise<void> {
-    if (this.isNative()) {
-      await this.getNativeClient().clearSwapStorage();
-      return;
-    }
-    await this.getWasmClient().clearSwapStorage();
+    await this.wasmClient.clearSwapStorage();
   }
 
   /**
    * Delete one particular swap by id
    */
   async deleteSwap(id: string): Promise<void> {
-    if (this.isNative()) {
-      await this.getNativeClient().deleteSwap(id);
-      return;
-    }
-    await this.getWasmClient().deleteSwap(id);
+    await this.wasmClient.deleteSwap(id);
   }
 
   // =========================================================================
@@ -957,7 +685,7 @@ export class Client {
    * @returns Estimate response with fee and output amounts
    */
   async estimateVtxoSwap(vtxos: string[]): Promise<EstimateVtxoSwapResponse> {
-    return await this.getWasmClient().estimateVtxoSwap(vtxos);
+    return await this.wasmClient.estimateVtxoSwap(vtxos);
   }
 
   /**
@@ -971,7 +699,7 @@ export class Client {
    * @returns The swap response and swap parameters
    */
   async createVtxoSwap(vtxos: string[]): Promise<CreateVtxoSwapResult> {
-    return await this.getWasmClient().createVtxoSwap(vtxos);
+    return await this.wasmClient.createVtxoSwap(vtxos);
   }
 
   /**
@@ -981,7 +709,7 @@ export class Client {
    * @returns The extended VTXO swap data
    */
   async getVtxoSwap(id: string): Promise<ExtendedVtxoSwapStorageData> {
-    return await this.getWasmClient().getVtxoSwap(id);
+    return await this.wasmClient.getVtxoSwap(id);
   }
 
   /**
@@ -1000,11 +728,7 @@ export class Client {
     swapParams: SwapParams,
     claimAddress: string,
   ): Promise<string> {
-    return await this.getWasmClient().claimVtxoSwap(
-      swap,
-      swapParams,
-      claimAddress,
-    );
+    return await this.wasmClient.claimVtxoSwap(swap, swapParams, claimAddress);
   }
 
   /**
@@ -1018,7 +742,7 @@ export class Client {
    * @returns The refund transaction ID
    */
   async refundVtxoSwap(swapId: string, refundAddress: string): Promise<string> {
-    return await this.getWasmClient().refundVtxoSwap(swapId, refundAddress);
+    return await this.wasmClient.refundVtxoSwap(swapId, refundAddress);
   }
 
   /**
@@ -1029,7 +753,7 @@ export class Client {
    * @returns Array of all stored extended VTXO swap data
    */
   async listAllVtxoSwaps(): Promise<ExtendedVtxoSwapStorageData[]> {
-    return await this.getWasmClient().listAllVtxoSwaps();
+    return await this.wasmClient.listAllVtxoSwaps();
   }
 
   /**
@@ -1043,14 +767,7 @@ export class Client {
   async createBitcoinToArkadeSwap(
     request: BtcToArkadeSwapRequest,
   ): Promise<BtcToArkadeSwapResponse> {
-    if (this.isNative()) {
-      return (await this.getNativeClient().createBitcoinToArkadeSwap(
-        request.target_arkade_address,
-        request.sats_receive,
-        request.referral_code,
-      )) as unknown as BtcToArkadeSwapResponse;
-    }
-    return await this.getWasmClient().createBitcoinToArkadeSwap(
+    return await this.wasmClient.createBitcoinToArkadeSwap(
       request.target_arkade_address,
       BigInt(request.sats_receive),
       request.referral_code,
@@ -1066,10 +783,7 @@ export class Client {
    * @returns The Arkade claim transaction ID
    */
   async claimBtcToArkadeVhtlc(swapId: string): Promise<string> {
-    if (this.isNative()) {
-      return await this.getNativeClient().claimBtcToArkadeVhtlc(swapId);
-    }
-    return await this.getWasmClient().claimBtcToArkadeVhtlc(swapId);
+    return await this.wasmClient.claimBtcToArkadeVhtlc(swapId);
   }
 
   /**
@@ -1085,13 +799,7 @@ export class Client {
     swapId: string,
     refundAddress: string,
   ): Promise<string> {
-    if (this.isNative()) {
-      return await this.getNativeClient().refundOnchainHtlc(
-        swapId,
-        refundAddress,
-      );
-    }
-    return await this.getWasmClient().refundOnchainHtlc(swapId, refundAddress);
+    return await this.wasmClient.refundOnchainHtlc(swapId, refundAddress);
   }
 }
 
