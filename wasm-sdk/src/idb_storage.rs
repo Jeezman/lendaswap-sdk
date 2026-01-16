@@ -26,8 +26,10 @@ const SWAPS_STORE: &str = "lendaswap_swaps";
 const VTXO_SWAPS_STORE: &str = "lendaswap_vtxo_swaps";
 const WALLET_KEY: &str = "default";
 
-// Old Dexie database name for wallet migration
+// Old Dexie database names for migration
 const OLD_WALLET_DB_NAME: &str = "lendaswap-wallet-v1";
+const OLD_SWAPS_DB_NAME: &str = "lendaswap-v1";
+const OLD_SWAPS_STORE: &str = "swaps";
 
 /// Serialize a value to JsValue using consistent settings.
 fn to_js_value<T: Serialize>(value: &T) -> Result<JsValue, serde_wasm_bindgen::Error> {
@@ -124,6 +126,9 @@ pub async fn open_idb_database(db_name: Option<String>) -> Result<IdbStorageHand
 
     // Migrate wallet data from old Dexie database if it exists
     migrate_wallet_from_old_database(&db).await?;
+
+    // Migrate swaps from old Dexie database if it exists
+    migrate_swaps_from_old_database(&db).await?;
 
     Ok(IdbStorageHandle { db: Rc::new(db) })
 }
@@ -242,6 +247,138 @@ async fn migrate_wallet_from_old_database(main_db: &Database) -> Result<(), JsVa
 
         log::info!("Migrated wallet data from old lendaswap-wallet database");
     }
+
+    old_db.close();
+    Ok(())
+}
+
+/// Migrate swaps from the old Dexie `lendaswap-v1` database.
+///
+/// This function checks if the old swaps database exists and if so,
+/// copies all swaps to the new database (if not already migrated).
+async fn migrate_swaps_from_old_database(main_db: &Database) -> Result<(), JsValue> {
+    let factory =
+        Factory::new().map_err(|e| JsValue::from_str(&format!("Factory error: {:?}", e)))?;
+
+    // Try to open the old swaps database (without version = opens latest)
+    let old_db_req = match factory.open(OLD_SWAPS_DB_NAME, None) {
+        Ok(req) => req,
+        Err(_) => {
+            log::debug!("Old swaps database doesn't exist, skipping migration");
+            return Ok(());
+        }
+    };
+
+    let old_db = match old_db_req.await {
+        Ok(db) => db,
+        Err(_) => {
+            log::debug!("Cannot open old swaps database, skipping migration");
+            return Ok(());
+        }
+    };
+
+    // Check if we already have swaps in the new database
+    let main_tx = main_db
+        .transaction(&[SWAPS_STORE], TransactionMode::ReadOnly)
+        .map_err(|e| JsValue::from_str(&format!("Transaction error: {:?}", e)))?;
+    let main_store = main_tx
+        .object_store(SWAPS_STORE)
+        .map_err(|e| JsValue::from_str(&format!("Store error: {:?}", e)))?;
+
+    let existing_keys = main_store
+        .get_all_keys(None, Some(1))
+        .map_err(|e| JsValue::from_str(&format!("Get keys error: {:?}", e)))?
+        .await
+        .map_err(|e| JsValue::from_str(&format!("Get keys await error: {:?}", e)))?;
+
+    if !existing_keys.is_empty() {
+        // Already have swaps, don't overwrite
+        log::debug!("Swaps already exist in new database, skipping migration");
+        old_db.close();
+        return Ok(());
+    }
+
+    // Read all swaps from old database
+    let old_tx = match old_db.transaction(&[OLD_SWAPS_STORE], TransactionMode::ReadOnly) {
+        Ok(tx) => tx,
+        Err(_) => {
+            log::debug!("Cannot create transaction on old swaps database");
+            old_db.close();
+            return Ok(());
+        }
+    };
+
+    let old_store = match old_tx.object_store(OLD_SWAPS_STORE) {
+        Ok(store) => store,
+        Err(_) => {
+            log::debug!("Cannot access swaps store in old database");
+            old_db.close();
+            return Ok(());
+        }
+    };
+
+    let old_swaps = old_store
+        .get_all(None, None)
+        .map_err(|e| JsValue::from_str(&format!("Old get_all error: {:?}", e)))?
+        .await
+        .map_err(|e| JsValue::from_str(&format!("Old get_all await error: {:?}", e)))?;
+
+    if old_swaps.is_empty() {
+        log::debug!("No swaps in old database to migrate");
+        old_db.close();
+        return Ok(());
+    }
+
+    log::info!(
+        "Migrating {} swaps from old lendaswap-v1 database",
+        old_swaps.len()
+    );
+
+    // Write all swaps to the new database
+    let new_tx = main_db
+        .transaction(&[SWAPS_STORE], TransactionMode::ReadWrite)
+        .map_err(|e| JsValue::from_str(&format!("New tx error: {:?}", e)))?;
+    let new_store = new_tx
+        .object_store(SWAPS_STORE)
+        .map_err(|e| JsValue::from_str(&format!("New store error: {:?}", e)))?;
+
+    let mut migrated_count = 0;
+    for swap_value in old_swaps {
+        // Get the swap ID
+        let swap_id = Reflect::get(&swap_value, &JsValue::from_str("id"))
+            .ok()
+            .and_then(|v| v.as_string());
+
+        let Some(swap_id) = swap_id else {
+            log::warn!("Skipping swap without id during migration");
+            continue;
+        };
+
+        // Apply any record-level migrations (e.g., refund_locktime split)
+        if let Err(e) = migrate_swap_record(&swap_value) {
+            log::warn!("Failed to migrate swap record '{}': {:?}", swap_id, e);
+            continue;
+        }
+
+        // Store in new database
+        if let Err(e) = new_store.put(&swap_value, None) {
+            log::warn!("Failed to store migrated swap '{}': {:?}", swap_id, e);
+            continue;
+        }
+
+        migrated_count += 1;
+    }
+
+    new_tx
+        .commit()
+        .map_err(|e| JsValue::from_str(&format!("Commit start error: {:?}", e)))?
+        .await
+        .map_err(|e| JsValue::from_str(&format!("Commit error: {:?}", e)))?;
+
+    log::info!(
+        "Successfully migrated {} swaps from old database",
+        migrated_count
+    );
 
     old_db.close();
     Ok(())
