@@ -8,9 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@lendasat/lendaswap-sdk':
-        specifier: file:../../ts-sdk
-        version: file:../../ts-sdk
       '@lendasat/lendaswap-sdk-native':
         specifier: file:../../node-sdk
         version: file:../../node-sdk
@@ -21,18 +18,6 @@ packages:
     resolution: {directory: ../../node-sdk, type: directory}
     engines: {node: '>= 18'}
 
-  '@lendasat/lendaswap-sdk@file:../../ts-sdk':
-    resolution: {directory: ../../ts-sdk, type: directory}
-
-  dexie@4.2.1:
-    resolution: {integrity: sha512-Ckej0NS6jxQ4Po3OrSQBFddayRhTCic2DoCAG5zacOfOVB9P2Q5Xc5uL/nVa7ZVs+HdMnvUPzLFCB/JwpB6Csg==}
-
 snapshots:
 
   '@lendasat/lendaswap-sdk-native@file:../../node-sdk': {}
-
-  '@lendasat/lendaswap-sdk@file:../../ts-sdk':
-    dependencies:
-      dexie: 4.2.1
-
-  dexie@4.2.1: {}
