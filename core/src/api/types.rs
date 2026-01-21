@@ -346,6 +346,7 @@ pub struct BtcToEvmSwapResponse {
     /// Lightning invoice for payment
     pub ln_invoice: String,
     /// The amount of satoshis we expect to receive
+    /// Deprecated: please use [`source_amount`]
     pub sats_receive: i64,
     /// Bitcoin HTLC claim transaction ID
     pub bitcoin_htlc_claim_txid: Option<String>,
@@ -355,6 +356,9 @@ pub struct BtcToEvmSwapResponse {
     pub evm_htlc_claim_txid: Option<String>,
     /// EVM HTLC fund transaction ID
     pub evm_htlc_fund_txid: Option<String>,
+    pub target_amount: f64,
+    /// Amount user must send in satoshis
+    pub source_amount: u64,
 }
 
 /// EVM → BTC swap response.
@@ -373,6 +377,7 @@ pub struct EvmToBtcSwapResponse {
     /// Lightning invoice for payment
     pub ln_invoice: String,
     /// Net satoshis user will receive
+    /// Deprecated: please use [`target_amount`]
     pub sats_receive: i64,
     /// Bitcoin HTLC fund transaction ID
     pub bitcoin_htlc_fund_txid: Option<String>,
@@ -394,6 +399,10 @@ pub struct EvmToBtcSwapResponse {
     pub gelato_user_deadline: Option<String>,
     /// ERC20 token address for approve target
     pub source_token_address: String,
+    /// Amount the user will receive in sats
+    pub target_amount: u64,
+    /// Amount user must send of the source asset
+    pub source_amount: f64,
 }
 
 /// Swap direction discriminator.
@@ -403,6 +412,7 @@ pub enum SwapDirection {
     BtcToEvm,
     EvmToBtc,
     BtcToArkade,
+    OnchainToEvm,
 }
 
 /// Tagged union for swap responses.
@@ -412,6 +422,7 @@ pub enum GetSwapResponse {
     BtcToEvm(BtcToEvmSwapResponse),
     EvmToBtc(EvmToBtcSwapResponse),
     BtcToArkade(BtcToArkadeSwapResponse),
+    OnchainToEvm(OnchainToEvmSwapResponse),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -448,12 +459,13 @@ impl GetSwapResponse {
     /// Get the common fields regardless of swap direction.
     ///
     /// Note: Only available for BtcToEvm and EvmToBtc swaps.
-    /// BtcToArkade swaps have a different structure.
+    /// BtcToArkade and OnchainToEvm swaps have different structures.
     pub fn common(&self) -> Option<&SwapCommonFields> {
         match self {
             GetSwapResponse::BtcToEvm(r) => Some(&r.common),
             GetSwapResponse::EvmToBtc(r) => Some(&r.common),
             GetSwapResponse::BtcToArkade(_) => None,
+            GetSwapResponse::OnchainToEvm(_) => None,
         }
     }
 
@@ -463,6 +475,7 @@ impl GetSwapResponse {
             GetSwapResponse::BtcToEvm(r) => r.common.id.to_string(),
             GetSwapResponse::EvmToBtc(r) => r.common.id.to_string(),
             GetSwapResponse::BtcToArkade(r) => r.id.to_string(),
+            GetSwapResponse::OnchainToEvm(r) => r.id.to_string(),
         }
     }
 
@@ -472,6 +485,7 @@ impl GetSwapResponse {
             GetSwapResponse::BtcToEvm(r) => r.common.status,
             GetSwapResponse::EvmToBtc(r) => r.common.status,
             GetSwapResponse::BtcToArkade(r) => r.status,
+            GetSwapResponse::OnchainToEvm(r) => r.status,
         }
     }
 
@@ -481,6 +495,7 @@ impl GetSwapResponse {
             GetSwapResponse::BtcToEvm(_) => SwapDirection::BtcToEvm,
             GetSwapResponse::EvmToBtc(_) => SwapDirection::EvmToBtc,
             GetSwapResponse::BtcToArkade(_) => SwapDirection::BtcToArkade,
+            GetSwapResponse::OnchainToEvm(_) => SwapDirection::OnchainToEvm,
         }
     }
 }
@@ -714,6 +729,7 @@ pub struct BtcToArkadeSwapResponse {
     /// Amount user must send in satoshis (includes fee).
     pub asset_amount: i64,
     /// Amount user will receive on Arkade in satoshis.
+    /// Deprecated: please use [`target_amount`]
     pub sats_receive: i64,
     /// Protocol fee in satoshis.
     pub fee_sats: i64,
@@ -756,4 +772,84 @@ pub struct BtcToArkadeSwapResponse {
     pub source_token: TokenId,
     /// Target token (always btc_arkade for this swap type).
     pub target_token: TokenId,
+    /// Amount the user will receive
+    pub target_amount: u64,
+    /// Amount user must send in satoshis
+    pub source_amount: u64,
+}
+
+/// Request to create an on-chain Bitcoin to EVM swap.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OnchainToEvmSwapRequest {
+    /// User's target EVM address to receive tokens.
+    pub target_address: String,
+    /// Amount user wants to send in satoshis.
+    pub source_amount: u64,
+    /// Target token (e.g., "usdc_pol", "usdt_pol").
+    pub target_token: TokenId,
+    /// Hash lock (32-byte SHA256 hex string with 0x prefix).
+    pub hash_lock: String,
+    /// User's refund public key for the on-chain Bitcoin HTLC.
+    pub refund_pk: String,
+    /// User ID derived from wallet for recovery.
+    pub user_id: String,
+    /// Optional referral code.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub referral_code: Option<String>,
+}
+
+/// On-chain BTC to EVM swap response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OnchainToEvmSwapResponse {
+    /// Swap ID.
+    pub id: uuid::Uuid,
+    /// Current status of the swap.
+    pub status: SwapStatus,
+    /// On-chain Bitcoin HTLC address (Taproot P2TR).
+    pub btc_htlc_address: String,
+    /// Protocol fee in satoshis.
+    pub fee_sats: i64,
+    /// The server's pk inside the htlc
+    pub btc_server_pk: String,
+    /// Hash lock (32-byte hex)
+    ///
+    /// To be used for EVM htlc
+    pub evm_hash_lock: String,
+    /// Hash lock (20-byte hex)
+    ///
+    /// To be used for bitcoin htlc. This is the [`ripemd160(evm_hash_lock)`]
+    pub btc_hash_lock: String,
+    /// On-chain BTC refund locktime (unix timestamp).
+    pub btc_refund_locktime: i64,
+    /// On-chain funding transaction ID.
+    pub btc_fund_txid: Option<String>,
+    /// On-chain claim transaction ID (server claim).
+    pub btc_claim_txid: Option<String>,
+    /// EVM HTLC fund transaction ID.
+    pub evm_fund_txid: Option<String>,
+    /// EVM HTLC claim transaction ID (user claim).
+    pub evm_claim_txid: Option<String>,
+    /// Bitcoin network.
+    pub network: String,
+    /// Timestamp of when the swap was created.
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: time::OffsetDateTime,
+    /// EVM chain (e.g., "Polygon", "Ethereum").
+    pub chain: String,
+    /// Client's EVM address (where tokens will be received).
+    pub client_evm_address: String,
+    /// EVM HTLC contract address.
+    pub evm_htlc_address: String,
+    /// Server's EVM address.
+    pub server_evm_address: String,
+    /// EVM HTLC refund locktime (unix timestamp).
+    pub evm_refund_locktime: i64,
+    /// Source token (e.g., btc_onchain).
+    pub source_token: TokenId,
+    /// Target token (e.g., usdc_pol).
+    pub target_token: TokenId,
+    /// How much the user will receive of the target asset
+    pub target_amount: f64,
+    /// Amount user must send in satoshis
+    pub source_amount: u64,
 }

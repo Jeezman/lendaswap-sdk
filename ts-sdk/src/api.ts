@@ -20,6 +20,7 @@ import {
   type ExtendedVtxoSwapStorageData,
   getLogLevel as wasmGetLogLevel,
   type IdbStorageHandle,
+  type OnchainToEvmSwapResponse,
   type QuoteResponse,
   setLogLevel as wasmSetLogLevel,
   type SwapParams,
@@ -42,6 +43,7 @@ export {
   ExtendedVtxoSwapStorageData,
   IdbStorageHandle,
   Network,
+  OnchainToEvmSwapResponse,
   openIdbDatabase,
   QuoteResponse,
   SwapParams as VtxoSwapParams,
@@ -65,7 +67,8 @@ function mapWasmSwapToInterface(
   const response =
     wasmSwap.btcToEvmResponse ??
     wasmSwap.evmToBtcResponse ??
-    wasmSwap.btcToArkadeResponse;
+    wasmSwap.btcToArkadeResponse ??
+    wasmSwap.onchainToEvmResponse;
   if (!response) {
     return undefined;
   }
@@ -99,7 +102,8 @@ export type TokenIdString =
 export type GetSwapResponse =
   | BtcToEvmSwapResponse
   | EvmToBtcSwapResponse
-  | BtcToArkadeSwapResponse;
+  | BtcToArkadeSwapResponse
+  | OnchainToEvmSwapResponse;
 
 /**
  * Extended swap storage data combining the API response with client-side swap parameters.
@@ -109,7 +113,8 @@ export interface ExtendedSwapStorageData {
   response:
     | BtcToEvmSwapResponse
     | EvmToBtcSwapResponse
-    | BtcToArkadeSwapResponse;
+    | BtcToArkadeSwapResponse
+    | OnchainToEvmSwapResponse;
   swap_params: SwapParams;
 }
 
@@ -155,6 +160,20 @@ export interface BtcToArkadeSwapRequest {
   target_arkade_address: string;
   /** Amount user wants to receive on Arkade in satoshis */
   sats_receive: number;
+  /** Optional referral code */
+  referral_code?: string;
+}
+
+/**
+ * Request to create an on-chain Bitcoin to EVM swap.
+ */
+export interface OnchainToEvmSwapRequest {
+  /** User's EVM address to receive tokens */
+  target_address: string;
+  /** Amount of BTC to send in satoshis */
+  source_amount: bigint;
+  /** Target token (e.g., "usdc_pol", "usdt_pol") */
+  target_token: TokenIdString;
   /** Optional referral code */
   referral_code?: string;
 }
@@ -770,6 +789,29 @@ export class Client {
     return await this.wasmClient.createBitcoinToArkadeSwap(
       request.target_arkade_address,
       BigInt(request.sats_receive),
+      request.referral_code,
+    );
+  }
+
+  /**
+   * Create an on-chain Bitcoin to EVM swap.
+   *
+   * User sends on-chain BTC to a Taproot HTLC address, and receives tokens
+   * on the target EVM chain (e.g., USDC on Polygon).
+   *
+   * @param request - The swap request parameters
+   * @param targetNetwork - Target EVM network ("polygon" or "ethereum")
+   * @returns The created swap response with Taproot address to fund
+   */
+  async createOnchainToEvmSwap(
+    request: OnchainToEvmSwapRequest,
+    targetNetwork: "ethereum" | "polygon",
+  ): Promise<OnchainToEvmSwapResponse> {
+    return await this.wasmClient.createOnchainToEvmSwap(
+      request.target_address,
+      request.source_amount,
+      request.target_token,
+      targetNetwork,
       request.referral_code,
     );
   }

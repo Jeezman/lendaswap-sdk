@@ -682,6 +682,100 @@ fn migrate_swap_record(value: &JsValue) -> Result<(), JsValue> {
         )?;
     }
 
+    // Migration v4: Add source_amount/target_amount
+    // Different swap types have different mappings:
+    // - OnchainToEvm: btc_expected_sats -> source_amount, asset_amount (Decimal) -> target_amount (f64)
+    // - BtcToEvm: sats_receive -> source_amount, asset_amount -> target_amount
+    // - EvmToBtc: asset_amount -> source_amount, sats_receive -> target_amount
+    // - BtcToArkade: asset_amount -> source_amount, sats_receive -> target_amount
+    if !Reflect::has(&response, &JsValue::from_str("source_amount"))? {
+        // Detect swap type by looking at unique fields
+        let is_onchain_to_evm = Reflect::has(&response, &JsValue::from_str("btc_expected_sats"))?;
+        let is_evm_to_btc = Reflect::has(&response, &JsValue::from_str("source_token_address"))?;
+        let is_btc_to_arkade =
+            Reflect::has(&response, &JsValue::from_str("arkade_vhtlc_address"))? && !is_evm_to_btc;
+        let is_btc_to_evm = !is_onchain_to_evm && !is_evm_to_btc && !is_btc_to_arkade;
+
+        if is_onchain_to_evm {
+            // OnchainToEvm: btc_expected_sats -> source_amount, asset_amount -> target_amount
+            let btc_expected_sats =
+                Reflect::get(&response, &JsValue::from_str("btc_expected_sats"))?
+                    .as_f64()
+                    .unwrap_or(0.0);
+            // asset_amount was stored as string (Decimal), parse to f64
+            let asset_amount_str = Reflect::get(&response, &JsValue::from_str("asset_amount"))?;
+            let target_amount = if let Some(s) = asset_amount_str.as_string() {
+                s.parse::<f64>().unwrap_or(0.0)
+            } else {
+                asset_amount_str.as_f64().unwrap_or(0.0)
+            };
+            Reflect::set(
+                &response,
+                &JsValue::from_str("source_amount"),
+                &JsValue::from_f64(btc_expected_sats),
+            )?;
+            Reflect::set(
+                &response,
+                &JsValue::from_str("target_amount"),
+                &JsValue::from_f64(target_amount),
+            )?;
+        } else if is_evm_to_btc {
+            // EvmToBtc: asset_amount -> source_amount, sats_receive -> target_amount
+            let asset_amount = Reflect::get(&response, &JsValue::from_str("asset_amount"))?
+                .as_f64()
+                .unwrap_or(0.0);
+            let sats_receive = Reflect::get(&response, &JsValue::from_str("sats_receive"))?
+                .as_f64()
+                .unwrap_or(0.0);
+            Reflect::set(
+                &response,
+                &JsValue::from_str("source_amount"),
+                &JsValue::from_f64(asset_amount),
+            )?;
+            Reflect::set(
+                &response,
+                &JsValue::from_str("target_amount"),
+                &JsValue::from_f64(sats_receive),
+            )?;
+        } else if is_btc_to_arkade {
+            // BtcToArkade: asset_amount -> source_amount, sats_receive -> target_amount
+            let asset_amount = Reflect::get(&response, &JsValue::from_str("asset_amount"))?
+                .as_f64()
+                .unwrap_or(0.0);
+            let sats_receive = Reflect::get(&response, &JsValue::from_str("sats_receive"))?
+                .as_f64()
+                .unwrap_or(0.0);
+            Reflect::set(
+                &response,
+                &JsValue::from_str("source_amount"),
+                &JsValue::from_f64(asset_amount),
+            )?;
+            Reflect::set(
+                &response,
+                &JsValue::from_str("target_amount"),
+                &JsValue::from_f64(sats_receive),
+            )?;
+        } else if is_btc_to_evm {
+            // BtcToEvm: sats_receive -> source_amount, asset_amount -> target_amount
+            let sats_receive = Reflect::get(&response, &JsValue::from_str("sats_receive"))?
+                .as_f64()
+                .unwrap_or(0.0);
+            let asset_amount = Reflect::get(&response, &JsValue::from_str("asset_amount"))?
+                .as_f64()
+                .unwrap_or(0.0);
+            Reflect::set(
+                &response,
+                &JsValue::from_str("source_amount"),
+                &JsValue::from_f64(sats_receive),
+            )?;
+            Reflect::set(
+                &response,
+                &JsValue::from_str("target_amount"),
+                &JsValue::from_f64(asset_amount),
+            )?;
+        }
+    }
+
     Ok(())
 }
 

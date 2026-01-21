@@ -302,6 +302,11 @@ async fn test_get_swap() {
                     println!("  ID: {}", s.id);
                     println!("  Status: {:?}", s.status);
                 }
+                GetSwapResponse::OnchainToEvm(s) => {
+                    println!("  Direction: Onchain BTC -> EVM");
+                    println!("  ID: {}", s.id);
+                    println!("  Status: {:?}", s.status);
+                }
             }
         }
         Err(e) => println!("Failed to get swap: {:#}", e),

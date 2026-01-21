@@ -64,6 +64,8 @@ export {
   type IdbStorageHandle,
   type LogLevel,
   type Network,
+  type OnchainToEvmSwapRequest,
+  type OnchainToEvmSwapResponse,
   openIdbDatabase,
   type QuoteRequest,
   QuoteResponse,

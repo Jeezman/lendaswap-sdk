@@ -2,7 +2,8 @@ use crate::api::{
     AssetPair, BtcToArkadeSwapRequest, BtcToArkadeSwapResponse, BtcToEvmSwapRequest,
     BtcToEvmSwapResponse, CreateVtxoSwapRequest, EstimateVtxoSwapResponse, EvmChain,
     EvmToArkadeSwapRequest, EvmToBtcSwapResponse, EvmToLightningSwapRequest, GetSwapResponse,
-    QuoteRequest, QuoteResponse, TokenId, TokenInfo, Version, VtxoSwapResponse,
+    OnchainToEvmSwapRequest, OnchainToEvmSwapResponse, QuoteRequest, QuoteResponse, TokenId,
+    TokenInfo, Version, VtxoSwapResponse,
 };
 use crate::esplora::EsploraClient;
 use crate::onchain_htlc::{
@@ -13,6 +14,7 @@ use crate::types::SwapData;
 use crate::{ApiClient, Error, Network, SwapParams, VhtlcAmounts, Wallet, vhtlc, vtxo_swap};
 use ark_rs::core::ArkAddress;
 use bitcoin::Address;
+use log::info;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -426,6 +428,54 @@ impl<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> Client<S, SS, VSS>
         Ok(response)
     }
 
+    /// Create an on-chain Bitcoin to EVM swap.
+    ///
+    /// User sends on-chain BTC to a Taproot HTLC address, and receives tokens
+    /// on the target EVM chain (e.g., USDC on Polygon).
+    ///
+    /// # Arguments
+    /// * `target_address` - User's EVM address to receive tokens
+    /// * `source_amount` - Amount of BTC to send in satoshis
+    /// * `target_token` - Target token (e.g., "usdc_pol")
+    /// * `target_chain` - Target EVM chain (Polygon or Ethereum)
+    /// * `referral_code` - Optional referral code
+    pub async fn create_onchain_to_evm_swap(
+        &self,
+        target_address: String,
+        source_amount: u64,
+        target_token: TokenId,
+        target_chain: EvmChain,
+        referral_code: Option<String>,
+    ) -> crate::Result<OnchainToEvmSwapResponse> {
+        let swap_params = self.wallet.derive_swap_params().await?;
+
+        // For onchain-to-EVM swaps, we use SHA256 with 0x prefix (matching EVM HTLC contracts).
+        let request = OnchainToEvmSwapRequest {
+            target_address,
+            source_amount,
+            target_token,
+            hash_lock: format!("0x{}", hex::encode(swap_params.preimage_hash)),
+            refund_pk: hex::encode(swap_params.public_key.serialize()),
+            user_id: hex::encode(swap_params.user_id.serialize()),
+            referral_code,
+        };
+
+        let response = self
+            .api_client
+            .create_onchain_to_evm_swap(&request, target_chain)
+            .await?;
+
+        let swap_id = response.id.to_string();
+        let swap_data = ExtendedSwapStorageData {
+            response: GetSwapResponse::OnchainToEvm(response.clone()),
+            swap_params,
+        };
+
+        self.swap_storage.store(&swap_id, &swap_data).await?;
+
+        Ok(response)
+    }
+
     pub async fn get_asset_pairs(&self) -> crate::Result<Vec<AssetPair>> {
         let asset_pairs = self.api_client.get_asset_pairs().await?;
         Ok(asset_pairs)
@@ -651,8 +701,42 @@ impl<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> Client<S, SS, VSS>
     ) -> crate::Result<String> {
         let swap_data = self.load_swap_data_from_storage(swap_id).await?;
 
-        let data = match &swap_data.response {
-            GetSwapResponse::BtcToArkade(data) => data,
+        let (server_xonly_pk, hash_lock, btc_refund_locktime, btc_htlc_address) = match &swap_data
+            .response
+        {
+            GetSwapResponse::BtcToArkade(data) => {
+                let server_pk = data.server_vhtlc_pk.clone();
+                let server_claim_pk = bitcoin::secp256k1::PublicKey::from_str(&server_pk)
+                    .map_err(|e| Error::Parse(format!("Invalid server public key: {e}")))?;
+                let (server_claim_pk, _parity) = server_claim_pk.x_only_public_key();
+                let hash_lock = data.hash_lock.clone();
+                let hash_lock = hash_lock.strip_prefix("0x").unwrap_or(hash_lock.as_str());
+                let hash_lock: [u8; 20] = hex::decode(hash_lock)
+                    .map_err(|e| Error::Parse(format!("Invalid hash lock hex: {e}")))?
+                    .try_into()
+                    .map_err(|_| Error::Parse("Hash lock must be 20 bytes".to_string()))?;
+                (
+                    server_claim_pk,
+                    hash_lock,
+                    data.btc_refund_locktime as u32,
+                    data.btc_htlc_address.clone(),
+                )
+            }
+            GetSwapResponse::OnchainToEvm(data) => {
+                let server_pk = data.btc_server_pk.clone();
+                let server_claim_pk = bitcoin::secp256k1::XOnlyPublicKey::from_str(&server_pk)
+                    .map_err(|e| Error::Parse(format!("Invalid server xonly public key: {e}")))?;
+                let hash_lock: [u8; 20] = hex::decode(data.btc_hash_lock.as_str())
+                    .map_err(|e| Error::Parse(format!("Invalid hash lock hex: {e}")))?
+                    .try_into()
+                    .map_err(|_| Error::Parse("Hash lock must be 20 bytes".to_string()))?;
+                (
+                    server_claim_pk,
+                    hash_lock,
+                    data.btc_refund_locktime as u32,
+                    data.btc_htlc_address.clone(),
+                )
+            }
             _ => {
                 return Err(Error::Vhtlc(
                     "Swap was not a BTC to Arkade swap".to_string(),
@@ -660,35 +744,28 @@ impl<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> Client<S, SS, VSS>
             }
         };
 
-        let server_claim_pk = bitcoin::secp256k1::PublicKey::from_str(&data.server_vhtlc_pk)
-            .map_err(|e| Error::Parse(format!("Invalid server public key: {e}")))?;
-        let (server_claim_pk, _parity) = server_claim_pk.x_only_public_key();
+        info!("Server public key {server_xonly_pk}");
 
         // Get the user's refund public key from swap params (convert to x-only for Taproot).
         let (user_refund_pk, _parity) = swap_data.swap_params.public_key.x_only_public_key();
 
-        // Parse the hash lock (20-byte HASH160).
-        let hash_lock: [u8; 20] = hex::decode(&data.hash_lock)
-            .map_err(|e| Error::Parse(format!("Invalid hash lock hex: {e}")))?
-            .try_into()
-            .map_err(|_| Error::Parse("Hash lock must be 20 bytes".to_string()))?;
-
         // Rebuild the HTLC scripts.
+
         let htlc_scripts = build_htlc_scripts(
             &hash_lock,
-            &server_claim_pk,
+            &server_xonly_pk,
             &user_refund_pk,
-            data.btc_refund_locktime as u32,
+            btc_refund_locktime,
         );
 
         // Derive the HTLC address and verify it matches.
         let bitcoin_network = self.wallet.network().to_bitcoin_network();
         let htlc_address = htlc_to_taproot_address(&htlc_scripts, bitcoin_network);
 
-        if htlc_address.to_string() != data.btc_htlc_address {
+        if htlc_address.to_string() != btc_htlc_address {
             return Err(Error::Bitcoin(format!(
                 "HTLC address mismatch: derived {} but expected {} for bitcoin network {}",
-                htlc_address, data.btc_htlc_address, bitcoin_network
+                htlc_address, btc_htlc_address, bitcoin_network
             )));
         }
 
@@ -704,7 +781,7 @@ impl<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> Client<S, SS, VSS>
         let (outpoint, amount) = esplora.find_utxo(&htlc_address).await?.ok_or_else(|| {
             Error::UtxoNotFound(format!(
                 "No unspent UTXO found at HTLC address {}",
-                data.btc_htlc_address
+                btc_htlc_address
             ))
         })?;
 
@@ -730,7 +807,7 @@ impl<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> Client<S, SS, VSS>
             &user_sk,
             &destination,
             fee_rate,
-            data.btc_refund_locktime as u32,
+            btc_refund_locktime,
         )?;
 
         log::info!(

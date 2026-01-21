@@ -344,6 +344,10 @@ pub struct BtcToEvmSwapResponse {
     pub bitcoin_htlc_fund_txid: Option<String>,
     pub evm_htlc_claim_txid: Option<String>,
     pub evm_htlc_fund_txid: Option<String>,
+    /// Amount user must send in satoshis
+    pub source_amount: u64,
+    /// Amount user will receive of the target asset
+    pub target_amount: f64,
 }
 
 impl From<core_api::BtcToEvmSwapResponse> for BtcToEvmSwapResponse {
@@ -380,6 +384,8 @@ impl From<core_api::BtcToEvmSwapResponse> for BtcToEvmSwapResponse {
             bitcoin_htlc_fund_txid: r.bitcoin_htlc_fund_txid,
             evm_htlc_claim_txid: r.evm_htlc_claim_txid,
             evm_htlc_fund_txid: r.evm_htlc_fund_txid,
+            source_amount: r.source_amount,
+            target_amount: r.target_amount,
         }
     }
 }
@@ -423,6 +429,10 @@ pub struct EvmToBtcSwapResponse {
     pub gelato_user_nonce: Option<String>,
     pub gelato_user_deadline: Option<String>,
     pub source_token_address: String,
+    /// Amount user must send of the source asset
+    pub source_amount: f64,
+    /// Amount user will receive in satoshis
+    pub target_amount: u64,
 }
 
 impl From<core_api::EvmToBtcSwapResponse> for EvmToBtcSwapResponse {
@@ -466,6 +476,8 @@ impl From<core_api::EvmToBtcSwapResponse> for EvmToBtcSwapResponse {
             gelato_user_nonce: r.gelato_user_nonce,
             gelato_user_deadline: r.gelato_user_deadline,
             source_token_address: r.source_token_address,
+            source_amount: r.source_amount,
+            target_amount: r.target_amount,
         }
     }
 }
@@ -500,6 +512,10 @@ pub struct BtcToArkadeSwapResponse {
     pub unilateral_refund_without_receiver_delay: i64,
     pub source_token: TokenId,
     pub target_token: TokenId,
+    /// Amount user must send in satoshis
+    pub source_amount: u64,
+    /// Amount user will receive in satoshis
+    pub target_amount: u64,
 }
 
 impl From<core_api::BtcToArkadeSwapResponse> for BtcToArkadeSwapResponse {
@@ -530,6 +546,72 @@ impl From<core_api::BtcToArkadeSwapResponse> for BtcToArkadeSwapResponse {
             unilateral_claim_delay: r.unilateral_claim_delay,
             unilateral_refund_delay: r.unilateral_refund_delay,
             unilateral_refund_without_receiver_delay: r.unilateral_refund_without_receiver_delay,
+            source_token: TokenId(r.source_token),
+            target_token: TokenId(r.target_token),
+            source_amount: r.source_amount,
+            target_amount: r.target_amount,
+        }
+    }
+}
+
+/// On-chain BTC to EVM swap response.
+#[wasm_bindgen(getter_with_clone)]
+#[derive(Debug, Clone)]
+pub struct OnchainToEvmSwapResponse {
+    pub id: String,
+    pub status: SwapStatus,
+    pub btc_htlc_address: String,
+    /// Amount user must send in satoshis
+    pub source_amount: u64,
+    /// Amount user will receive of the target asset
+    pub target_amount: f64,
+    pub fee_sats: i64,
+    pub btc_server_pk: String,
+    pub btc_hash_lock: String,
+    pub evm_hash_lock: String,
+    pub btc_refund_locktime: i64,
+    pub btc_fund_txid: Option<String>,
+    pub btc_claim_txid: Option<String>,
+    pub evm_fund_txid: Option<String>,
+    pub evm_claim_txid: Option<String>,
+    pub network: String,
+    pub created_at: String,
+    pub chain: String,
+    pub client_evm_address: String,
+    pub evm_htlc_address: String,
+    pub server_evm_address: String,
+    pub evm_refund_locktime: i64,
+    pub source_token: TokenId,
+    pub target_token: TokenId,
+}
+
+impl From<core_api::OnchainToEvmSwapResponse> for OnchainToEvmSwapResponse {
+    fn from(r: core_api::OnchainToEvmSwapResponse) -> Self {
+        OnchainToEvmSwapResponse {
+            id: r.id.to_string(),
+            status: r.status.into(),
+            btc_htlc_address: r.btc_htlc_address,
+            source_amount: r.source_amount,
+            target_amount: r.target_amount,
+            fee_sats: r.fee_sats,
+            btc_server_pk: r.btc_server_pk,
+            evm_hash_lock: r.evm_hash_lock,
+            btc_hash_lock: r.btc_hash_lock,
+            btc_refund_locktime: r.btc_refund_locktime,
+            btc_fund_txid: r.btc_fund_txid,
+            btc_claim_txid: r.btc_claim_txid,
+            evm_fund_txid: r.evm_fund_txid,
+            evm_claim_txid: r.evm_claim_txid,
+            network: r.network,
+            created_at: r
+                .created_at
+                .format(&time::format_description::well_known::Rfc3339)
+                .unwrap_or_default(),
+            chain: r.chain,
+            client_evm_address: r.client_evm_address,
+            evm_htlc_address: r.evm_htlc_address,
+            server_evm_address: r.server_evm_address,
+            evm_refund_locktime: r.evm_refund_locktime,
             source_token: TokenId(r.source_token),
             target_token: TokenId(r.target_token),
         }
@@ -641,6 +723,7 @@ pub enum SwapType {
     BtcToEvm,
     EvmToBtc,
     BtcToArkade,
+    OnchainToEvm,
 }
 
 #[wasm_bindgen]
@@ -652,6 +735,7 @@ impl ExtendedSwapStorageData {
             core_api::GetSwapResponse::BtcToEvm(_) => SwapType::BtcToEvm,
             core_api::GetSwapResponse::EvmToBtc(_) => SwapType::EvmToBtc,
             core_api::GetSwapResponse::BtcToArkade(_) => SwapType::BtcToArkade,
+            core_api::GetSwapResponse::OnchainToEvm(_) => SwapType::OnchainToEvm,
         }
     }
 
@@ -661,8 +745,7 @@ impl ExtendedSwapStorageData {
     pub fn btc_to_evm_response(&self) -> Option<BtcToEvmSwapResponse> {
         match &self.response {
             core_api::GetSwapResponse::BtcToEvm(r) => Some(r.clone().into()),
-            core_api::GetSwapResponse::EvmToBtc(_) => None,
-            core_api::GetSwapResponse::BtcToArkade(_) => None,
+            _ => None,
         }
     }
 
@@ -671,20 +754,28 @@ impl ExtendedSwapStorageData {
     #[wasm_bindgen(js_name = "evmToBtcResponse", getter)]
     pub fn evm_to_btc_response(&self) -> Option<EvmToBtcSwapResponse> {
         match &self.response {
-            core_api::GetSwapResponse::BtcToEvm(_) => None,
             core_api::GetSwapResponse::EvmToBtc(r) => Some(r.clone().into()),
-            core_api::GetSwapResponse::BtcToArkade(_) => None,
+            _ => None,
         }
     }
 
-    /// Get the Onchain to Arkade swap response, if this is an Onchian to Arkade swap.
+    /// Get the Onchain to Arkade swap response, if this is an Onchain to Arkade swap.
     /// Returns undefined if not.
     #[wasm_bindgen(js_name = "btcToArkadeResponse", getter)]
     pub fn btc_to_arkade_response(&self) -> Option<BtcToArkadeSwapResponse> {
         match &self.response {
-            core_api::GetSwapResponse::BtcToEvm(_) => None,
-            core_api::GetSwapResponse::EvmToBtc(_) => None,
             core_api::GetSwapResponse::BtcToArkade(r) => Some(r.clone().into()),
+            _ => None,
+        }
+    }
+
+    /// Get the Onchain to EVM swap response, if this is an Onchain to EVM swap.
+    /// Returns undefined if not.
+    #[wasm_bindgen(js_name = "onchainToEvmResponse", getter)]
+    pub fn onchain_to_evm_response(&self) -> Option<OnchainToEvmSwapResponse> {
+        match &self.response {
+            core_api::GetSwapResponse::OnchainToEvm(r) => Some(r.clone().into()),
+            _ => None,
         }
     }
 
@@ -1212,6 +1303,52 @@ impl Client {
         let swap = self
             .inner
             .create_btc_to_arkade_swap(target_arkade_address, sats_receive, referral_code)
+            .await
+            .map_err(|e| JsValue::from_str(&format!("{:#}", e)))?;
+
+        Ok(swap.into())
+    }
+
+    /// Create an on-chain Bitcoin to EVM swap.
+    ///
+    /// User sends on-chain BTC to a Taproot HTLC address, and receives tokens
+    /// on the target EVM chain (e.g., USDC on Polygon).
+    ///
+    /// # Arguments
+    /// * `target_address` - User's EVM address to receive tokens
+    /// * `source_amount` - Amount of BTC to send in satoshis
+    /// * `target_token` - Target token (e.g., "usdc_pol")
+    /// * `target_chain` - Target EVM chain ("polygon" or "ethereum")
+    /// * `referral_code` - Optional referral code
+    #[wasm_bindgen(js_name = "createOnchainToEvmSwap")]
+    pub async fn create_onchain_to_evm_swap(
+        &self,
+        target_address: String,
+        source_amount: u64,
+        target_token: String,
+        target_chain: String,
+        referral_code: Option<String>,
+    ) -> Result<OnchainToEvmSwapResponse, JsValue> {
+        let target_token = match target_token.as_str() {
+            "btc_lightning" => core_api::TokenId::BtcLightning,
+            "btc_arkade" => core_api::TokenId::BtcArkade,
+            "btc_onchain" => core_api::TokenId::BtcOnchain,
+            other => core_api::TokenId::Coin(other.to_string()),
+        };
+
+        let target_chain: core_api::EvmChain = target_chain
+            .parse()
+            .map_err(|e: String| JsValue::from_str(&e))?;
+
+        let swap = self
+            .inner
+            .create_onchain_to_evm_swap(
+                target_address,
+                source_amount,
+                target_token,
+                target_chain,
+                referral_code,
+            )
             .await
             .map_err(|e| JsValue::from_str(&format!("{:#}", e)))?;
 

@@ -2,7 +2,14 @@
 
 use crate::error::{Error, Result};
 
-use super::types::*;
+use super::types::{
+    ApiError, AssetPair, BtcToArkadeSwapRequest, BtcToArkadeSwapResponse, BtcToEvmSwapRequest,
+    BtcToEvmSwapResponse, ClaimGelatoRequest, CreateVtxoSwapRequest, EstimateVtxoSwapRequest,
+    EstimateVtxoSwapResponse, EvmChain, EvmToArkadeSwapRequest, EvmToBtcSwapResponse,
+    EvmToLightningSwapRequest, GetSwapResponse, OnchainToEvmSwapRequest, OnchainToEvmSwapResponse,
+    QuoteRequest, QuoteResponse, RecoverSwapsRequest, RecoverSwapsResponse, TokenInfo, Version,
+    VtxoSwapResponse,
+};
 
 /// Lendaswap API client.
 #[derive(Debug, Clone)]
@@ -143,6 +150,23 @@ impl ApiClient {
         request: &BtcToArkadeSwapRequest,
     ) -> Result<BtcToArkadeSwapResponse> {
         let url = format!("{}/swap/bitcoin/arkade", self.base_url);
+        self.post_json(&url, request).await
+    }
+
+    /// Create an on-chain Bitcoin to EVM swap (BTC → Token on Polygon/Ethereum).
+    ///
+    /// User sends on-chain BTC to a Taproot HTLC address, and receives tokens
+    /// on the target EVM chain.
+    ///
+    /// # Arguments
+    /// * `request` - Swap request parameters
+    /// * `target_network` - Target EVM network (e.g., "polygon", "ethereum")
+    pub async fn create_onchain_to_evm_swap(
+        &self,
+        request: &OnchainToEvmSwapRequest,
+        target_network: EvmChain,
+    ) -> Result<OnchainToEvmSwapResponse> {
+        let url = format!("{}/swap/bitcoin/{}", self.base_url, target_network);
         self.post_json(&url, request).await
     }
 
