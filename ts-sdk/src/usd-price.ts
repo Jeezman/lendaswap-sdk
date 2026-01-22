@@ -45,6 +45,10 @@ const TOKEN_TO_COINGECKO: Record<string, string> = {
   // Gold token
   xaut_eth: "tether-gold",
 
+  // Wrapped Bitcoin
+  wbtc_pol: "wrapped-bitcoin",
+  wbtc_eth: "wrapped-bitcoin",
+
   // Native tokens
   pol_pol: "matic-network", // POL (formerly MATIC)
   eth_eth: "ethereum",

@@ -92,6 +92,8 @@ export type TokenIdString =
   | "usdc_eth"
   | "usdt_eth"
   | "xaut_eth"
+  | "wbtc_pol"
+  | "wbtc_eth"
   | (string & {});
 
 /**
