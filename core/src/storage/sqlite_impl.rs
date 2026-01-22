@@ -838,8 +838,8 @@ impl SqliteStorage {
             bitcoin_htlc_fund_txid,
             evm_htlc_claim_txid,
             evm_htlc_fund_txid,
-            target_amount,
-            source_amount: source_amount as u64,
+            target_amount: Some(target_amount),
+            source_amount: Some(source_amount as u64),
         };
 
         Ok(ExtendedSwapStorageData {
@@ -1964,8 +1964,8 @@ mod tests {
             bitcoin_htlc_fund_txid: None,
             evm_htlc_claim_txid: None,
             evm_htlc_fund_txid: None,
-            target_amount: 100.5,
-            source_amount: 50000,
+            target_amount: Some(100.5),
+            source_amount: Some(50000),
         };
 
         let data = ExtendedSwapStorageData {

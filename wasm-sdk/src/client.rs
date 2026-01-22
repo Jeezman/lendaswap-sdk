@@ -352,6 +352,8 @@ pub struct BtcToEvmSwapResponse {
 
 impl From<core_api::BtcToEvmSwapResponse> for BtcToEvmSwapResponse {
     fn from(r: core_api::BtcToEvmSwapResponse) -> Self {
+        let source_amount = r.source_amount();
+        let target_amount = r.target_amount();
         BtcToEvmSwapResponse {
             id: r.common.id.to_string(),
             status: r.common.status.into(),
@@ -384,8 +386,8 @@ impl From<core_api::BtcToEvmSwapResponse> for BtcToEvmSwapResponse {
             bitcoin_htlc_fund_txid: r.bitcoin_htlc_fund_txid,
             evm_htlc_claim_txid: r.evm_htlc_claim_txid,
             evm_htlc_fund_txid: r.evm_htlc_fund_txid,
-            source_amount: r.source_amount,
-            target_amount: r.target_amount,
+            source_amount,
+            target_amount,
         }
     }
 }

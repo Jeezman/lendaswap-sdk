@@ -356,9 +356,26 @@ pub struct BtcToEvmSwapResponse {
     pub evm_htlc_claim_txid: Option<String>,
     /// EVM HTLC fund transaction ID
     pub evm_htlc_fund_txid: Option<String>,
-    pub target_amount: f64,
-    /// Amount user must send in satoshis
-    pub source_amount: u64,
+    /// Amount user will receive of target asset. Falls back to common.asset_amount if not present.
+    #[serde(default)]
+    pub target_amount: Option<f64>,
+    /// Amount user must send in satoshis. Falls back to sats_receive if not present.
+    #[serde(default)]
+    pub source_amount: Option<u64>,
+}
+
+impl BtcToEvmSwapResponse {
+    /// Returns the target amount (amount user will receive).
+    /// Uses `target_amount` if present, otherwise falls back to deprecated `asset_amount`.
+    pub fn target_amount(&self) -> f64 {
+        self.target_amount.unwrap_or(self.common.asset_amount)
+    }
+
+    /// Returns the source amount in satoshis (amount user must send).
+    /// Uses `source_amount` if present, otherwise falls back to deprecated `sats_receive`.
+    pub fn source_amount(&self) -> u64 {
+        self.source_amount.unwrap_or(self.sats_receive as u64)
+    }
 }
 
 /// EVM → BTC swap response.

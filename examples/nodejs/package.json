@@ -8,6 +8,8 @@
     "lendaswap": "./index.js"
   },
   "scripts": {
+    "build:sdk": "cd ../../node-sdk && npm install && npm run build",
+    "setup": "npm run build:sdk && npm install",
     "start": "node index.js",
     "pairs": "node index.js pairs",
     "tokens": "node index.js tokens",
