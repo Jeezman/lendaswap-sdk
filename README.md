@@ -4,7 +4,7 @@ Monorepo containing client SDKs for Lendaswap - Bitcoin-to-stablecoin atomic swa
 
 ## Structure
 
-This repository contains three interconnected packages:
+This repository contains interconnected packages:
 
 ### [`core/`](./core/) - Rust Core Library
 
@@ -14,9 +14,9 @@ Platform-agnostic Rust library containing:
 - Type definitions matching the backend API schema
 - HTTP request handling with `reqwest`
 
-Used as a dependency by the WASM SDK.
+Used as a dependency by both the WASM SDK and the Node.js native SDK.
 
-### [`wasm-sdk/`](wasm-sdk/) - WASM Bindings
+### [`wasm-sdk/`](./wasm-sdk/) - WASM Bindings
 
 WebAssembly bindings for the core library:
 
@@ -26,15 +26,30 @@ WebAssembly bindings for the core library:
 
 Compiled to WASM and consumed by the TypeScript SDK.
 
+### [`node-sdk/`](./node-sdk/) - Native Node.js SDK
+
+Native Node.js bindings via [napi-rs](https://napi.rs/):
+
+- SQLite storage for server-side applications
+- Pre-built binaries for macOS, Linux, and Windows (x64, ARM64)
+- Designed for CLI tools and backend services
+- Published as `@lendasat/lendaswap-sdk-native` on npm
+
 ### [`ts-sdk/`](./ts-sdk/) - TypeScript SDK
 
 High-level TypeScript/JavaScript SDK:
 
 - Wraps the WASM bindings with idiomatic TypeScript
 - HD wallet management for swap parameters
-- Storage providers (LocalStorage, IndexedDB, Memory)
+- Storage providers (LocalStorage, IndexedDB, Memory, SQLite via node-sdk)
 - Real-time WebSocket price feed
 - Published as `@lendasat/lendaswap-sdk` on npm
+
+### [`examples/`](./examples/) - Example Projects
+
+Example implementations:
+
+- [`examples/nodejs/`](./examples/nodejs/) - CLI example using the native Node.js SDK with SQLite storage
 
 ## Architecture
 
@@ -42,16 +57,21 @@ High-level TypeScript/JavaScript SDK:
 ┌─────────────────────────────────────────────────────┐
 │                   ts-sdk (TypeScript)               │
 │  - ApiClient, Wallet, PriceFeedService              │
-│  - Storage providers                                │
-│  - Published to npm as @lendasat/lendaswap-sdk               │
+│  - Storage providers (browser + Node.js)            │
+│  - Published to npm as @lendasat/lendaswap-sdk      │
 └─────────────────────┬───────────────────────────────┘
-                      │ imports WASM
-┌─────────────────────▼───────────────────────────────┐
-│                wasm-sdk (WASM)                      │
-│  - wasm-bindgen exports                             │
-│  - JS-friendly type conversions                     │
-└─────────────────────┬───────────────────────────────┘
-                      │ depends on
+                      │ imports
+        ┌─────────────┴─────────────┐
+        │                           │
+┌───────▼───────────┐     ┌─────────▼─────────────────┐
+│   wasm-sdk (WASM) │     │  node-sdk (Native)        │
+│  - wasm-bindgen   │     │  - napi-rs bindings       │
+│  - Browser/WASM   │     │  - SQLite storage         │
+└───────┬───────────┘     │  - @lendasat/lendaswap-   │
+        │                 │    sdk-native             │
+        │                 └─────────┬─────────────────┘
+        │ depends on                │ depends on
+        └─────────────┬─────────────┘
 ┌─────────────────────▼───────────────────────────────┐
 │                  core (Rust)                        │
 │  - API types and client                             │
@@ -61,19 +81,34 @@ High-level TypeScript/JavaScript SDK:
 
 ## Building
 
+This project uses [Just](https://github.com/casey/just) as a command runner.
+
 ```bash
-# Build everything (WASM + TypeScript)
+# Build both SDKs (WASM + Native)
+just build-all
+
+# Build WASM SDK + TypeScript
+just build-sdk
+
+# Build native Node.js SDK
+just build-native
+
+# Run Node.js example
+just run-nodejs-example
+```
+
+Manual build commands:
+
+```bash
+# Build WASM + TypeScript SDK
 cd ts-sdk
 pnpm install
 pnpm run build
 
-# Build only WASM
-cd wasm-sdk
-wasm-pack build --target web --out-dir ../ts-sdk/wasm
-
-# Build only TypeScript
-cd ts-sdk
-pnpm run build:ts
+# Build native Node.js SDK
+cd node-sdk
+npm install
+npm run build
 ```
 
 ## Development
@@ -87,6 +122,9 @@ cargo check --all
 
 # Run Rust tests
 cargo test --all
+
+# Run TypeScript SDK tests
+just test-sdk
 ```
 
 ## License
