@@ -16,6 +16,7 @@ use super::types::{
 pub struct ApiClient {
     base_url: String,
     client: reqwest::Client,
+    api_key: Option<String>,
 }
 
 impl ApiClient {
@@ -27,12 +28,25 @@ impl ApiClient {
         Self {
             base_url: base_url.into().trim_end_matches('/').to_string(),
             client: reqwest::Client::new(),
+            api_key: None,
         }
     }
 
     /// Get the base URL.
     pub fn base_url(&self) -> &str {
         &self.base_url
+    }
+
+    /// Set the API key for tracking swap creation.
+    ///
+    /// When set, the API key will be sent as the `X-API-Key` header on swap creation requests.
+    pub fn set_api_key(&mut self, api_key: Option<String>) {
+        self.api_key = api_key;
+    }
+
+    /// Get the current API key.
+    pub fn api_key(&self) -> Option<&str> {
+        self.api_key.as_deref()
     }
 
     /// Health check endpoint.
@@ -275,10 +289,14 @@ impl ApiClient {
         url: &str,
         body: &R,
     ) -> Result<T> {
-        let response = self
-            .client
-            .post(url)
-            .json(body)
+        let mut request = self.client.post(url).json(body);
+
+        // Add API key header if set
+        if let Some(ref api_key) = self.api_key {
+            request = request.header("X-API-Key", api_key);
+        }
+
+        let response = request
             .send()
             .await
             .map_err(|e| Error::Network(format!("Failed to send request to {}: {}", url, e)))?;

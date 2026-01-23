@@ -247,6 +247,7 @@ export class ClientBuilder {
   private _network?: NetworkInput;
   private _arkadeUrl?: string;
   private _esploraUrl?: string;
+  private _apiKey?: string;
 
   constructor() {}
 
@@ -313,6 +314,16 @@ export class ClientBuilder {
   }
 
   /**
+   * Set the API key for tracking swap creation.
+   *
+   * When set, the API key will be sent as the `X-API-Key` header on swap creation requests.
+   */
+  apiKey(apiKey: string): this {
+    this._apiKey = apiKey;
+    return this;
+  }
+
+  /**
    * Build the client asynchronously.
    *
    * @returns A Promise that resolves to a new Client instance
@@ -340,14 +351,18 @@ export class ClientBuilder {
       storageHandle = await openIdbDatabase();
     }
 
-    const wasmBuilder = new WasmClientBuilder();
-    const wasmClient = wasmBuilder
+    let wasmBuilder = new WasmClientBuilder()
       .url(this._url)
       .storage(storageHandle)
       .network(this._network)
       .arkadeUrl(this._arkadeUrl)
-      .esploraUrl(this._esploraUrl)
-      .build();
+      .esploraUrl(this._esploraUrl);
+
+    if (this._apiKey) {
+      wasmBuilder = wasmBuilder.apiKey(this._apiKey);
+    }
+
+    const wasmClient = wasmBuilder.build();
 
     return Client.fromWasmClient(wasmClient);
   }
@@ -459,6 +474,22 @@ export class Client {
 
   async init(mnemonic?: string): Promise<void> {
     await this.wasmClient.init(mnemonic);
+  }
+
+  /**
+   * Set the API key for tracking swap creation.
+   *
+   * When set, the API key will be sent as the `X-API-Key` header on swap creation requests.
+   */
+  setApiKey(apiKey: string | undefined): void {
+    this.wasmClient.setApiKey(apiKey);
+  }
+
+  /**
+   * Get the current API key.
+   */
+  get apiKey(): string | undefined {
+    return this.wasmClient.apiKey;
   }
 
   /**

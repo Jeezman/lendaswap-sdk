@@ -825,6 +825,7 @@ pub struct ClientBuilder {
     network: Option<String>,
     arkade_url: Option<String>,
     esplora_url: Option<String>,
+    api_key: Option<String>,
 }
 
 #[wasm_bindgen]
@@ -838,6 +839,7 @@ impl ClientBuilder {
             network: None,
             arkade_url: None,
             esplora_url: None,
+            api_key: None,
         }
     }
 
@@ -876,6 +878,15 @@ impl ClientBuilder {
         self
     }
 
+    /// Set the API key for tracking swap creation.
+    ///
+    /// When set, the API key will be sent as the `X-API-Key` header on swap creation requests.
+    #[wasm_bindgen(js_name = "apiKey")]
+    pub fn api_key(mut self, api_key: String) -> ClientBuilder {
+        self.api_key = Some(api_key);
+        self
+    }
+
     /// Build the client, consuming the builder.
     ///
     /// Returns an error if any required field is missing.
@@ -897,7 +908,13 @@ impl ClientBuilder {
             .esplora_url
             .ok_or_else(|| JsValue::from_str("esploraUrl is required"))?;
 
-        Client::new(url, &storage, network, arkade_url, esplora_url)
+        let mut client = Client::new(url, &storage, network, arkade_url, esplora_url)?;
+
+        if let Some(api_key) = self.api_key {
+            client.set_api_key(Some(api_key));
+        }
+
+        Ok(client)
     }
 }
 
@@ -998,6 +1015,20 @@ impl Client {
             .await
             .map_err(|e: lendaswap_core::Error| JsValue::from_str(&format!("{}", e)))?;
         Ok(())
+    }
+
+    /// Set the API key for tracking swap creation.
+    ///
+    /// When set, the API key will be sent as the `X-API-Key` header on swap creation requests.
+    #[wasm_bindgen(js_name = "setApiKey")]
+    pub fn set_api_key(&mut self, api_key: Option<String>) {
+        self.inner.set_api_key(api_key);
+    }
+
+    /// Get the current API key.
+    #[wasm_bindgen(js_name = "apiKey", getter)]
+    pub fn api_key(&self) -> Option<String> {
+        self.inner.api_key().map(|s| s.to_string())
     }
 
     /// Create an Arkade to EVM swap.

@@ -35,18 +35,26 @@ export const CONFIG = {
     esploraUrl: process.env.ESPLORA_URL || "https://mempool.space/api",
     dbPath: process.env.DB_PATH || "./lendaswap.db",
     mnemonic: process.env.MNEMONIC,
+    // Optional API key for swap tracking
+    apiKey: process.env.LENDASWAP_API_KEY,
 };
 
 // Create and initialize client
 async function createClient() {
     const storage = SqliteStorageHandle.open(CONFIG.dbPath);
-    const client = new ClientBuilder()
+    let builder = new ClientBuilder()
         .storage(storage)
         .url(CONFIG.apiUrl)
         .network(CONFIG.network)
         .arkadeUrl(CONFIG.arkadeUrl)
-        .esploraUrl(CONFIG.esploraUrl)
-        .build();
+        .esploraUrl(CONFIG.esploraUrl);
+
+    // Set API key if provided (will be sent as X-API-Key header on swap creation)
+    if (CONFIG.apiKey) {
+        builder = builder.apiKey(CONFIG.apiKey);
+    }
+
+    const client = builder.build();
 
     await client.init(CONFIG.mnemonic);
     return client;
@@ -83,6 +91,7 @@ Environment Variables:
   ESPLORA_URL         Esplora API URL
   DB_PATH             SQLite database path (default: ./lendaswap.db)
   MNEMONIC            Wallet mnemonic (optional, generates new if not set)
+  LENDASWAP_API_KEY   API key for swap tracking (optional, sent as X-API-Key header)
 `);
 }
 

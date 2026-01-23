@@ -83,6 +83,7 @@ pub struct ClientBuilder<S, SS, VSS> {
     network: Option<Network>,
     arkade_url: Option<String>,
     esplora_url: Option<String>,
+    api_key: Option<String>,
 }
 
 impl<S, SS, VSS> Default for ClientBuilder<S, SS, VSS> {
@@ -102,6 +103,7 @@ impl<S, SS, VSS> ClientBuilder<S, SS, VSS> {
             network: None,
             arkade_url: None,
             esplora_url: None,
+            api_key: None,
         }
     }
 
@@ -146,6 +148,14 @@ impl<S, SS, VSS> ClientBuilder<S, SS, VSS> {
         self.esplora_url = Some(url.into());
         self
     }
+
+    /// Set the API key for tracking swap creation.
+    ///
+    /// When set, the API key will be sent as the `X-API-Key` header on swap creation requests.
+    pub fn api_key(mut self, api_key: impl Into<String>) -> Self {
+        self.api_key = Some(api_key.into());
+        self
+    }
 }
 
 impl<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> ClientBuilder<S, SS, VSS> {
@@ -175,7 +185,7 @@ impl<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> ClientBuilder<S, S
             .esplora_url
             .ok_or_else(|| Error::Config("esplora_url is required".to_string()))?;
 
-        Ok(Client::new(
+        let mut client = Client::new(
             url,
             wallet_storage,
             swap_storage,
@@ -183,7 +193,13 @@ impl<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> ClientBuilder<S, S
             network,
             arkade_url,
             esplora_url,
-        ))
+        );
+
+        if let Some(api_key) = self.api_key {
+            client.set_api_key(Some(api_key));
+        }
+
+        Ok(client)
     }
 }
 
@@ -240,6 +256,18 @@ impl<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> Client<S, SS, VSS>
 
     pub fn api_client(&self) -> &ApiClient {
         &self.api_client
+    }
+
+    /// Set the API key for tracking swap creation.
+    ///
+    /// When set, the API key will be sent as the `X-API-Key` header on swap creation requests.
+    pub fn set_api_key(&mut self, api_key: Option<String>) {
+        self.api_client.set_api_key(api_key);
+    }
+
+    /// Get the current API key.
+    pub fn api_key(&self) -> Option<&str> {
+        self.api_client.api_key()
     }
 
     pub fn wallet(&self) -> &Wallet<S> {

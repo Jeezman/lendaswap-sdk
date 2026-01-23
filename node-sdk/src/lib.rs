@@ -520,6 +520,23 @@ impl Client {
             .map_err(|e| Error::from_reason(format!("{}", e)))
     }
 
+    /// Set the API key for tracking swap creation.
+    ///
+    /// When set, the API key will be sent as the `X-API-Key` header on swap creation requests.
+    #[napi]
+    pub async fn set_api_key(&self, api_key: Option<String>) -> Result<()> {
+        let mut client = self.inner.lock().await;
+        client.set_api_key(api_key);
+        Ok(())
+    }
+
+    /// Get the current API key.
+    #[napi]
+    pub async fn get_api_key(&self) -> Result<Option<String>> {
+        let client = self.inner.lock().await;
+        Ok(client.api_key().map(|s| s.to_string()))
+    }
+
     /// Get the current mnemonic.
     #[napi]
     pub async fn get_mnemonic(&self) -> Result<String> {
@@ -912,6 +929,7 @@ pub struct ClientBuilder {
     network: Option<String>,
     arkade_url: Option<String>,
     esplora_url: Option<String>,
+    api_key: Option<String>,
 }
 
 #[napi]
@@ -925,6 +943,7 @@ impl ClientBuilder {
             network: None,
             arkade_url: None,
             esplora_url: None,
+            api_key: None,
         }
     }
 
@@ -963,6 +982,15 @@ impl ClientBuilder {
         self
     }
 
+    /// Set the API key for tracking swap creation.
+    ///
+    /// When set, the API key will be sent as the `X-API-Key` header on swap creation requests.
+    #[napi]
+    pub fn api_key(&mut self, api_key: String) -> &Self {
+        self.api_key = Some(api_key);
+        self
+    }
+
     /// Build the client.
     #[napi]
     pub fn build(&self) -> Result<Client> {
@@ -995,7 +1023,7 @@ impl ClientBuilder {
         let swap_storage = (**storage).clone();
         let vtxo_swap_storage = (**storage).clone();
 
-        let inner = CoreClient::new(
+        let mut inner = CoreClient::new(
             url.clone(),
             wallet_storage,
             swap_storage,
@@ -1004,6 +1032,10 @@ impl ClientBuilder {
             arkade_url.clone(),
             esplora_url.clone(),
         );
+
+        if let Some(ref api_key) = self.api_key {
+            inner.set_api_key(Some(api_key.clone()));
+        }
 
         Ok(Client {
             inner: Arc::new(Mutex::new(inner)),
