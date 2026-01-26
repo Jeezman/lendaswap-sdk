@@ -34,11 +34,9 @@ impl SqliteStorageHandle {
     /// Create an in-memory SQLite database (useful for testing).
     #[napi(factory)]
     pub async fn in_memory() -> Result<Self> {
-        let storage = SqliteStorage::in_memory()
-            .await
-            .map_err(|e| {
-                Error::from_reason(format!("Failed to create in-memory database: {}", e))
-            })?;
+        let storage = SqliteStorage::in_memory().await.map_err(|e| {
+            Error::from_reason(format!("Failed to create in-memory database: {}", e))
+        })?;
         Ok(Self {
             storage: Arc::new(storage),
         })
