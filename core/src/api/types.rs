@@ -347,6 +347,7 @@ pub struct BtcToEvmSwapResponse {
     pub ln_invoice: String,
     /// The amount of satoshis we expect to receive
     /// Deprecated: please use [`source_amount`]
+    #[deprecated(note = "please use source_amount instead")]
     pub sats_receive: i64,
     /// Bitcoin HTLC claim transaction ID
     pub bitcoin_htlc_claim_txid: Option<String>,
@@ -373,6 +374,7 @@ impl BtcToEvmSwapResponse {
 
     /// Returns the source amount in satoshis (amount user must send).
     /// Uses `source_amount` if present, otherwise falls back to deprecated `sats_receive`.
+    #[allow(deprecated)]
     pub fn source_amount(&self) -> u64 {
         self.source_amount.unwrap_or(self.sats_receive as u64)
     }
@@ -395,6 +397,7 @@ pub struct EvmToBtcSwapResponse {
     pub ln_invoice: String,
     /// Net satoshis user will receive
     /// Deprecated: please use [`target_amount`]
+    #[deprecated(note = "please use target_amount instead")]
     pub sats_receive: i64,
     /// Bitcoin HTLC fund transaction ID
     pub bitcoin_htlc_fund_txid: Option<String>,

@@ -203,8 +203,13 @@ pub struct BtcToEvmSwapResponse {
     pub evm_htlc_claim_txid: Option<String>,
     /// EVM HTLC fund transaction ID
     pub evm_htlc_fund_txid: Option<String>,
+    /// Amount user will receive of target asset
+    pub target_amount: Option<f64>,
+    /// Amount user must send in satoshis
+    pub source_amount: Option<i64>,
 }
 
+#[allow(deprecated)] // sats_receive is deprecated but needed for backward compatibility
 impl From<core_api::BtcToEvmSwapResponse> for BtcToEvmSwapResponse {
     fn from(r: core_api::BtcToEvmSwapResponse) -> Self {
         BtcToEvmSwapResponse {
@@ -230,6 +235,8 @@ impl From<core_api::BtcToEvmSwapResponse> for BtcToEvmSwapResponse {
             bitcoin_htlc_fund_txid: r.bitcoin_htlc_fund_txid,
             evm_htlc_claim_txid: r.evm_htlc_claim_txid,
             evm_htlc_fund_txid: r.evm_htlc_fund_txid,
+            target_amount: r.target_amount,
+            source_amount: r.source_amount.map(|s| s as i64),
         }
     }
 }
@@ -259,8 +266,13 @@ pub struct EvmToBtcSwapResponse {
     pub evm_htlc_claim_txid: Option<String>,
     /// EVM HTLC fund transaction ID
     pub evm_htlc_fund_txid: Option<String>,
+    /// Amount user will receive in sats
+    pub target_amount: i64,
+    /// Amount user must send of the source asset
+    pub source_amount: f64,
 }
 
+#[allow(deprecated)] // sats_receive is deprecated but needed for backward compatibility
 impl From<core_api::EvmToBtcSwapResponse> for EvmToBtcSwapResponse {
     fn from(r: core_api::EvmToBtcSwapResponse) -> Self {
         EvmToBtcSwapResponse {
@@ -287,6 +299,8 @@ impl From<core_api::EvmToBtcSwapResponse> for EvmToBtcSwapResponse {
             bitcoin_htlc_claim_txid: r.bitcoin_htlc_claim_txid,
             evm_htlc_claim_txid: r.evm_htlc_claim_txid,
             evm_htlc_fund_txid: r.evm_htlc_fund_txid,
+            target_amount: r.target_amount as i64,
+            source_amount: r.source_amount,
         }
     }
 }
@@ -314,6 +328,10 @@ pub struct BtcToArkadeSwapResponse {
     pub arkade_fund_txid: Option<String>,
     /// Arkade VHTLC claim transaction ID.
     pub arkade_claim_txid: Option<String>,
+    /// Amount user will receive on Arkade in satoshis
+    pub target_amount: i64,
+    /// Amount user must send in satoshis
+    pub source_amount: i64,
 }
 
 impl From<core_api::BtcToArkadeSwapResponse> for BtcToArkadeSwapResponse {
@@ -339,6 +357,8 @@ impl From<core_api::BtcToArkadeSwapResponse> for BtcToArkadeSwapResponse {
             btc_claim_txid: r.btc_claim_txid,
             arkade_fund_txid: r.arkade_fund_txid,
             arkade_claim_txid: r.arkade_claim_txid,
+            target_amount: r.target_amount as i64,
+            source_amount: r.source_amount as i64,
         }
     }
 }

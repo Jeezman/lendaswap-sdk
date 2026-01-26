@@ -148,6 +148,7 @@ impl SqliteStorage {
     // Helper functions for storing different swap types
     // =========================================================================
 
+    #[allow(deprecated)] // sats_receive is deprecated but needed for backward compatibility
     async fn store_btc_to_evm(
         &self,
         swap_id: &str,
@@ -218,6 +219,7 @@ impl SqliteStorage {
         Ok(())
     }
 
+    #[allow(deprecated)] // sats_receive is deprecated but needed for backward compatibility
     async fn store_evm_to_btc(
         &self,
         swap_id: &str,
@@ -579,6 +581,7 @@ impl SqliteStorage {
         })
     }
 
+    #[allow(deprecated)] // sats_receive is deprecated but needed for backward compatibility
     async fn load_btc_to_evm(
         &self,
         swap_id: &str,
@@ -642,6 +645,7 @@ impl SqliteStorage {
         })
     }
 
+    #[allow(deprecated)] // sats_receive is deprecated but needed for backward compatibility
     async fn load_evm_to_btc(
         &self,
         swap_id: &str,
@@ -1180,7 +1184,7 @@ impl VtxoSwapStorage for SqliteStorage {
 // =========================================================================
 // Tests
 // =========================================================================
-
+#[allow(deprecated)]
 #[cfg(test)]
 mod tests {
     use super::*;
