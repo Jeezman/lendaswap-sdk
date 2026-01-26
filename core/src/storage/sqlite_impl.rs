@@ -1,8 +1,8 @@
-//! SQLite storage implementation with flat database schema.
+//! SQLite storage implementation using sqlx with migration support.
 //!
-//! This module provides persistent storage using SQLite with proper columnar storage
-//! for better queryability and migration support. Suitable for native applications
-//! (CLI tools, Flutter apps, Node.js via napi-rs, etc.).
+//! This module provides persistent storage using SQLite with proper migrations
+//! via sqlx. Suitable for native applications (CLI tools, Flutter apps, Node.js
+//! via napi-rs, etc.).
 
 use super::{
     ExtendedSwapStorageData, ExtendedVtxoSwapStorageData, StorageFuture, SwapStorage,
@@ -14,13 +14,35 @@ use crate::api::{
     VtxoSwapStatus,
 };
 use crate::types::SwapParams;
-use rusqlite::{Connection, params};
-use rust_decimal::prelude::ToPrimitive;
+use sqlx::Row;
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
 use std::path::Path;
 use std::str::FromStr;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use time::OffsetDateTime;
 use uuid::Uuid;
+
+/// Parse SwapStatus from stored Debug format string.
+fn parse_swap_status(s: &str) -> SwapStatus {
+    // We store using Debug format (e.g., "Pending", "ClientFunded")
+    // Try to parse via serde (expects lowercase)
+    serde_json::from_str(&format!("\"{}\"", s.to_lowercase())).unwrap_or(SwapStatus::Pending)
+}
+
+/// Parse VtxoSwapStatus from stored Debug format string.
+fn parse_vtxo_swap_status(s: &str) -> VtxoSwapStatus {
+    serde_json::from_str(&format!("\"{}\"", s.to_lowercase())).unwrap_or(VtxoSwapStatus::Pending)
+}
+
+/// Parse TokenId from stored string.
+fn parse_token_id(s: &str) -> TokenId {
+    match s {
+        "btc_lightning" => TokenId::BtcLightning,
+        "btc_arkade" => TokenId::BtcArkade,
+        "btc_onchain" => TokenId::BtcOnchain,
+        other => TokenId::Coin(other.to_string()),
+    }
+}
 
 /// Swap type discriminator for the registry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,9 +74,9 @@ impl SwapType {
     }
 }
 
-/// SQLite-based storage implementation with flat database schema.
+/// SQLite-based storage implementation using sqlx with migrations.
 ///
-/// This provides persistent storage using SQLite with proper columnar storage,
+/// This provides persistent storage using SQLite with proper migration support,
 /// suitable for native applications (CLI tools, Flutter apps, Node.js via napi-rs, etc.).
 ///
 /// # Example
@@ -62,7 +84,7 @@ impl SwapType {
 /// ```rust,ignore
 /// use lendaswap_core::SqliteStorage;
 ///
-/// let storage = SqliteStorage::open("./lendaswap.db")?;
+/// let storage = SqliteStorage::open("./lendaswap.db").await?;
 /// let client = Client::new(
 ///     url,
 ///     storage.clone(),
@@ -75,306 +97,59 @@ impl SwapType {
 /// ```
 #[derive(Clone)]
 pub struct SqliteStorage {
-    conn: Arc<Mutex<Connection>>,
+    pool: Arc<SqlitePool>,
 }
 
 impl SqliteStorage {
     /// Open or create a SQLite database at the given path.
     ///
-    /// Creates the necessary tables if they don't exist.
-    pub fn open<P: AsRef<Path>>(path: P) -> std::result::Result<Self, rusqlite::Error> {
-        let conn = Connection::open(path)?;
+    /// Runs migrations automatically on startup.
+    pub async fn open<P: AsRef<Path>>(path: P) -> Result<Self, sqlx::Error> {
+        let path_str = path.as_ref().to_string_lossy().to_string();
+        let options = SqliteConnectOptions::new()
+            .filename(&path_str)
+            .create_if_missing(true);
+
+        let pool = SqlitePoolOptions::new()
+            .max_connections(5)
+            .connect_with(options)
+            .await?;
+
         let storage = Self {
-            conn: Arc::new(Mutex::new(conn)),
+            pool: Arc::new(pool),
         };
-        storage.initialize_schema()?;
+        storage.run_migrations().await?;
         Ok(storage)
     }
 
     /// Create an in-memory SQLite database (useful for testing).
-    pub fn in_memory() -> std::result::Result<Self, rusqlite::Error> {
-        let conn = Connection::open_in_memory()?;
+    pub async fn in_memory() -> Result<Self, sqlx::Error> {
+        let options = SqliteConnectOptions::from_str(":memory:")?;
+
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await?;
+
         let storage = Self {
-            conn: Arc::new(Mutex::new(conn)),
+            pool: Arc::new(pool),
         };
-        storage.initialize_schema()?;
+        storage.run_migrations().await?;
         Ok(storage)
     }
 
-    /// Initialize the database schema.
-    fn initialize_schema(&self) -> std::result::Result<(), rusqlite::Error> {
-        let conn = self.conn.lock().unwrap();
-
-        // Wallet table
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS wallet (
-                id TEXT PRIMARY KEY,
-                mnemonic TEXT,
-                key_index INTEGER NOT NULL DEFAULT 0
-            )",
-            [],
-        )?;
-
-        // Ensure default wallet row exists
-        conn.execute(
-            "INSERT OR IGNORE INTO wallet (id, key_index) VALUES ('default', 0)",
-            [],
-        )?;
-
-        // Swap registry table to track which table contains each swap
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS swap_registry (
-                swap_id TEXT PRIMARY KEY NOT NULL,
-                swap_type TEXT NOT NULL
-            )",
-            [],
-        )?;
-
-        // BTC → EVM swaps table
-        conn.execute(
-            r#"
-            CREATE TABLE IF NOT EXISTS btc_to_evm_swaps (
-                swap_id TEXT PRIMARY KEY NOT NULL,
-                -- Common fields
-                status TEXT NOT NULL,
-                hash_lock TEXT NOT NULL,
-                fee_sats INTEGER NOT NULL,
-                asset_amount REAL NOT NULL,
-                sender_pk TEXT NOT NULL,
-                receiver_pk TEXT NOT NULL,
-                server_pk TEXT NOT NULL,
-                evm_refund_locktime INTEGER NOT NULL,
-                vhtlc_refund_locktime INTEGER NOT NULL,
-                unilateral_claim_delay INTEGER NOT NULL,
-                unilateral_refund_delay INTEGER NOT NULL,
-                unilateral_refund_without_receiver_delay INTEGER NOT NULL,
-                network TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                source_token TEXT NOT NULL,
-                target_token TEXT NOT NULL,
-                -- BtcToEvm specific
-                htlc_address_evm TEXT NOT NULL,
-                htlc_address_arkade TEXT NOT NULL,
-                user_address_evm TEXT NOT NULL,
-                ln_invoice TEXT NOT NULL,
-                sats_receive INTEGER NOT NULL,
-                bitcoin_htlc_claim_txid TEXT,
-                bitcoin_htlc_fund_txid TEXT,
-                evm_htlc_claim_txid TEXT,
-                evm_htlc_fund_txid TEXT,
-                -- SwapParams
-                secret_key TEXT NOT NULL,
-                public_key TEXT NOT NULL,
-                preimage TEXT NOT NULL,
-                preimage_hash TEXT NOT NULL,
-                user_id TEXT NOT NULL,
-                key_index INTEGER NOT NULL
-            )
-            "#,
-            [],
-        )?;
-
-        // EVM → BTC swaps table
-        conn.execute(
-            r#"
-            CREATE TABLE IF NOT EXISTS evm_to_btc_swaps (
-                swap_id TEXT PRIMARY KEY NOT NULL,
-                -- Common fields
-                status TEXT NOT NULL,
-                hash_lock TEXT NOT NULL,
-                fee_sats INTEGER NOT NULL,
-                asset_amount REAL NOT NULL,
-                sender_pk TEXT NOT NULL,
-                receiver_pk TEXT NOT NULL,
-                server_pk TEXT NOT NULL,
-                evm_refund_locktime INTEGER NOT NULL,
-                vhtlc_refund_locktime INTEGER NOT NULL,
-                unilateral_claim_delay INTEGER NOT NULL,
-                unilateral_refund_delay INTEGER NOT NULL,
-                unilateral_refund_without_receiver_delay INTEGER NOT NULL,
-                network TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                source_token TEXT NOT NULL,
-                target_token TEXT NOT NULL,
-                -- EvmToBtc specific
-                htlc_address_evm TEXT NOT NULL,
-                htlc_address_arkade TEXT NOT NULL,
-                user_address_evm TEXT NOT NULL,
-                user_address_arkade TEXT,
-                ln_invoice TEXT NOT NULL,
-                sats_receive INTEGER NOT NULL,
-                bitcoin_htlc_fund_txid TEXT,
-                bitcoin_htlc_claim_txid TEXT,
-                evm_htlc_claim_txid TEXT,
-                evm_htlc_fund_txid TEXT,
-                create_swap_tx TEXT,
-                approve_tx TEXT,
-                gelato_forwarder_address TEXT,
-                gelato_user_nonce TEXT,
-                gelato_user_deadline TEXT,
-                source_token_address TEXT NOT NULL,
-                source_amount REAL NOT NULL,
-                target_amount INTEGER NOT NULL,
-                -- SwapParams
-                secret_key TEXT NOT NULL,
-                public_key TEXT NOT NULL,
-                preimage TEXT NOT NULL,
-                preimage_hash TEXT NOT NULL,
-                user_id TEXT NOT NULL,
-                key_index INTEGER NOT NULL
-            )
-            "#,
-            [],
-        )?;
-
-        // BTC → Arkade swaps table
-        conn.execute(
-            r#"
-            CREATE TABLE IF NOT EXISTS btc_to_arkade_swaps (
-                swap_id TEXT PRIMARY KEY NOT NULL,
-                status TEXT NOT NULL,
-                btc_htlc_address TEXT NOT NULL,
-                asset_amount INTEGER NOT NULL,
-                sats_receive INTEGER NOT NULL,
-                fee_sats INTEGER NOT NULL,
-                hash_lock TEXT NOT NULL,
-                btc_refund_locktime INTEGER NOT NULL,
-                arkade_vhtlc_address TEXT NOT NULL,
-                target_arkade_address TEXT NOT NULL,
-                btc_fund_txid TEXT,
-                btc_claim_txid TEXT,
-                arkade_fund_txid TEXT,
-                arkade_claim_txid TEXT,
-                network TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                -- VHTLC parameters
-                server_vhtlc_pk TEXT NOT NULL,
-                arkade_server_pk TEXT NOT NULL,
-                vhtlc_refund_locktime INTEGER NOT NULL,
-                unilateral_claim_delay INTEGER NOT NULL,
-                unilateral_refund_delay INTEGER NOT NULL,
-                unilateral_refund_without_receiver_delay INTEGER NOT NULL,
-                source_token TEXT NOT NULL,
-                target_token TEXT NOT NULL,
-                source_amount INTEGER NOT NULL,
-                target_amount INTEGER NOT NULL,
-                -- SwapParams
-                secret_key TEXT NOT NULL,
-                public_key TEXT NOT NULL,
-                preimage TEXT NOT NULL,
-                preimage_hash TEXT NOT NULL,
-                user_id TEXT NOT NULL,
-                key_index INTEGER NOT NULL
-            )
-            "#,
-            [],
-        )?;
-
-        // Onchain BTC → EVM swaps table
-        conn.execute(
-            r#"
-            CREATE TABLE IF NOT EXISTS onchain_to_evm_swaps (
-                swap_id TEXT PRIMARY KEY NOT NULL,
-                status TEXT NOT NULL,
-                btc_htlc_address TEXT NOT NULL,
-                source_amount INTEGER NOT NULL,
-                target_amount REAL NOT NULL,
-                fee_sats INTEGER NOT NULL,
-                hash_lock TEXT NOT NULL,
-                btc_refund_locktime INTEGER NOT NULL,
-                btc_fund_txid TEXT,
-                btc_claim_txid TEXT,
-                evm_fund_txid TEXT,
-                evm_claim_txid TEXT,
-                network TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                chain TEXT NOT NULL,
-                client_evm_address TEXT NOT NULL,
-                evm_htlc_address TEXT NOT NULL,
-                server_evm_address TEXT NOT NULL,
-                evm_refund_locktime INTEGER NOT NULL,
-                source_token TEXT NOT NULL,
-                target_token TEXT NOT NULL,
-                -- SwapParams
-                secret_key TEXT NOT NULL,
-                public_key TEXT NOT NULL,
-                preimage TEXT NOT NULL,
-                preimage_hash TEXT NOT NULL,
-                user_id TEXT NOT NULL,
-                key_index INTEGER NOT NULL
-            )
-            "#,
-            [],
-        )?;
-
-        // VTXO swaps table
-        conn.execute(
-            r#"
-            CREATE TABLE IF NOT EXISTS vtxo_swaps (
-                swap_id TEXT PRIMARY KEY NOT NULL,
-                -- VtxoSwapResponse fields
-                status TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                -- Client VHTLC params
-                client_vhtlc_address TEXT NOT NULL,
-                client_fund_amount_sats INTEGER NOT NULL,
-                client_pk TEXT NOT NULL,
-                client_locktime INTEGER NOT NULL,
-                client_unilateral_claim_delay INTEGER NOT NULL,
-                client_unilateral_refund_delay INTEGER NOT NULL,
-                client_unilateral_refund_without_receiver_delay INTEGER NOT NULL,
-                -- Server VHTLC params
-                server_vhtlc_address TEXT NOT NULL,
-                server_fund_amount_sats INTEGER NOT NULL,
-                server_pk TEXT NOT NULL,
-                server_locktime INTEGER NOT NULL,
-                server_unilateral_claim_delay INTEGER NOT NULL,
-                server_unilateral_refund_delay INTEGER NOT NULL,
-                server_unilateral_refund_without_receiver_delay INTEGER NOT NULL,
-                -- Common params
-                arkade_server_pk TEXT NOT NULL,
-                preimage_hash_response TEXT NOT NULL,
-                fee_sats INTEGER NOT NULL,
-                network TEXT NOT NULL,
-                -- SwapParams fields (stored as hex)
-                secret_key TEXT NOT NULL,
-                public_key TEXT NOT NULL,
-                preimage TEXT NOT NULL,
-                preimage_hash_params TEXT NOT NULL,
-                user_id TEXT NOT NULL,
-                key_index INTEGER NOT NULL
-            )
-            "#,
-            [],
-        )?;
-
-        // Create indexes
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_btc_to_evm_swaps_status ON btc_to_evm_swaps(status)",
-            [],
-        )?;
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_evm_to_btc_swaps_status ON evm_to_btc_swaps(status)",
-            [],
-        )?;
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_btc_to_arkade_swaps_status ON btc_to_arkade_swaps(status)",
-            [],
-        )?;
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_vtxo_swaps_status ON vtxo_swaps(status)",
-            [],
-        )?;
-
+    /// Run database migrations.
+    async fn run_migrations(&self) -> Result<(), sqlx::Error> {
+        sqlx::migrate!("./migrations").run(&*self.pool).await?;
         Ok(())
     }
 
     // =========================================================================
-    // Swap Storage Helpers
+    // Helper functions for storing different swap types
     // =========================================================================
 
-    fn store_btc_to_evm(
-        conn: &Connection,
+    async fn store_btc_to_evm(
+        &self,
         swap_id: &str,
         r: &BtcToEvmSwapResponse,
         params: &SwapParams,
@@ -385,59 +160,66 @@ impl SqliteStorage {
             .format(&time::format_description::well_known::Rfc3339)
             .unwrap_or_default();
 
-        conn.execute(
+        sqlx::query(
             r#"
             INSERT OR REPLACE INTO btc_to_evm_swaps (
-                swap_id, status, hash_lock, fee_sats, asset_amount, sender_pk, receiver_pk, server_pk,
-                evm_refund_locktime, vhtlc_refund_locktime, unilateral_claim_delay, unilateral_refund_delay,
-                unilateral_refund_without_receiver_delay, network, created_at, source_token, target_token,
-                htlc_address_evm, htlc_address_arkade, user_address_evm, ln_invoice, sats_receive,
-                bitcoin_htlc_claim_txid, bitcoin_htlc_fund_txid, evm_htlc_claim_txid, evm_htlc_fund_txid,
+                swap_id, status, hash_lock, fee_sats, asset_amount, sender_pk, receiver_pk,
+                server_pk, evm_refund_locktime, vhtlc_refund_locktime, unilateral_claim_delay,
+                unilateral_refund_delay, unilateral_refund_without_receiver_delay, network,
+                created_at, source_token, target_token, htlc_address_evm, htlc_address_arkade,
+                user_address_evm, ln_invoice, sats_receive, bitcoin_htlc_claim_txid,
+                bitcoin_htlc_fund_txid, evm_htlc_claim_txid, evm_htlc_fund_txid,
+                target_amount, source_amount,
                 secret_key, public_key, preimage, preimage_hash, user_id, key_index
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32)
+            ) VALUES (
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
+                ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34
+            )
             "#,
-            params![
-                swap_id,
-                format!("{:?}", r.common.status),
-                r.common.hash_lock,
-                r.common.fee_sats,
-                r.common.asset_amount,
-                r.common.sender_pk,
-                r.common.receiver_pk,
-                r.common.server_pk,
-                r.common.evm_refund_locktime as i64,
-                r.common.vhtlc_refund_locktime as i64,
-                r.common.unilateral_claim_delay,
-                r.common.unilateral_refund_delay,
-                r.common.unilateral_refund_without_receiver_delay,
-                r.common.network,
-                created_at,
-                r.common.source_token.as_str(),
-                r.common.target_token.as_str(),
-                r.htlc_address_evm,
-                r.htlc_address_arkade,
-                r.user_address_evm,
-                r.ln_invoice,
-                r.sats_receive,
-                r.bitcoin_htlc_claim_txid,
-                r.bitcoin_htlc_fund_txid,
-                r.evm_htlc_claim_txid,
-                r.evm_htlc_fund_txid,
-                hex::encode(params.secret_key.secret_bytes()),
-                hex::encode(params.public_key.serialize()),
-                hex::encode(params.preimage),
-                hex::encode(params.preimage_hash),
-                hex::encode(params.user_id.serialize()),
-                params.key_index as i64,
-            ],
         )
+        .bind(swap_id)
+        .bind(format!("{:?}", r.common.status))
+        .bind(&r.common.hash_lock)
+        .bind(r.common.fee_sats)
+        .bind(r.common.asset_amount)
+        .bind(&r.common.sender_pk)
+        .bind(&r.common.receiver_pk)
+        .bind(&r.common.server_pk)
+        .bind(r.common.evm_refund_locktime as i64)
+        .bind(r.common.vhtlc_refund_locktime as i64)
+        .bind(r.common.unilateral_claim_delay)
+        .bind(r.common.unilateral_refund_delay)
+        .bind(r.common.unilateral_refund_without_receiver_delay)
+        .bind(&r.common.network)
+        .bind(&created_at)
+        .bind(r.common.source_token.as_str())
+        .bind(r.common.target_token.as_str())
+        .bind(&r.htlc_address_evm)
+        .bind(&r.htlc_address_arkade)
+        .bind(&r.user_address_evm)
+        .bind(&r.ln_invoice)
+        .bind(r.sats_receive)
+        .bind(&r.bitcoin_htlc_claim_txid)
+        .bind(&r.bitcoin_htlc_fund_txid)
+        .bind(&r.evm_htlc_claim_txid)
+        .bind(&r.evm_htlc_fund_txid)
+        .bind(r.target_amount)
+        .bind(r.source_amount.map(|v| v as i64))
+        .bind(hex::encode(params.secret_key.secret_bytes()))
+        .bind(hex::encode(params.public_key.serialize()))
+        .bind(hex::encode(params.preimage))
+        .bind(hex::encode(params.preimage_hash))
+        .bind(hex::encode(params.user_id.serialize()))
+        .bind(params.key_index as i64)
+        .execute(&*self.pool)
+        .await
         .map_err(|e| crate::Error::Storage(format!("Failed to store BtcToEvm swap: {}", e)))?;
 
         Ok(())
     }
 
-    fn store_evm_to_btc(
-        conn: &Connection,
+    async fn store_evm_to_btc(
+        &self,
         swap_id: &str,
         r: &EvmToBtcSwapResponse,
         params: &SwapParams,
@@ -448,70 +230,75 @@ impl SqliteStorage {
             .format(&time::format_description::well_known::Rfc3339)
             .unwrap_or_default();
 
-        conn.execute(
+        sqlx::query(
             r#"
             INSERT OR REPLACE INTO evm_to_btc_swaps (
-                swap_id, status, hash_lock, fee_sats, asset_amount, sender_pk, receiver_pk, server_pk,
-                evm_refund_locktime, vhtlc_refund_locktime, unilateral_claim_delay, unilateral_refund_delay,
-                unilateral_refund_without_receiver_delay, network, created_at, source_token, target_token,
-                htlc_address_evm, htlc_address_arkade, user_address_evm, user_address_arkade, ln_invoice,
-                sats_receive, bitcoin_htlc_fund_txid, bitcoin_htlc_claim_txid, evm_htlc_claim_txid,
-                evm_htlc_fund_txid, create_swap_tx, approve_tx, gelato_forwarder_address, gelato_user_nonce,
-                gelato_user_deadline, source_token_address, source_amount, target_amount, secret_key, public_key, preimage, preimage_hash,
-                user_id, key_index
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41)
+                swap_id, status, hash_lock, fee_sats, asset_amount, sender_pk, receiver_pk,
+                server_pk, evm_refund_locktime, vhtlc_refund_locktime, unilateral_claim_delay,
+                unilateral_refund_delay, unilateral_refund_without_receiver_delay, network,
+                created_at, source_token, target_token, htlc_address_evm, htlc_address_arkade,
+                user_address_evm, user_address_arkade, ln_invoice, sats_receive,
+                bitcoin_htlc_fund_txid, bitcoin_htlc_claim_txid, evm_htlc_claim_txid,
+                evm_htlc_fund_txid, create_swap_tx, approve_tx, gelato_forwarder_address,
+                gelato_user_nonce, gelato_user_deadline, source_token_address, source_amount,
+                target_amount, secret_key, public_key, preimage, preimage_hash, user_id, key_index
+            ) VALUES (
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
+                ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33,
+                ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41
+            )
             "#,
-            params![
-                swap_id,
-                format!("{:?}", r.common.status),
-                r.common.hash_lock,
-                r.common.fee_sats,
-                r.common.asset_amount,
-                r.common.sender_pk,
-                r.common.receiver_pk,
-                r.common.server_pk,
-                r.common.evm_refund_locktime as i64,
-                r.common.vhtlc_refund_locktime as i64,
-                r.common.unilateral_claim_delay,
-                r.common.unilateral_refund_delay,
-                r.common.unilateral_refund_without_receiver_delay,
-                r.common.network,
-                created_at,
-                r.common.source_token.as_str(),
-                r.common.target_token.as_str(),
-                r.htlc_address_evm,
-                r.htlc_address_arkade,
-                r.user_address_evm,
-                r.user_address_arkade,
-                r.ln_invoice,
-                r.sats_receive,
-                r.bitcoin_htlc_fund_txid,
-                r.bitcoin_htlc_claim_txid,
-                r.evm_htlc_claim_txid,
-                r.evm_htlc_fund_txid,
-                r.create_swap_tx,
-                r.approve_tx,
-                r.gelato_forwarder_address,
-                r.gelato_user_nonce,
-                r.gelato_user_deadline,
-                r.source_token_address,
-                r.source_amount,
-                r.target_amount as i64,
-                hex::encode(params.secret_key.secret_bytes()),
-                hex::encode(params.public_key.serialize()),
-                hex::encode(params.preimage),
-                hex::encode(params.preimage_hash),
-                hex::encode(params.user_id.serialize()),
-                params.key_index as i64,
-            ],
         )
+        .bind(swap_id)
+        .bind(format!("{:?}", r.common.status))
+        .bind(&r.common.hash_lock)
+        .bind(r.common.fee_sats)
+        .bind(r.common.asset_amount)
+        .bind(&r.common.sender_pk)
+        .bind(&r.common.receiver_pk)
+        .bind(&r.common.server_pk)
+        .bind(r.common.evm_refund_locktime as i64)
+        .bind(r.common.vhtlc_refund_locktime as i64)
+        .bind(r.common.unilateral_claim_delay)
+        .bind(r.common.unilateral_refund_delay)
+        .bind(r.common.unilateral_refund_without_receiver_delay)
+        .bind(&r.common.network)
+        .bind(&created_at)
+        .bind(r.common.source_token.as_str())
+        .bind(r.common.target_token.as_str())
+        .bind(&r.htlc_address_evm)
+        .bind(&r.htlc_address_arkade)
+        .bind(&r.user_address_evm)
+        .bind(&r.user_address_arkade)
+        .bind(&r.ln_invoice)
+        .bind(r.sats_receive)
+        .bind(&r.bitcoin_htlc_fund_txid)
+        .bind(&r.bitcoin_htlc_claim_txid)
+        .bind(&r.evm_htlc_claim_txid)
+        .bind(&r.evm_htlc_fund_txid)
+        .bind(&r.create_swap_tx)
+        .bind(&r.approve_tx)
+        .bind(&r.gelato_forwarder_address)
+        .bind(&r.gelato_user_nonce)
+        .bind(&r.gelato_user_deadline)
+        .bind(&r.source_token_address)
+        .bind(r.source_amount)
+        .bind(r.target_amount as i64)
+        .bind(hex::encode(params.secret_key.secret_bytes()))
+        .bind(hex::encode(params.public_key.serialize()))
+        .bind(hex::encode(params.preimage))
+        .bind(hex::encode(params.preimage_hash))
+        .bind(hex::encode(params.user_id.serialize()))
+        .bind(params.key_index as i64)
+        .execute(&*self.pool)
+        .await
         .map_err(|e| crate::Error::Storage(format!("Failed to store EvmToBtc swap: {}", e)))?;
 
         Ok(())
     }
 
-    fn store_btc_to_arkade(
-        conn: &Connection,
+    async fn store_btc_to_arkade(
+        &self,
         swap_id: &str,
         r: &BtcToArkadeSwapResponse,
         params: &SwapParams,
@@ -521,59 +308,64 @@ impl SqliteStorage {
             .format(&time::format_description::well_known::Rfc3339)
             .unwrap_or_default();
 
-        conn.execute(
+        sqlx::query(
             r#"
             INSERT OR REPLACE INTO btc_to_arkade_swaps (
-                swap_id, status, btc_htlc_address, asset_amount, sats_receive, fee_sats, hash_lock,
-                btc_refund_locktime, arkade_vhtlc_address, target_arkade_address,
-                btc_fund_txid, btc_claim_txid, arkade_fund_txid, arkade_claim_txid, network, created_at,
-                server_vhtlc_pk, arkade_server_pk, vhtlc_refund_locktime,
-                unilateral_claim_delay, unilateral_refund_delay, unilateral_refund_without_receiver_delay,
-                source_token, target_token, source_amount, target_amount, secret_key, public_key, preimage, preimage_hash, user_id, key_index
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32)
+                swap_id, status, btc_htlc_address, asset_amount, sats_receive, fee_sats,
+                hash_lock, btc_refund_locktime, arkade_vhtlc_address, target_arkade_address,
+                btc_fund_txid, btc_claim_txid, arkade_fund_txid, arkade_claim_txid, network,
+                created_at, server_vhtlc_pk, arkade_server_pk, vhtlc_refund_locktime,
+                unilateral_claim_delay, unilateral_refund_delay,
+                unilateral_refund_without_receiver_delay, source_token, target_token,
+                source_amount, target_amount, secret_key, public_key, preimage, preimage_hash,
+                user_id, key_index
+            ) VALUES (
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
+                ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32
+            )
             "#,
-            params![
-                swap_id,
-                format!("{:?}", r.status),
-                r.btc_htlc_address,
-                r.asset_amount,
-                r.sats_receive,
-                r.fee_sats,
-                r.hash_lock,
-                r.btc_refund_locktime,
-                r.arkade_vhtlc_address,
-                r.target_arkade_address,
-                r.btc_fund_txid,
-                r.btc_claim_txid,
-                r.arkade_fund_txid,
-                r.arkade_claim_txid,
-                r.network,
-                created_at,
-                r.server_vhtlc_pk,
-                r.arkade_server_pk,
-                r.vhtlc_refund_locktime,
-                r.unilateral_claim_delay,
-                r.unilateral_refund_delay,
-                r.unilateral_refund_without_receiver_delay,
-                r.source_token.as_str(),
-                r.target_token.as_str(),
-                r.source_amount as i64,
-                r.target_amount as i64,
-                hex::encode(params.secret_key.secret_bytes()),
-                hex::encode(params.public_key.serialize()),
-                hex::encode(params.preimage),
-                hex::encode(params.preimage_hash),
-                hex::encode(params.user_id.serialize()),
-                params.key_index as i64,
-            ],
         )
+        .bind(swap_id)
+        .bind(format!("{:?}", r.status))
+        .bind(&r.btc_htlc_address)
+        .bind(r.asset_amount)
+        .bind(r.sats_receive)
+        .bind(r.fee_sats)
+        .bind(&r.hash_lock)
+        .bind(r.btc_refund_locktime)
+        .bind(&r.arkade_vhtlc_address)
+        .bind(&r.target_arkade_address)
+        .bind(&r.btc_fund_txid)
+        .bind(&r.btc_claim_txid)
+        .bind(&r.arkade_fund_txid)
+        .bind(&r.arkade_claim_txid)
+        .bind(&r.network)
+        .bind(&created_at)
+        .bind(&r.server_vhtlc_pk)
+        .bind(&r.arkade_server_pk)
+        .bind(r.vhtlc_refund_locktime)
+        .bind(r.unilateral_claim_delay)
+        .bind(r.unilateral_refund_delay)
+        .bind(r.unilateral_refund_without_receiver_delay)
+        .bind(r.source_token.as_str())
+        .bind(r.target_token.as_str())
+        .bind(r.source_amount as i64)
+        .bind(r.target_amount as i64)
+        .bind(hex::encode(params.secret_key.secret_bytes()))
+        .bind(hex::encode(params.public_key.serialize()))
+        .bind(hex::encode(params.preimage))
+        .bind(hex::encode(params.preimage_hash))
+        .bind(hex::encode(params.user_id.serialize()))
+        .bind(params.key_index as i64)
+        .execute(&*self.pool)
+        .await
         .map_err(|e| crate::Error::Storage(format!("Failed to store BtcToArkade swap: {}", e)))?;
 
         Ok(())
     }
 
-    fn store_onchain_to_evm(
-        conn: &Connection,
+    async fn store_onchain_to_evm(
+        &self,
         swap_id: &str,
         r: &OnchainToEvmSwapResponse,
         params: &SwapParams,
@@ -583,713 +375,59 @@ impl SqliteStorage {
             .format(&time::format_description::well_known::Rfc3339)
             .unwrap_or_default();
 
-        conn.execute(
+        sqlx::query(
             r#"
             INSERT OR REPLACE INTO onchain_to_evm_swaps (
                 swap_id, status, btc_htlc_address, fee_sats, btc_server_pk,
-                evm_hash_lock, btc_hash_lock, btc_refund_locktime, btc_fund_txid, btc_claim_txid, evm_fund_txid,
-                evm_claim_txid, network, created_at, chain, client_evm_address, evm_htlc_address,
-                server_evm_address, evm_refund_locktime, source_token, target_token,
-                secret_key, public_key, preimage, preimage_hash, user_id, key_index, source_amount, target_amount
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28)
+                evm_hash_lock, btc_hash_lock, btc_refund_locktime, btc_fund_txid, btc_claim_txid,
+                evm_fund_txid, evm_claim_txid, network, created_at, chain, client_evm_address,
+                evm_htlc_address, server_evm_address, evm_refund_locktime, source_token,
+                target_token, secret_key, public_key, preimage, preimage_hash, user_id,
+                key_index, source_amount, target_amount
+            ) VALUES (
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
+                ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29
+            )
             "#,
-            params![
-                swap_id,
-                format!("{:?}", r.status),
-                r.btc_htlc_address,
-                r.fee_sats,
-                r.btc_server_pk,
-                r.evm_hash_lock,
-                r.btc_hash_lock,
-                r.btc_refund_locktime,
-                r.btc_fund_txid,
-                r.btc_claim_txid,
-                r.evm_fund_txid,
-                r.evm_claim_txid,
-                r.network,
-                created_at,
-                r.chain,
-                r.client_evm_address,
-                r.evm_htlc_address,
-                r.server_evm_address,
-                r.evm_refund_locktime,
-                r.source_token.as_str(),
-                r.target_token.as_str(),
-                hex::encode(params.secret_key.secret_bytes()),
-                hex::encode(params.public_key.serialize()),
-                hex::encode(params.preimage),
-                hex::encode(params.preimage_hash),
-                hex::encode(params.user_id.serialize()),
-                params.key_index as i64,
-                r.source_amount as i64,
-                r.target_amount.to_f64().expect("to fit")
-            ],
         )
+        .bind(swap_id)
+        .bind(format!("{:?}", r.status))
+        .bind(&r.btc_htlc_address)
+        .bind(r.fee_sats)
+        .bind(&r.btc_server_pk)
+        .bind(&r.evm_hash_lock)
+        .bind(&r.btc_hash_lock)
+        .bind(r.btc_refund_locktime)
+        .bind(&r.btc_fund_txid)
+        .bind(&r.btc_claim_txid)
+        .bind(&r.evm_fund_txid)
+        .bind(&r.evm_claim_txid)
+        .bind(&r.network)
+        .bind(&created_at)
+        .bind(&r.chain)
+        .bind(&r.client_evm_address)
+        .bind(&r.evm_htlc_address)
+        .bind(&r.server_evm_address)
+        .bind(r.evm_refund_locktime)
+        .bind(r.source_token.as_str())
+        .bind(r.target_token.as_str())
+        .bind(hex::encode(params.secret_key.secret_bytes()))
+        .bind(hex::encode(params.public_key.serialize()))
+        .bind(hex::encode(params.preimage))
+        .bind(hex::encode(params.preimage_hash))
+        .bind(hex::encode(params.user_id.serialize()))
+        .bind(params.key_index as i64)
+        .bind(r.source_amount as i64)
+        .bind(r.target_amount)
+        .execute(&*self.pool)
+        .await
         .map_err(|e| crate::Error::Storage(format!("Failed to store OnchainToEvm swap: {}", e)))?;
 
         Ok(())
     }
 
-    fn load_btc_to_evm(
-        conn: &Connection,
-        swap_id: &str,
-    ) -> Result<Option<ExtendedSwapStorageData>, crate::Error> {
-        let mut stmt = conn
-            .prepare("SELECT * FROM btc_to_evm_swaps WHERE swap_id = ?1")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-
-        let result = stmt.query_row(params![swap_id], |row| Ok(Self::row_to_btc_to_evm(row)));
-
-        match result {
-            Ok(data) => Ok(Some(data?)),
-            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(e) => Err(crate::Error::Storage(format!("SQLite error: {}", e))),
-        }
-    }
-
-    fn load_evm_to_btc(
-        conn: &Connection,
-        swap_id: &str,
-    ) -> Result<Option<ExtendedSwapStorageData>, crate::Error> {
-        let mut stmt = conn
-            .prepare("SELECT * FROM evm_to_btc_swaps WHERE swap_id = ?1")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-
-        let result = stmt.query_row(params![swap_id], |row| Ok(Self::row_to_evm_to_btc(row)));
-
-        match result {
-            Ok(data) => Ok(Some(data?)),
-            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(e) => Err(crate::Error::Storage(format!("SQLite error: {}", e))),
-        }
-    }
-
-    fn load_btc_to_arkade(
-        conn: &Connection,
-        swap_id: &str,
-    ) -> Result<Option<ExtendedSwapStorageData>, crate::Error> {
-        let mut stmt = conn
-            .prepare("SELECT * FROM btc_to_arkade_swaps WHERE swap_id = ?1")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-
-        let result = stmt.query_row(params![swap_id], |row| Ok(Self::row_to_btc_to_arkade(row)));
-
-        match result {
-            Ok(data) => Ok(Some(data?)),
-            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(e) => Err(crate::Error::Storage(format!("SQLite error: {}", e))),
-        }
-    }
-
-    fn load_onchain_to_evm(
-        conn: &Connection,
-        swap_id: &str,
-    ) -> Result<Option<ExtendedSwapStorageData>, crate::Error> {
-        let mut stmt = conn
-            .prepare("SELECT * FROM onchain_to_evm_swaps WHERE swap_id = ?1")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-
-        let result = stmt.query_row(params![swap_id], |row| Ok(Self::row_to_onchain_to_evm(row)));
-
-        match result {
-            Ok(data) => Ok(Some(data?)),
-            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(e) => Err(crate::Error::Storage(format!("SQLite error: {}", e))),
-        }
-    }
-
-    fn row_to_btc_to_evm(row: &rusqlite::Row) -> Result<ExtendedSwapStorageData, crate::Error> {
-        let swap_id: String = row
-            .get("swap_id")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let status: String = row
-            .get("status")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let hash_lock: String = row
-            .get("hash_lock")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let fee_sats: i64 = row
-            .get("fee_sats")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let asset_amount: f64 = row
-            .get("asset_amount")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let sender_pk: String = row
-            .get("sender_pk")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let receiver_pk: String = row
-            .get("receiver_pk")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let server_pk: String = row
-            .get("server_pk")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let evm_refund_locktime: i64 = row
-            .get("evm_refund_locktime")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let vhtlc_refund_locktime: i64 = row
-            .get("vhtlc_refund_locktime")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let unilateral_claim_delay: i64 = row
-            .get("unilateral_claim_delay")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let unilateral_refund_delay: i64 = row
-            .get("unilateral_refund_delay")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let unilateral_refund_without_receiver_delay: i64 = row
-            .get("unilateral_refund_without_receiver_delay")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let network: String = row
-            .get("network")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let created_at: String = row
-            .get("created_at")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let source_token: String = row
-            .get("source_token")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let target_token: String = row
-            .get("target_token")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let htlc_address_evm: String = row
-            .get("htlc_address_evm")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let htlc_address_arkade: String = row
-            .get("htlc_address_arkade")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let user_address_evm: String = row
-            .get("user_address_evm")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let ln_invoice: String = row
-            .get("ln_invoice")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let sats_receive: i64 = row
-            .get("sats_receive")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let bitcoin_htlc_claim_txid: Option<String> = row.get("bitcoin_htlc_claim_txid").ok();
-        let bitcoin_htlc_fund_txid: Option<String> = row.get("bitcoin_htlc_fund_txid").ok();
-        let evm_htlc_claim_txid: Option<String> = row.get("evm_htlc_claim_txid").ok();
-        let evm_htlc_fund_txid: Option<String> = row.get("evm_htlc_fund_txid").ok();
-        let secret_key: String = row
-            .get("secret_key")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let public_key: String = row
-            .get("public_key")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let preimage: String = row
-            .get("preimage")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let preimage_hash: String = row
-            .get("preimage_hash")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let user_id: String = row
-            .get("user_id")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let key_index: i64 = row
-            .get("key_index")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-
-        let id = Uuid::from_str(&swap_id)
-            .map_err(|e| crate::Error::Storage(format!("Failed to parse swap_id: {}", e)))?;
-        let status = parse_swap_status(&status)?;
-        let created_at =
-            OffsetDateTime::parse(&created_at, &time::format_description::well_known::Rfc3339)
-                .map_err(|e| crate::Error::Storage(format!("Failed to parse created_at: {}", e)))?;
-
-        let source_amount: i64 = row.get("source_amount").unwrap_or(sats_receive);
-        let target_amount: f64 = row.get("target_amount").unwrap_or(asset_amount);
-
-        let swap_params = parse_swap_params(
-            &secret_key,
-            &public_key,
-            &preimage,
-            &preimage_hash,
-            &user_id,
-            key_index,
-        )?;
-
-        let common = SwapCommonFields {
-            id,
-            status,
-            hash_lock,
-            fee_sats,
-            asset_amount,
-            sender_pk,
-            receiver_pk,
-            server_pk,
-            evm_refund_locktime: evm_refund_locktime as u32,
-            vhtlc_refund_locktime: vhtlc_refund_locktime as u32,
-            unilateral_claim_delay,
-            unilateral_refund_delay,
-            unilateral_refund_without_receiver_delay,
-            network,
-            created_at,
-            source_token: parse_token_id(&source_token),
-            target_token: parse_token_id(&target_token),
-        };
-
-        let response = BtcToEvmSwapResponse {
-            common,
-            htlc_address_evm,
-            htlc_address_arkade,
-            user_address_evm,
-            ln_invoice,
-            sats_receive,
-            bitcoin_htlc_claim_txid,
-            bitcoin_htlc_fund_txid,
-            evm_htlc_claim_txid,
-            evm_htlc_fund_txid,
-            target_amount: Some(target_amount),
-            source_amount: Some(source_amount as u64),
-        };
-
-        Ok(ExtendedSwapStorageData {
-            response: GetSwapResponse::BtcToEvm(response),
-            swap_params,
-        })
-    }
-
-    fn row_to_evm_to_btc(row: &rusqlite::Row) -> Result<ExtendedSwapStorageData, crate::Error> {
-        let swap_id: String = row
-            .get("swap_id")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let status: String = row
-            .get("status")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let hash_lock: String = row
-            .get("hash_lock")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let fee_sats: i64 = row
-            .get("fee_sats")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let asset_amount: f64 = row
-            .get("asset_amount")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let sender_pk: String = row
-            .get("sender_pk")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let receiver_pk: String = row
-            .get("receiver_pk")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let server_pk: String = row
-            .get("server_pk")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let evm_refund_locktime: i64 = row
-            .get("evm_refund_locktime")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let vhtlc_refund_locktime: i64 = row
-            .get("vhtlc_refund_locktime")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let unilateral_claim_delay: i64 = row
-            .get("unilateral_claim_delay")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let unilateral_refund_delay: i64 = row
-            .get("unilateral_refund_delay")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let unilateral_refund_without_receiver_delay: i64 = row
-            .get("unilateral_refund_without_receiver_delay")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let network: String = row
-            .get("network")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let created_at: String = row
-            .get("created_at")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let source_token: String = row
-            .get("source_token")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let target_token: String = row
-            .get("target_token")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let htlc_address_evm: String = row
-            .get("htlc_address_evm")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let htlc_address_arkade: String = row
-            .get("htlc_address_arkade")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let user_address_evm: String = row
-            .get("user_address_evm")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let user_address_arkade: Option<String> = row.get("user_address_arkade").ok();
-        let ln_invoice: String = row
-            .get("ln_invoice")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let sats_receive: i64 = row
-            .get("sats_receive")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let bitcoin_htlc_fund_txid: Option<String> = row.get("bitcoin_htlc_fund_txid").ok();
-        let bitcoin_htlc_claim_txid: Option<String> = row.get("bitcoin_htlc_claim_txid").ok();
-        let evm_htlc_claim_txid: Option<String> = row.get("evm_htlc_claim_txid").ok();
-        let evm_htlc_fund_txid: Option<String> = row.get("evm_htlc_fund_txid").ok();
-        let create_swap_tx: Option<String> = row.get("create_swap_tx").ok();
-        let approve_tx: Option<String> = row.get("approve_tx").ok();
-        let gelato_forwarder_address: Option<String> = row.get("gelato_forwarder_address").ok();
-        let gelato_user_nonce: Option<String> = row.get("gelato_user_nonce").ok();
-        let gelato_user_deadline: Option<String> = row.get("gelato_user_deadline").ok();
-        let source_token_address: String = row
-            .get("source_token_address")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let source_amount: f64 = row
-            .get("source_amount")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let target_amount: i64 = row
-            .get("target_amount")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let secret_key: String = row
-            .get("secret_key")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let public_key: String = row
-            .get("public_key")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let preimage: String = row
-            .get("preimage")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let preimage_hash: String = row
-            .get("preimage_hash")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let user_id: String = row
-            .get("user_id")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let key_index: i64 = row
-            .get("key_index")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-
-        let id = Uuid::from_str(&swap_id)
-            .map_err(|e| crate::Error::Storage(format!("Failed to parse swap_id: {}", e)))?;
-        let status = parse_swap_status(&status)?;
-        let created_at =
-            OffsetDateTime::parse(&created_at, &time::format_description::well_known::Rfc3339)
-                .map_err(|e| crate::Error::Storage(format!("Failed to parse created_at: {}", e)))?;
-        let swap_params = parse_swap_params(
-            &secret_key,
-            &public_key,
-            &preimage,
-            &preimage_hash,
-            &user_id,
-            key_index,
-        )?;
-
-        let common = SwapCommonFields {
-            id,
-            status,
-            hash_lock,
-            fee_sats,
-            asset_amount,
-            sender_pk,
-            receiver_pk,
-            server_pk,
-            evm_refund_locktime: evm_refund_locktime as u32,
-            vhtlc_refund_locktime: vhtlc_refund_locktime as u32,
-            unilateral_claim_delay,
-            unilateral_refund_delay,
-            unilateral_refund_without_receiver_delay,
-            network,
-            created_at,
-            source_token: parse_token_id(&source_token),
-            target_token: parse_token_id(&target_token),
-        };
-
-        let response = EvmToBtcSwapResponse {
-            common,
-            htlc_address_evm,
-            htlc_address_arkade,
-            user_address_evm,
-            user_address_arkade,
-            ln_invoice,
-            sats_receive,
-            bitcoin_htlc_fund_txid,
-            bitcoin_htlc_claim_txid,
-            evm_htlc_claim_txid,
-            evm_htlc_fund_txid,
-            create_swap_tx,
-            approve_tx,
-            gelato_forwarder_address,
-            gelato_user_nonce,
-            gelato_user_deadline,
-            source_token_address,
-            source_amount,
-            target_amount: target_amount as u64,
-        };
-
-        Ok(ExtendedSwapStorageData {
-            response: GetSwapResponse::EvmToBtc(response),
-            swap_params,
-        })
-    }
-
-    fn row_to_btc_to_arkade(row: &rusqlite::Row) -> Result<ExtendedSwapStorageData, crate::Error> {
-        let swap_id: String = row
-            .get("swap_id")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let status: String = row
-            .get("status")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let btc_htlc_address: String = row
-            .get("btc_htlc_address")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let asset_amount: i64 = row
-            .get("asset_amount")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let sats_receive: i64 = row
-            .get("sats_receive")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let fee_sats: i64 = row
-            .get("fee_sats")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let hash_lock: String = row
-            .get("hash_lock")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let btc_refund_locktime: i64 = row
-            .get("btc_refund_locktime")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let arkade_vhtlc_address: String = row
-            .get("arkade_vhtlc_address")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let target_arkade_address: String = row
-            .get("target_arkade_address")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let btc_fund_txid: Option<String> = row.get("btc_fund_txid").ok();
-        let btc_claim_txid: Option<String> = row.get("btc_claim_txid").ok();
-        let arkade_fund_txid: Option<String> = row.get("arkade_fund_txid").ok();
-        let arkade_claim_txid: Option<String> = row.get("arkade_claim_txid").ok();
-        let network: String = row
-            .get("network")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let created_at: String = row
-            .get("created_at")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let server_vhtlc_pk: String = row
-            .get("server_vhtlc_pk")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let arkade_server_pk: String = row
-            .get("arkade_server_pk")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let vhtlc_refund_locktime: i64 = row
-            .get("vhtlc_refund_locktime")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let unilateral_claim_delay: i64 = row
-            .get("unilateral_claim_delay")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let unilateral_refund_delay: i64 = row
-            .get("unilateral_refund_delay")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let unilateral_refund_without_receiver_delay: i64 = row
-            .get("unilateral_refund_without_receiver_delay")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let source_token: String = row
-            .get("source_token")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let target_token: String = row
-            .get("target_token")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let source_amount: i64 = row
-            .get("source_amount")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let target_amount: i64 = row
-            .get("target_amount")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let secret_key: String = row
-            .get("secret_key")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let public_key: String = row
-            .get("public_key")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let preimage: String = row
-            .get("preimage")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let preimage_hash: String = row
-            .get("preimage_hash")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let user_id: String = row
-            .get("user_id")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let key_index: i64 = row
-            .get("key_index")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-
-        let id = Uuid::from_str(&swap_id)
-            .map_err(|e| crate::Error::Storage(format!("Failed to parse swap_id: {}", e)))?;
-        let status = parse_swap_status(&status)?;
-        let created_at =
-            OffsetDateTime::parse(&created_at, &time::format_description::well_known::Rfc3339)
-                .map_err(|e| crate::Error::Storage(format!("Failed to parse created_at: {}", e)))?;
-        let swap_params = parse_swap_params(
-            &secret_key,
-            &public_key,
-            &preimage,
-            &preimage_hash,
-            &user_id,
-            key_index,
-        )?;
-
-        let response = BtcToArkadeSwapResponse {
-            id,
-            status,
-            btc_htlc_address,
-            asset_amount,
-            sats_receive,
-            fee_sats,
-            hash_lock,
-            btc_refund_locktime,
-            arkade_vhtlc_address,
-            target_arkade_address,
-            btc_fund_txid,
-            btc_claim_txid,
-            arkade_fund_txid,
-            arkade_claim_txid,
-            network,
-            created_at,
-            server_vhtlc_pk,
-            arkade_server_pk,
-            vhtlc_refund_locktime,
-            unilateral_claim_delay,
-            unilateral_refund_delay,
-            unilateral_refund_without_receiver_delay,
-            source_token: parse_token_id(&source_token),
-            target_token: parse_token_id(&target_token),
-            source_amount: source_amount as u64,
-            target_amount: target_amount as u64,
-        };
-
-        Ok(ExtendedSwapStorageData {
-            response: GetSwapResponse::BtcToArkade(response),
-            swap_params,
-        })
-    }
-
-    fn row_to_onchain_to_evm(row: &rusqlite::Row) -> Result<ExtendedSwapStorageData, crate::Error> {
-        let swap_id: String = row
-            .get("swap_id")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let status: String = row
-            .get("status")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let btc_htlc_address: String = row
-            .get("btc_htlc_address")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let source_amount: i64 = row
-            .get("source_amount")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let target_amount: f64 = row
-            .get("target_amount")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let fee_sats: i64 = row
-            .get("fee_sats")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let evm_hash_lock: String = row
-            .get("evm_hash_lock")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let btc_hash_lock: String = row
-            .get("btc_hash_lock")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let btc_server_pk: String = row
-            .get("btc_server_pk")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let btc_refund_locktime: i64 = row
-            .get("btc_refund_locktime")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let btc_fund_txid: Option<String> = row.get("btc_fund_txid").ok();
-        let btc_claim_txid: Option<String> = row.get("btc_claim_txid").ok();
-        let evm_fund_txid: Option<String> = row.get("evm_fund_txid").ok();
-        let evm_claim_txid: Option<String> = row.get("evm_claim_txid").ok();
-        let network: String = row
-            .get("network")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let created_at: String = row
-            .get("created_at")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let chain: String = row
-            .get("chain")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let client_evm_address: String = row
-            .get("client_evm_address")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let evm_htlc_address: String = row
-            .get("evm_htlc_address")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let server_evm_address: String = row
-            .get("server_evm_address")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let evm_refund_locktime: i64 = row
-            .get("evm_refund_locktime")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let source_token: String = row
-            .get("source_token")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let target_token: String = row
-            .get("target_token")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let secret_key: String = row
-            .get("secret_key")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let public_key: String = row
-            .get("public_key")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let preimage: String = row
-            .get("preimage")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let preimage_hash: String = row
-            .get("preimage_hash")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let user_id: String = row
-            .get("user_id")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let key_index: i64 = row
-            .get("key_index")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-
-        let id = Uuid::from_str(&swap_id)
-            .map_err(|e| crate::Error::Storage(format!("Failed to parse swap_id: {}", e)))?;
-        let status = parse_swap_status(&status)?;
-        let created_at =
-            OffsetDateTime::parse(&created_at, &time::format_description::well_known::Rfc3339)
-                .map_err(|e| crate::Error::Storage(format!("Failed to parse created_at: {}", e)))?;
-        let swap_params = parse_swap_params(
-            &secret_key,
-            &public_key,
-            &preimage,
-            &preimage_hash,
-            &user_id,
-            key_index,
-        )?;
-
-        let response = OnchainToEvmSwapResponse {
-            id,
-            status,
-            btc_htlc_address,
-            source_amount: source_amount as u64,
-            target_amount,
-            fee_sats,
-            btc_server_pk,
-            evm_hash_lock,
-            btc_hash_lock,
-            btc_refund_locktime,
-            btc_fund_txid,
-            btc_claim_txid,
-            evm_fund_txid,
-            evm_claim_txid,
-            network,
-            created_at,
-            chain,
-            client_evm_address,
-            evm_htlc_address,
-            server_evm_address,
-            evm_refund_locktime,
-            source_token: parse_token_id(&source_token),
-            target_token: parse_token_id(&target_token),
-        };
-
-        Ok(ExtendedSwapStorageData {
-            response: GetSwapResponse::OnchainToEvm(response),
-            swap_params,
-        })
-    }
-
-    // =========================================================================
-    // VTXO Swap Storage Helpers
-    // =========================================================================
-
-    fn store_vtxo_swap(
-        conn: &Connection,
+    async fn store_vtxo_swap(
+        &self,
         swap_id: &str,
         response: &VtxoSwapResponse,
         params: &SwapParams,
@@ -1299,7 +437,7 @@ impl SqliteStorage {
             .format(&time::format_description::well_known::Rfc3339)
             .unwrap_or_default();
 
-        conn.execute(
+        sqlx::query(
             r#"
             INSERT OR REPLACE INTO vtxo_swaps (
                 swap_id, status, created_at,
@@ -1311,163 +449,422 @@ impl SqliteStorage {
                 server_unilateral_refund_delay, server_unilateral_refund_without_receiver_delay,
                 arkade_server_pk, preimage_hash_response, fee_sats, network,
                 secret_key, public_key, preimage, preimage_hash_params, user_id, key_index
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)
+            ) VALUES (
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
+                ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27
+            )
             "#,
-            params![
-                swap_id,
-                format!("{:?}", response.status),
-                created_at,
-                response.client_vhtlc_address,
-                response.client_fund_amount_sats,
-                response.client_pk,
-                response.client_locktime as i64,
-                response.client_unilateral_claim_delay,
-                response.client_unilateral_refund_delay,
-                response.client_unilateral_refund_without_receiver_delay,
-                response.server_vhtlc_address,
-                response.server_fund_amount_sats,
-                response.server_pk,
-                response.server_locktime as i64,
-                response.server_unilateral_claim_delay,
-                response.server_unilateral_refund_delay,
-                response.server_unilateral_refund_without_receiver_delay,
-                response.arkade_server_pk,
-                response.preimage_hash,
-                response.fee_sats,
-                response.network,
-                hex::encode(params.secret_key.secret_bytes()),
-                hex::encode(params.public_key.serialize()),
-                hex::encode(params.preimage),
-                hex::encode(params.preimage_hash),
-                hex::encode(params.user_id.serialize()),
-                params.key_index as i64,
-            ],
         )
+        .bind(swap_id)
+        .bind(format!("{:?}", response.status))
+        .bind(&created_at)
+        .bind(&response.client_vhtlc_address)
+        .bind(response.client_fund_amount_sats)
+        .bind(&response.client_pk)
+        .bind(response.client_locktime as i64)
+        .bind(response.client_unilateral_claim_delay)
+        .bind(response.client_unilateral_refund_delay)
+        .bind(response.client_unilateral_refund_without_receiver_delay)
+        .bind(&response.server_vhtlc_address)
+        .bind(response.server_fund_amount_sats)
+        .bind(&response.server_pk)
+        .bind(response.server_locktime as i64)
+        .bind(response.server_unilateral_claim_delay)
+        .bind(response.server_unilateral_refund_delay)
+        .bind(response.server_unilateral_refund_without_receiver_delay)
+        .bind(&response.arkade_server_pk)
+        .bind(&response.preimage_hash)
+        .bind(response.fee_sats)
+        .bind(&response.network)
+        .bind(hex::encode(params.secret_key.secret_bytes()))
+        .bind(hex::encode(params.public_key.serialize()))
+        .bind(hex::encode(params.preimage))
+        .bind(hex::encode(params.preimage_hash))
+        .bind(hex::encode(params.user_id.serialize()))
+        .bind(params.key_index as i64)
+        .execute(&*self.pool)
+        .await
         .map_err(|e| crate::Error::Storage(format!("Failed to store VTXO swap: {}", e)))?;
 
         Ok(())
     }
 
-    fn row_to_vtxo_swap(row: &rusqlite::Row) -> Result<ExtendedVtxoSwapStorageData, crate::Error> {
-        let swap_id: String = row
-            .get("swap_id")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let status: String = row
-            .get("status")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let created_at: String = row
-            .get("created_at")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let client_vhtlc_address: String = row
-            .get("client_vhtlc_address")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let client_fund_amount_sats: i64 = row
-            .get("client_fund_amount_sats")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let client_pk: String = row
-            .get("client_pk")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let client_locktime: i64 = row
-            .get("client_locktime")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let client_unilateral_claim_delay: i64 = row
-            .get("client_unilateral_claim_delay")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let client_unilateral_refund_delay: i64 = row
-            .get("client_unilateral_refund_delay")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let client_unilateral_refund_without_receiver_delay: i64 = row
-            .get("client_unilateral_refund_without_receiver_delay")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let server_vhtlc_address: String = row
-            .get("server_vhtlc_address")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let server_fund_amount_sats: i64 = row
-            .get("server_fund_amount_sats")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let server_pk: String = row
-            .get("server_pk")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let server_locktime: i64 = row
-            .get("server_locktime")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let server_unilateral_claim_delay: i64 = row
-            .get("server_unilateral_claim_delay")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let server_unilateral_refund_delay: i64 = row
-            .get("server_unilateral_refund_delay")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let server_unilateral_refund_without_receiver_delay: i64 = row
-            .get("server_unilateral_refund_without_receiver_delay")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let arkade_server_pk: String = row
-            .get("arkade_server_pk")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let preimage_hash_response: String = row
-            .get("preimage_hash_response")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let fee_sats: i64 = row
-            .get("fee_sats")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let network: String = row
-            .get("network")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let secret_key: String = row
-            .get("secret_key")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let public_key: String = row
-            .get("public_key")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let preimage: String = row
-            .get("preimage")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let preimage_hash_params: String = row
-            .get("preimage_hash_params")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let user_id: String = row
-            .get("user_id")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-        let key_index: i64 = row
-            .get("key_index")
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
+    // =========================================================================
+    // Helper functions for loading different swap types
+    // =========================================================================
 
-        let id = Uuid::from_str(&swap_id)
-            .map_err(|e| crate::Error::Storage(format!("Failed to parse swap_id: {}", e)))?;
-        let status = parse_vtxo_swap_status(&status)?;
-        let created_at =
-            OffsetDateTime::parse(&created_at, &time::format_description::well_known::Rfc3339)
-                .map_err(|e| crate::Error::Storage(format!("Failed to parse created_at: {}", e)))?;
-        let swap_params = parse_swap_params(
-            &secret_key,
-            &public_key,
-            &preimage,
-            &preimage_hash_params,
-            &user_id,
-            key_index,
-        )?;
+    fn parse_swap_params(row: &sqlx::sqlite::SqliteRow) -> Result<SwapParams, crate::Error> {
+        use bitcoin::secp256k1::{PublicKey, SecretKey};
+
+        let secret_key_hex: String = row.get("secret_key");
+        let public_key_hex: String = row.get("public_key");
+        let preimage_hex: String = row.get("preimage");
+        let preimage_hash_hex: String = row.get("preimage_hash");
+        let user_id_hex: String = row.get("user_id");
+        let key_index: i64 = row.get("key_index");
+
+        let secret_key_bytes =
+            hex::decode(&secret_key_hex).map_err(|e| crate::Error::Storage(e.to_string()))?;
+        let public_key_bytes =
+            hex::decode(&public_key_hex).map_err(|e| crate::Error::Storage(e.to_string()))?;
+        let preimage_bytes =
+            hex::decode(&preimage_hex).map_err(|e| crate::Error::Storage(e.to_string()))?;
+        let preimage_hash_bytes =
+            hex::decode(&preimage_hash_hex).map_err(|e| crate::Error::Storage(e.to_string()))?;
+        let user_id_bytes =
+            hex::decode(&user_id_hex).map_err(|e| crate::Error::Storage(e.to_string()))?;
+
+        let secret_key = SecretKey::from_slice(&secret_key_bytes)
+            .map_err(|e| crate::Error::Storage(e.to_string()))?;
+        let public_key = PublicKey::from_slice(&public_key_bytes)
+            .map_err(|e| crate::Error::Storage(e.to_string()))?;
+        let user_id = PublicKey::from_slice(&user_id_bytes)
+            .map_err(|e| crate::Error::Storage(e.to_string()))?;
+
+        let mut preimage = [0u8; 32];
+        preimage.copy_from_slice(&preimage_bytes);
+        let mut preimage_hash = [0u8; 32];
+        preimage_hash.copy_from_slice(&preimage_hash_bytes);
+
+        Ok(SwapParams {
+            secret_key,
+            public_key,
+            preimage,
+            preimage_hash,
+            user_id,
+            key_index: key_index as u32,
+        })
+    }
+
+    fn parse_swap_params_vtxo(row: &sqlx::sqlite::SqliteRow) -> Result<SwapParams, crate::Error> {
+        use bitcoin::secp256k1::{PublicKey, SecretKey};
+
+        let secret_key_hex: String = row.get("secret_key");
+        let public_key_hex: String = row.get("public_key");
+        let preimage_hex: String = row.get("preimage");
+        let preimage_hash_hex: String = row.get("preimage_hash_params");
+        let user_id_hex: String = row.get("user_id");
+        let key_index: i64 = row.get("key_index");
+
+        let secret_key_bytes =
+            hex::decode(&secret_key_hex).map_err(|e| crate::Error::Storage(e.to_string()))?;
+        let public_key_bytes =
+            hex::decode(&public_key_hex).map_err(|e| crate::Error::Storage(e.to_string()))?;
+        let preimage_bytes =
+            hex::decode(&preimage_hex).map_err(|e| crate::Error::Storage(e.to_string()))?;
+        let preimage_hash_bytes =
+            hex::decode(&preimage_hash_hex).map_err(|e| crate::Error::Storage(e.to_string()))?;
+        let user_id_bytes =
+            hex::decode(&user_id_hex).map_err(|e| crate::Error::Storage(e.to_string()))?;
+
+        let secret_key = SecretKey::from_slice(&secret_key_bytes)
+            .map_err(|e| crate::Error::Storage(e.to_string()))?;
+        let public_key = PublicKey::from_slice(&public_key_bytes)
+            .map_err(|e| crate::Error::Storage(e.to_string()))?;
+        let user_id = PublicKey::from_slice(&user_id_bytes)
+            .map_err(|e| crate::Error::Storage(e.to_string()))?;
+
+        let mut preimage = [0u8; 32];
+        preimage.copy_from_slice(&preimage_bytes);
+        let mut preimage_hash = [0u8; 32];
+        preimage_hash.copy_from_slice(&preimage_hash_bytes);
+
+        Ok(SwapParams {
+            secret_key,
+            public_key,
+            preimage,
+            preimage_hash,
+            user_id,
+            key_index: key_index as u32,
+        })
+    }
+
+    async fn load_btc_to_evm(
+        &self,
+        swap_id: &str,
+    ) -> Result<ExtendedSwapStorageData, crate::Error> {
+        let row = sqlx::query("SELECT * FROM btc_to_evm_swaps WHERE swap_id = ?1")
+            .bind(swap_id)
+            .fetch_one(&*self.pool)
+            .await
+            .map_err(|e| crate::Error::Storage(format!("Failed to load BtcToEvm: {}", e)))?;
+
+        let swap_params = Self::parse_swap_params(&row)?;
+
+        let status_str: String = row.get("status");
+        let created_at_str: String = row.get("created_at");
+        let source_token_str: String = row.get("source_token");
+        let target_token_str: String = row.get("target_token");
+
+        let common = SwapCommonFields {
+            id: Uuid::parse_str(swap_id).unwrap(),
+            status: parse_swap_status(&status_str),
+            hash_lock: row.get("hash_lock"),
+            fee_sats: row.get("fee_sats"),
+            asset_amount: row.get("asset_amount"),
+            sender_pk: row.get("sender_pk"),
+            receiver_pk: row.get("receiver_pk"),
+            server_pk: row.get("server_pk"),
+            evm_refund_locktime: row.get::<i64, _>("evm_refund_locktime") as u32,
+            vhtlc_refund_locktime: row.get::<i64, _>("vhtlc_refund_locktime") as u32,
+            unilateral_claim_delay: row.get("unilateral_claim_delay"),
+            unilateral_refund_delay: row.get("unilateral_refund_delay"),
+            unilateral_refund_without_receiver_delay: row
+                .get("unilateral_refund_without_receiver_delay"),
+            network: row.get("network"),
+            created_at: OffsetDateTime::parse(
+                &created_at_str,
+                &time::format_description::well_known::Rfc3339,
+            )
+            .unwrap_or_else(|_| OffsetDateTime::now_utc()),
+            source_token: parse_token_id(&source_token_str),
+            target_token: parse_token_id(&target_token_str),
+        };
+
+        let response = BtcToEvmSwapResponse {
+            common,
+            htlc_address_evm: row.get("htlc_address_evm"),
+            htlc_address_arkade: row.get("htlc_address_arkade"),
+            user_address_evm: row.get("user_address_evm"),
+            ln_invoice: row.get("ln_invoice"),
+            sats_receive: row.get("sats_receive"),
+            bitcoin_htlc_claim_txid: row.get("bitcoin_htlc_claim_txid"),
+            bitcoin_htlc_fund_txid: row.get("bitcoin_htlc_fund_txid"),
+            evm_htlc_claim_txid: row.get("evm_htlc_claim_txid"),
+            evm_htlc_fund_txid: row.get("evm_htlc_fund_txid"),
+            target_amount: row.get("target_amount"),
+            source_amount: row.get::<Option<i64>, _>("source_amount").map(|v| v as u64),
+        };
+
+        Ok(ExtendedSwapStorageData {
+            response: GetSwapResponse::BtcToEvm(response),
+            swap_params,
+        })
+    }
+
+    async fn load_evm_to_btc(
+        &self,
+        swap_id: &str,
+    ) -> Result<ExtendedSwapStorageData, crate::Error> {
+        let row = sqlx::query("SELECT * FROM evm_to_btc_swaps WHERE swap_id = ?1")
+            .bind(swap_id)
+            .fetch_one(&*self.pool)
+            .await
+            .map_err(|e| crate::Error::Storage(format!("Failed to load EvmToBtc: {}", e)))?;
+
+        let swap_params = Self::parse_swap_params(&row)?;
+
+        let status_str: String = row.get("status");
+        let created_at_str: String = row.get("created_at");
+        let source_token_str: String = row.get("source_token");
+        let target_token_str: String = row.get("target_token");
+
+        let common = SwapCommonFields {
+            id: Uuid::parse_str(swap_id).unwrap(),
+            status: parse_swap_status(&status_str),
+            hash_lock: row.get("hash_lock"),
+            fee_sats: row.get("fee_sats"),
+            asset_amount: row.get("asset_amount"),
+            sender_pk: row.get("sender_pk"),
+            receiver_pk: row.get("receiver_pk"),
+            server_pk: row.get("server_pk"),
+            evm_refund_locktime: row.get::<i64, _>("evm_refund_locktime") as u32,
+            vhtlc_refund_locktime: row.get::<i64, _>("vhtlc_refund_locktime") as u32,
+            unilateral_claim_delay: row.get("unilateral_claim_delay"),
+            unilateral_refund_delay: row.get("unilateral_refund_delay"),
+            unilateral_refund_without_receiver_delay: row
+                .get("unilateral_refund_without_receiver_delay"),
+            network: row.get("network"),
+            created_at: OffsetDateTime::parse(
+                &created_at_str,
+                &time::format_description::well_known::Rfc3339,
+            )
+            .unwrap_or_else(|_| OffsetDateTime::now_utc()),
+            source_token: parse_token_id(&source_token_str),
+            target_token: parse_token_id(&target_token_str),
+        };
+
+        let response = EvmToBtcSwapResponse {
+            common,
+            htlc_address_evm: row.get("htlc_address_evm"),
+            htlc_address_arkade: row.get("htlc_address_arkade"),
+            user_address_evm: row.get("user_address_evm"),
+            user_address_arkade: row.get("user_address_arkade"),
+            ln_invoice: row.get("ln_invoice"),
+            sats_receive: row.get("sats_receive"),
+            bitcoin_htlc_fund_txid: row.get("bitcoin_htlc_fund_txid"),
+            bitcoin_htlc_claim_txid: row.get("bitcoin_htlc_claim_txid"),
+            evm_htlc_claim_txid: row.get("evm_htlc_claim_txid"),
+            evm_htlc_fund_txid: row.get("evm_htlc_fund_txid"),
+            create_swap_tx: row.get("create_swap_tx"),
+            approve_tx: row.get("approve_tx"),
+            gelato_forwarder_address: row.get("gelato_forwarder_address"),
+            gelato_user_nonce: row.get("gelato_user_nonce"),
+            gelato_user_deadline: row.get("gelato_user_deadline"),
+            source_token_address: row.get("source_token_address"),
+            source_amount: row.get("source_amount"),
+            target_amount: row.get::<i64, _>("target_amount") as u64,
+        };
+
+        Ok(ExtendedSwapStorageData {
+            response: GetSwapResponse::EvmToBtc(response),
+            swap_params,
+        })
+    }
+
+    async fn load_btc_to_arkade(
+        &self,
+        swap_id: &str,
+    ) -> Result<ExtendedSwapStorageData, crate::Error> {
+        let row = sqlx::query("SELECT * FROM btc_to_arkade_swaps WHERE swap_id = ?1")
+            .bind(swap_id)
+            .fetch_one(&*self.pool)
+            .await
+            .map_err(|e| crate::Error::Storage(format!("Failed to load BtcToArkade: {}", e)))?;
+
+        let swap_params = Self::parse_swap_params(&row)?;
+
+        let status_str: String = row.get("status");
+        let created_at_str: String = row.get("created_at");
+        let source_token_str: String = row.get("source_token");
+        let target_token_str: String = row.get("target_token");
+
+        let response = BtcToArkadeSwapResponse {
+            id: Uuid::parse_str(swap_id).unwrap(),
+            status: parse_swap_status(&status_str),
+            btc_htlc_address: row.get("btc_htlc_address"),
+            asset_amount: row.get("asset_amount"),
+            sats_receive: row.get("sats_receive"),
+            fee_sats: row.get("fee_sats"),
+            hash_lock: row.get("hash_lock"),
+            btc_refund_locktime: row.get("btc_refund_locktime"),
+            arkade_vhtlc_address: row.get("arkade_vhtlc_address"),
+            target_arkade_address: row.get("target_arkade_address"),
+            btc_fund_txid: row.get("btc_fund_txid"),
+            btc_claim_txid: row.get("btc_claim_txid"),
+            arkade_fund_txid: row.get("arkade_fund_txid"),
+            arkade_claim_txid: row.get("arkade_claim_txid"),
+            network: row.get("network"),
+            created_at: OffsetDateTime::parse(
+                &created_at_str,
+                &time::format_description::well_known::Rfc3339,
+            )
+            .unwrap_or_else(|_| OffsetDateTime::now_utc()),
+            server_vhtlc_pk: row.get("server_vhtlc_pk"),
+            arkade_server_pk: row.get("arkade_server_pk"),
+            vhtlc_refund_locktime: row.get("vhtlc_refund_locktime"),
+            unilateral_claim_delay: row.get("unilateral_claim_delay"),
+            unilateral_refund_delay: row.get("unilateral_refund_delay"),
+            unilateral_refund_without_receiver_delay: row
+                .get("unilateral_refund_without_receiver_delay"),
+            source_token: parse_token_id(&source_token_str),
+            target_token: parse_token_id(&target_token_str),
+            source_amount: row.get::<i64, _>("source_amount") as u64,
+            target_amount: row.get::<i64, _>("target_amount") as u64,
+        };
+
+        Ok(ExtendedSwapStorageData {
+            response: GetSwapResponse::BtcToArkade(response),
+            swap_params,
+        })
+    }
+
+    async fn load_onchain_to_evm(
+        &self,
+        swap_id: &str,
+    ) -> Result<ExtendedSwapStorageData, crate::Error> {
+        let row = sqlx::query("SELECT * FROM onchain_to_evm_swaps WHERE swap_id = ?1")
+            .bind(swap_id)
+            .fetch_one(&*self.pool)
+            .await
+            .map_err(|e| crate::Error::Storage(format!("Failed to load OnchainToEvm: {}", e)))?;
+
+        let swap_params = Self::parse_swap_params(&row)?;
+
+        let status_str: String = row.get("status");
+        let created_at_str: String = row.get("created_at");
+        let source_token_str: String = row.get("source_token");
+        let target_token_str: String = row.get("target_token");
+
+        let response = OnchainToEvmSwapResponse {
+            id: Uuid::parse_str(swap_id).unwrap(),
+            status: parse_swap_status(&status_str),
+            btc_htlc_address: row.get("btc_htlc_address"),
+            fee_sats: row.get("fee_sats"),
+            btc_server_pk: row.get("btc_server_pk"),
+            evm_hash_lock: row.get("evm_hash_lock"),
+            btc_hash_lock: row.get("btc_hash_lock"),
+            btc_refund_locktime: row.get("btc_refund_locktime"),
+            btc_fund_txid: row.get("btc_fund_txid"),
+            btc_claim_txid: row.get("btc_claim_txid"),
+            evm_fund_txid: row.get("evm_fund_txid"),
+            evm_claim_txid: row.get("evm_claim_txid"),
+            network: row.get("network"),
+            created_at: OffsetDateTime::parse(
+                &created_at_str,
+                &time::format_description::well_known::Rfc3339,
+            )
+            .unwrap_or_else(|_| OffsetDateTime::now_utc()),
+            chain: row.get("chain"),
+            client_evm_address: row.get("client_evm_address"),
+            evm_htlc_address: row.get("evm_htlc_address"),
+            server_evm_address: row.get("server_evm_address"),
+            evm_refund_locktime: row.get("evm_refund_locktime"),
+            source_token: parse_token_id(&source_token_str),
+            target_token: parse_token_id(&target_token_str),
+            target_amount: row.get("target_amount"),
+            source_amount: row.get::<i64, _>("source_amount") as u64,
+        };
+
+        Ok(ExtendedSwapStorageData {
+            response: GetSwapResponse::OnchainToEvm(response),
+            swap_params,
+        })
+    }
+
+    async fn load_vtxo_swap(
+        &self,
+        swap_id: &str,
+    ) -> Result<ExtendedVtxoSwapStorageData, crate::Error> {
+        let row = sqlx::query("SELECT * FROM vtxo_swaps WHERE swap_id = ?1")
+            .bind(swap_id)
+            .fetch_one(&*self.pool)
+            .await
+            .map_err(|e| crate::Error::Storage(format!("Failed to load VTXO swap: {}", e)))?;
+
+        let swap_params = Self::parse_swap_params_vtxo(&row)?;
+
+        let status_str: String = row.get("status");
+        let created_at_str: String = row.get("created_at");
 
         let response = VtxoSwapResponse {
-            id,
-            status,
-            created_at,
-            client_vhtlc_address,
-            client_fund_amount_sats,
-            client_pk,
-            client_locktime: client_locktime as u64,
-            client_unilateral_claim_delay,
-            client_unilateral_refund_delay,
-            client_unilateral_refund_without_receiver_delay,
-            server_vhtlc_address,
-            server_fund_amount_sats,
-            server_pk,
-            server_locktime: server_locktime as u64,
-            server_unilateral_claim_delay,
-            server_unilateral_refund_delay,
-            server_unilateral_refund_without_receiver_delay,
-            arkade_server_pk,
-            preimage_hash: preimage_hash_response,
-            fee_sats,
-            network,
+            id: Uuid::parse_str(swap_id).unwrap(),
+            status: parse_vtxo_swap_status(&status_str),
+            created_at: OffsetDateTime::parse(
+                &created_at_str,
+                &time::format_description::well_known::Rfc3339,
+            )
+            .unwrap_or_else(|_| OffsetDateTime::now_utc()),
+            client_vhtlc_address: row.get("client_vhtlc_address"),
+            client_fund_amount_sats: row.get("client_fund_amount_sats"),
+            client_pk: row.get("client_pk"),
+            client_locktime: row.get::<i64, _>("client_locktime") as u64,
+            client_unilateral_claim_delay: row.get("client_unilateral_claim_delay"),
+            client_unilateral_refund_delay: row.get("client_unilateral_refund_delay"),
+            client_unilateral_refund_without_receiver_delay: row
+                .get("client_unilateral_refund_without_receiver_delay"),
+            server_vhtlc_address: row.get("server_vhtlc_address"),
+            server_fund_amount_sats: row.get("server_fund_amount_sats"),
+            server_pk: row.get("server_pk"),
+            server_locktime: row.get::<i64, _>("server_locktime") as u64,
+            server_unilateral_claim_delay: row.get("server_unilateral_claim_delay"),
+            server_unilateral_refund_delay: row.get("server_unilateral_refund_delay"),
+            server_unilateral_refund_without_receiver_delay: row
+                .get("server_unilateral_refund_without_receiver_delay"),
+            arkade_server_pk: row.get("arkade_server_pk"),
+            preimage_hash: row.get("preimage_hash_response"),
+            fee_sats: row.get("fee_sats"),
+            network: row.get("network"),
         };
 
         Ok(ExtendedVtxoSwapStorageData {
@@ -1477,189 +874,85 @@ impl SqliteStorage {
     }
 }
 
-// ============================================================================
-// Helper functions
-// ============================================================================
-
-fn parse_token_id(s: &str) -> TokenId {
-    match s {
-        "btc_lightning" => TokenId::BtcLightning,
-        "btc_arkade" => TokenId::BtcArkade,
-        "btc_onchain" => TokenId::BtcOnchain,
-        other => TokenId::Coin(other.to_string()),
-    }
-}
-
-fn parse_swap_status(s: &str) -> Result<SwapStatus, crate::Error> {
-    match s {
-        "Pending" => Ok(SwapStatus::Pending),
-        "ClientFundingSeen" => Ok(SwapStatus::ClientFundingSeen),
-        "ClientFunded" => Ok(SwapStatus::ClientFunded),
-        "ServerFunded" => Ok(SwapStatus::ServerFunded),
-        "ClientRedeeming" => Ok(SwapStatus::ClientRedeeming),
-        "ClientRedeemed" => Ok(SwapStatus::ClientRedeemed),
-        "ServerRedeemed" => Ok(SwapStatus::ServerRedeemed),
-        "Expired" => Ok(SwapStatus::Expired),
-        "ClientRefunded" => Ok(SwapStatus::ClientRefunded),
-        "ClientFundedServerRefunded" => Ok(SwapStatus::ClientFundedServerRefunded),
-        "ClientRefundedServerFunded" => Ok(SwapStatus::ClientRefundedServerFunded),
-        "ClientRefundedServerRefunded" => Ok(SwapStatus::ClientRefundedServerRefunded),
-        "ClientInvalidFunded" => Ok(SwapStatus::ClientInvalidFunded),
-        "ClientFundedTooLate" => Ok(SwapStatus::ClientFundedTooLate),
-        "ClientRedeemedAndClientRefunded" => Ok(SwapStatus::ClientRedeemedAndClientRefunded),
-        _ => Err(crate::Error::Storage(format!("Unknown SwapStatus: {}", s))),
-    }
-}
-
-fn parse_vtxo_swap_status(s: &str) -> Result<VtxoSwapStatus, crate::Error> {
-    match s {
-        "Pending" => Ok(VtxoSwapStatus::Pending),
-        "ClientFunded" => Ok(VtxoSwapStatus::ClientFunded),
-        "ServerFunded" => Ok(VtxoSwapStatus::ServerFunded),
-        "ClientRedeemed" => Ok(VtxoSwapStatus::ClientRedeemed),
-        "ServerRedeemed" => Ok(VtxoSwapStatus::ServerRedeemed),
-        "ClientRefunded" => Ok(VtxoSwapStatus::ClientRefunded),
-        "ClientFundedServerRefunded" => Ok(VtxoSwapStatus::ClientFundedServerRefunded),
-        "Expired" => Ok(VtxoSwapStatus::Expired),
-        _ => Err(crate::Error::Storage(format!(
-            "Unknown VtxoSwapStatus: {}",
-            s
-        ))),
-    }
-}
-
-fn parse_swap_params(
-    secret_key: &str,
-    public_key: &str,
-    preimage: &str,
-    preimage_hash: &str,
-    user_id: &str,
-    key_index: i64,
-) -> Result<SwapParams, crate::Error> {
-    let secret_key_bytes = hex::decode(secret_key)
-        .map_err(|e| crate::Error::Storage(format!("Failed to decode secret_key: {}", e)))?;
-    let secret_key = bitcoin::secp256k1::SecretKey::from_slice(&secret_key_bytes)
-        .map_err(|e| crate::Error::Storage(format!("Failed to parse secret_key: {}", e)))?;
-
-    let public_key_bytes = hex::decode(public_key)
-        .map_err(|e| crate::Error::Storage(format!("Failed to decode public_key: {}", e)))?;
-    let public_key = bitcoin::secp256k1::PublicKey::from_slice(&public_key_bytes)
-        .map_err(|e| crate::Error::Storage(format!("Failed to parse public_key: {}", e)))?;
-
-    let preimage_bytes = hex::decode(preimage)
-        .map_err(|e| crate::Error::Storage(format!("Failed to decode preimage: {}", e)))?;
-    let preimage: [u8; 32] = preimage_bytes
-        .try_into()
-        .map_err(|_| crate::Error::Storage("Invalid preimage length".to_string()))?;
-
-    let preimage_hash_bytes = hex::decode(preimage_hash)
-        .map_err(|e| crate::Error::Storage(format!("Failed to decode preimage_hash: {}", e)))?;
-    let preimage_hash: [u8; 32] = preimage_hash_bytes
-        .try_into()
-        .map_err(|_| crate::Error::Storage("Invalid preimage_hash length".to_string()))?;
-
-    let user_id_bytes = hex::decode(user_id)
-        .map_err(|e| crate::Error::Storage(format!("Failed to decode user_id: {}", e)))?;
-    let user_id = bitcoin::secp256k1::PublicKey::from_slice(&user_id_bytes)
-        .map_err(|e| crate::Error::Storage(format!("Failed to parse user_id: {}", e)))?;
-
-    Ok(SwapParams {
-        secret_key,
-        public_key,
-        preimage,
-        preimage_hash,
-        user_id,
-        key_index: key_index as u32,
-    })
-}
-
-// ============================================================================
-// Trait Implementations
-// ============================================================================
+// =========================================================================
+// WalletStorage implementation
+// =========================================================================
 
 impl WalletStorage for SqliteStorage {
     fn get_mnemonic(&self) -> StorageFuture<'_, Option<String>> {
         Box::pin(async move {
-            let conn = self.conn.lock().unwrap();
-            let mut stmt = conn
-                .prepare("SELECT mnemonic FROM wallet WHERE id = 'default'")
+            let row = sqlx::query("SELECT mnemonic FROM wallet WHERE id = 'default'")
+                .fetch_optional(&*self.pool)
+                .await
                 .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
 
-            let mnemonic: Option<String> = stmt
-                .query_row([], |row| row.get(0))
-                .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-
-            Ok(mnemonic)
+            Ok(row.and_then(|r| r.get("mnemonic")))
         })
     }
 
     fn set_mnemonic(&self, mnemonic: &str) -> StorageFuture<'_, ()> {
         let mnemonic = mnemonic.to_string();
         Box::pin(async move {
-            let conn = self.conn.lock().unwrap();
-            conn.execute(
-                "UPDATE wallet SET mnemonic = ?1 WHERE id = 'default'",
-                params![mnemonic],
-            )
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
+            sqlx::query("UPDATE wallet SET mnemonic = ?1 WHERE id = 'default'")
+                .bind(&mnemonic)
+                .execute(&*self.pool)
+                .await
+                .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
             Ok(())
         })
     }
 
     fn get_key_index(&self) -> StorageFuture<'_, u32> {
         Box::pin(async move {
-            let conn = self.conn.lock().unwrap();
-            let mut stmt = conn
-                .prepare("SELECT key_index FROM wallet WHERE id = 'default'")
+            let row = sqlx::query("SELECT key_index FROM wallet WHERE id = 'default'")
+                .fetch_one(&*self.pool)
+                .await
                 .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
 
-            let index: u32 = stmt
-                .query_row([], |row| row.get(0))
-                .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-
-            Ok(index)
+            Ok(row.get::<i64, _>("key_index") as u32)
         })
     }
 
     fn set_key_index(&self, index: u32) -> StorageFuture<'_, ()> {
         Box::pin(async move {
-            let conn = self.conn.lock().unwrap();
-            conn.execute(
-                "UPDATE wallet SET key_index = ?1 WHERE id = 'default'",
-                params![index],
-            )
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
+            sqlx::query("UPDATE wallet SET key_index = ?1 WHERE id = 'default'")
+                .bind(index as i64)
+                .execute(&*self.pool)
+                .await
+                .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
             Ok(())
         })
     }
 }
 
+// =========================================================================
+// SwapStorage implementation
+// =========================================================================
+
 impl SwapStorage for SqliteStorage {
     fn get(&self, swap_id: &str) -> StorageFuture<'_, Option<ExtendedSwapStorageData>> {
         let swap_id = swap_id.to_string();
         Box::pin(async move {
-            let conn = self.conn.lock().unwrap();
-
-            // Look up swap type in registry
-            let mut stmt = conn
-                .prepare("SELECT swap_type FROM swap_registry WHERE swap_id = ?1")
+            // Look up swap type from registry
+            let row = sqlx::query("SELECT swap_type FROM swap_registry WHERE swap_id = ?1")
+                .bind(&swap_id)
+                .fetch_optional(&*self.pool)
+                .await
                 .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
 
-            let swap_type: Option<String> =
-                stmt.query_row(params![&swap_id], |row| row.get(0)).ok();
-
-            let swap_type = match swap_type.and_then(|t| SwapType::from_str(&t)) {
-                Some(st) => st,
-                None => return Ok(None),
+            let Some(row) = row else {
+                return Ok(None);
             };
 
-            drop(stmt);
+            let swap_type_str: String = row.get("swap_type");
+            let swap_type = SwapType::from_str(&swap_type_str);
 
             match swap_type {
-                SwapType::BtcToEvm => Self::load_btc_to_evm(&conn, &swap_id),
-                SwapType::EvmToBtc => Self::load_evm_to_btc(&conn, &swap_id),
-                SwapType::BtcToArkade => Self::load_btc_to_arkade(&conn, &swap_id),
-                SwapType::OnchainToEvm => Self::load_onchain_to_evm(&conn, &swap_id),
+                Some(SwapType::BtcToEvm) => Ok(Some(self.load_btc_to_evm(&swap_id).await?)),
+                Some(SwapType::EvmToBtc) => Ok(Some(self.load_evm_to_btc(&swap_id).await?)),
+                Some(SwapType::BtcToArkade) => Ok(Some(self.load_btc_to_arkade(&swap_id).await?)),
+                Some(SwapType::OnchainToEvm) => Ok(Some(self.load_onchain_to_evm(&swap_id).await?)),
+                None => Ok(None),
             }
         })
     }
@@ -1668,8 +961,6 @@ impl SwapStorage for SqliteStorage {
         let swap_id = swap_id.to_string();
         let data = data.clone();
         Box::pin(async move {
-            let conn = self.conn.lock().unwrap();
-
             let swap_type = match &data.response {
                 GetSwapResponse::BtcToEvm(_) => SwapType::BtcToEvm,
                 GetSwapResponse::EvmToBtc(_) => SwapType::EvmToBtc,
@@ -1678,25 +969,30 @@ impl SwapStorage for SqliteStorage {
             };
 
             // Update registry
-            conn.execute(
+            sqlx::query(
                 "INSERT OR REPLACE INTO swap_registry (swap_id, swap_type) VALUES (?1, ?2)",
-                params![&swap_id, swap_type.as_str()],
             )
+            .bind(&swap_id)
+            .bind(swap_type.as_str())
+            .execute(&*self.pool)
+            .await
             .map_err(|e| crate::Error::Storage(format!("Failed to update registry: {}", e)))?;
 
             // Store in appropriate table
             match &data.response {
                 GetSwapResponse::BtcToEvm(r) => {
-                    Self::store_btc_to_evm(&conn, &swap_id, r, &data.swap_params)
+                    self.store_btc_to_evm(&swap_id, r, &data.swap_params).await
                 }
                 GetSwapResponse::EvmToBtc(r) => {
-                    Self::store_evm_to_btc(&conn, &swap_id, r, &data.swap_params)
+                    self.store_evm_to_btc(&swap_id, r, &data.swap_params).await
                 }
                 GetSwapResponse::BtcToArkade(r) => {
-                    Self::store_btc_to_arkade(&conn, &swap_id, r, &data.swap_params)
+                    self.store_btc_to_arkade(&swap_id, r, &data.swap_params)
+                        .await
                 }
                 GetSwapResponse::OnchainToEvm(r) => {
-                    Self::store_onchain_to_evm(&conn, &swap_id, r, &data.swap_params)
+                    self.store_onchain_to_evm(&swap_id, r, &data.swap_params)
+                        .await
                 }
             }
         })
@@ -1705,39 +1001,38 @@ impl SwapStorage for SqliteStorage {
     fn delete(&self, swap_id: &str) -> StorageFuture<'_, ()> {
         let swap_id = swap_id.to_string();
         Box::pin(async move {
-            let conn = self.conn.lock().unwrap();
-
             // Look up swap type first
-            let mut stmt = conn
-                .prepare("SELECT swap_type FROM swap_registry WHERE swap_id = ?1")
+            let row = sqlx::query("SELECT swap_type FROM swap_registry WHERE swap_id = ?1")
+                .bind(&swap_id)
+                .fetch_optional(&*self.pool)
+                .await
                 .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
 
-            let swap_type: Option<String> =
-                stmt.query_row(params![&swap_id], |row| row.get(0)).ok();
-
-            drop(stmt);
-
-            if let Some(swap_type) = swap_type {
-                let table = match swap_type.as_str() {
+            if let Some(row) = row {
+                let swap_type_str: String = row.get("swap_type");
+                let table = match swap_type_str.as_str() {
                     "BtcToEvm" => "btc_to_evm_swaps",
                     "EvmToBtc" => "evm_to_btc_swaps",
                     "BtcToArkade" => "btc_to_arkade_swaps",
+                    "OnchainToEvm" => "onchain_to_evm_swaps",
                     _ => return Ok(()),
                 };
 
-                conn.execute(
-                    &format!("DELETE FROM {} WHERE swap_id = ?1", table),
-                    params![&swap_id],
-                )
-                .map_err(|e| crate::Error::Storage(format!("Failed to delete swap: {}", e)))?;
+                sqlx::query(&format!("DELETE FROM {} WHERE swap_id = ?1", table))
+                    .bind(&swap_id)
+                    .execute(&*self.pool)
+                    .await
+                    .map_err(|e| crate::Error::Storage(format!("Failed to delete swap: {}", e)))?;
             }
 
             // Delete from registry
-            conn.execute(
-                "DELETE FROM swap_registry WHERE swap_id = ?1",
-                params![&swap_id],
-            )
-            .map_err(|e| crate::Error::Storage(format!("Failed to delete from registry: {}", e)))?;
+            sqlx::query("DELETE FROM swap_registry WHERE swap_id = ?1")
+                .bind(&swap_id)
+                .execute(&*self.pool)
+                .await
+                .map_err(|e| {
+                    crate::Error::Storage(format!("Failed to delete from registry: {}", e))
+                })?;
 
             Ok(())
         })
@@ -1745,154 +1040,67 @@ impl SwapStorage for SqliteStorage {
 
     fn list(&self) -> StorageFuture<'_, Vec<String>> {
         Box::pin(async move {
-            let conn = self.conn.lock().unwrap();
-            let mut stmt = conn
-                .prepare("SELECT swap_id FROM swap_registry")
+            let rows = sqlx::query("SELECT swap_id FROM swap_registry")
+                .fetch_all(&*self.pool)
+                .await
                 .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
 
-            let ids: Vec<String> = stmt
-                .query_map([], |row| row.get(0))
-                .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?
-                .filter_map(|r| r.ok())
-                .collect();
-
-            Ok(ids)
+            Ok(rows.iter().map(|r| r.get("swap_id")).collect())
         })
     }
 
     fn get_all(&self) -> StorageFuture<'_, Vec<ExtendedSwapStorageData>> {
         Box::pin(async move {
-            let conn = self.conn.lock().unwrap();
             let mut swaps = Vec::new();
 
             // Get all BtcToEvm swaps
-            {
-                let mut stmt = conn
-                    .prepare("SELECT * FROM btc_to_evm_swaps")
-                    .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
+            let rows = sqlx::query("SELECT swap_id FROM btc_to_evm_swaps")
+                .fetch_all(&*self.pool)
+                .await
+                .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
 
-                let rows = stmt
-                    .query_map([], |row| Ok(Self::row_to_btc_to_evm(row)))
-                    .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-
-                for row in rows {
-                    if let Ok(Ok(data)) = row {
-                        swaps.push(data);
-                    }
+            for row in rows {
+                let swap_id: String = row.get("swap_id");
+                if let Ok(data) = self.load_btc_to_evm(&swap_id).await {
+                    swaps.push(data);
                 }
             }
 
             // Get all EvmToBtc swaps
-            {
-                let mut stmt = conn
-                    .prepare("SELECT * FROM evm_to_btc_swaps")
-                    .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
+            let rows = sqlx::query("SELECT swap_id FROM evm_to_btc_swaps")
+                .fetch_all(&*self.pool)
+                .await
+                .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
 
-                let rows = stmt
-                    .query_map([], |row| Ok(Self::row_to_evm_to_btc(row)))
-                    .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-
-                for row in rows {
-                    if let Ok(Ok(data)) = row {
-                        swaps.push(data);
-                    }
+            for row in rows {
+                let swap_id: String = row.get("swap_id");
+                if let Ok(data) = self.load_evm_to_btc(&swap_id).await {
+                    swaps.push(data);
                 }
             }
 
             // Get all BtcToArkade swaps
-            {
-                let mut stmt = conn
-                    .prepare("SELECT * FROM btc_to_arkade_swaps")
-                    .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
+            let rows = sqlx::query("SELECT swap_id FROM btc_to_arkade_swaps")
+                .fetch_all(&*self.pool)
+                .await
+                .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
 
-                let rows = stmt
-                    .query_map([], |row| Ok(Self::row_to_btc_to_arkade(row)))
-                    .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-
-                for row in rows {
-                    if let Ok(Ok(data)) = row {
-                        swaps.push(data);
-                    }
+            for row in rows {
+                let swap_id: String = row.get("swap_id");
+                if let Ok(data) = self.load_btc_to_arkade(&swap_id).await {
+                    swaps.push(data);
                 }
             }
 
-            Ok(swaps)
-        })
-    }
-}
-
-impl VtxoSwapStorage for SqliteStorage {
-    fn get(&self, swap_id: &str) -> StorageFuture<'_, Option<ExtendedVtxoSwapStorageData>> {
-        let swap_id = swap_id.to_string();
-        Box::pin(async move {
-            let conn = self.conn.lock().unwrap();
-            let mut stmt = conn
-                .prepare("SELECT * FROM vtxo_swaps WHERE swap_id = ?1")
+            // Get all OnchainToEvm swaps
+            let rows = sqlx::query("SELECT swap_id FROM onchain_to_evm_swaps")
+                .fetch_all(&*self.pool)
+                .await
                 .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
 
-            let result = stmt.query_row(params![&swap_id], |row| Ok(Self::row_to_vtxo_swap(row)));
-
-            match result {
-                Ok(data) => Ok(Some(data?)),
-                Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-                Err(e) => Err(crate::Error::Storage(format!("SQLite error: {}", e))),
-            }
-        })
-    }
-
-    fn store(&self, swap_id: &str, data: &ExtendedVtxoSwapStorageData) -> StorageFuture<'_, ()> {
-        let swap_id = swap_id.to_string();
-        let data = data.clone();
-        Box::pin(async move {
-            let conn = self.conn.lock().unwrap();
-            Self::store_vtxo_swap(&conn, &swap_id, &data.response, &data.swap_params)
-        })
-    }
-
-    fn delete(&self, swap_id: &str) -> StorageFuture<'_, ()> {
-        let swap_id = swap_id.to_string();
-        Box::pin(async move {
-            let conn = self.conn.lock().unwrap();
-            conn.execute(
-                "DELETE FROM vtxo_swaps WHERE swap_id = ?1",
-                params![&swap_id],
-            )
-            .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-            Ok(())
-        })
-    }
-
-    fn list(&self) -> StorageFuture<'_, Vec<String>> {
-        Box::pin(async move {
-            let conn = self.conn.lock().unwrap();
-            let mut stmt = conn
-                .prepare("SELECT swap_id FROM vtxo_swaps")
-                .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-
-            let ids: Vec<String> = stmt
-                .query_map([], |row| row.get(0))
-                .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?
-                .filter_map(|r| r.ok())
-                .collect();
-
-            Ok(ids)
-        })
-    }
-
-    fn get_all(&self) -> StorageFuture<'_, Vec<ExtendedVtxoSwapStorageData>> {
-        Box::pin(async move {
-            let conn = self.conn.lock().unwrap();
-            let mut stmt = conn
-                .prepare("SELECT * FROM vtxo_swaps")
-                .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-
-            let rows = stmt
-                .query_map([], |row| Ok(Self::row_to_vtxo_swap(row)))
-                .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
-
-            let mut swaps = Vec::new();
             for row in rows {
-                if let Ok(Ok(data)) = row {
+                let swap_id: String = row.get("swap_id");
+                if let Ok(data) = self.load_onchain_to_evm(&swap_id).await {
                     swaps.push(data);
                 }
             }
@@ -1901,6 +1109,77 @@ impl VtxoSwapStorage for SqliteStorage {
         })
     }
 }
+
+// =========================================================================
+// VtxoSwapStorage implementation
+// =========================================================================
+
+impl VtxoSwapStorage for SqliteStorage {
+    fn get(&self, swap_id: &str) -> StorageFuture<'_, Option<ExtendedVtxoSwapStorageData>> {
+        let swap_id = swap_id.to_string();
+        Box::pin(async move {
+            match self.load_vtxo_swap(&swap_id).await {
+                Ok(data) => Ok(Some(data)),
+                Err(_) => Ok(None),
+            }
+        })
+    }
+
+    fn store(&self, swap_id: &str, data: &ExtendedVtxoSwapStorageData) -> StorageFuture<'_, ()> {
+        let swap_id = swap_id.to_string();
+        let data = data.clone();
+        Box::pin(async move {
+            self.store_vtxo_swap(&swap_id, &data.response, &data.swap_params)
+                .await
+        })
+    }
+
+    fn delete(&self, swap_id: &str) -> StorageFuture<'_, ()> {
+        let swap_id = swap_id.to_string();
+        Box::pin(async move {
+            sqlx::query("DELETE FROM vtxo_swaps WHERE swap_id = ?1")
+                .bind(&swap_id)
+                .execute(&*self.pool)
+                .await
+                .map_err(|e| crate::Error::Storage(format!("Failed to delete VTXO swap: {}", e)))?;
+            Ok(())
+        })
+    }
+
+    fn list(&self) -> StorageFuture<'_, Vec<String>> {
+        Box::pin(async move {
+            let rows = sqlx::query("SELECT swap_id FROM vtxo_swaps")
+                .fetch_all(&*self.pool)
+                .await
+                .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
+
+            Ok(rows.iter().map(|r| r.get("swap_id")).collect())
+        })
+    }
+
+    fn get_all(&self) -> StorageFuture<'_, Vec<ExtendedVtxoSwapStorageData>> {
+        Box::pin(async move {
+            let rows = sqlx::query("SELECT swap_id FROM vtxo_swaps")
+                .fetch_all(&*self.pool)
+                .await
+                .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
+
+            let mut swaps = Vec::new();
+            for row in rows {
+                let swap_id: String = row.get("swap_id");
+                if let Ok(data) = self.load_vtxo_swap(&swap_id).await {
+                    swaps.push(data);
+                }
+            }
+
+            Ok(swaps)
+        })
+    }
+}
+
+// =========================================================================
+// Tests
+// =========================================================================
 
 #[cfg(test)]
 mod tests {
@@ -1926,28 +1205,24 @@ mod tests {
     // =========================================================================
 
     /// Environment variable name for specifying a file-based test database path.
-    /// If set, tests will use a file-based SQLite database at the specified path.
-    /// If not set, tests will use an in-memory database.
     const TEST_DB_PATH_ENV: &str = "TEST_SQLITE_DB_PATH";
 
     /// Creates a test storage instance.
-    ///
-    /// If `TEST_SQLITE_DB_PATH` environment variable is set, creates a file-based
-    /// database at that path. Otherwise, creates an in-memory database.
-    ///
-    /// When using a file-based database, each test should use a unique identifier
-    /// to avoid conflicts between parallel tests.
-    fn create_test_storage() -> SqliteStorage {
+    /// If `TEST_SQLITE_DB_PATH` is set, uses a file-based database.
+    /// Otherwise, uses an in-memory database.
+    async fn create_test_storage() -> SqliteStorage {
         match std::env::var(TEST_DB_PATH_ENV) {
             Ok(path) => {
-                // Create parent directories if they don't exist
                 if let Some(parent) = std::path::Path::new(&path).parent() {
                     let _ = std::fs::create_dir_all(parent);
                 }
                 SqliteStorage::open(&path)
+                    .await
                     .unwrap_or_else(|e| panic!("Failed to open test database at {}: {}", path, e))
             }
-            Err(_) => SqliteStorage::in_memory().expect("Failed to create in-memory test database"),
+            Err(_) => SqliteStorage::in_memory()
+                .await
+                .expect("Failed to create in-memory test database"),
         }
     }
 
@@ -1973,8 +1248,6 @@ mod tests {
         }
     }
 
-    /// Creates a test BtcToEvm swap with a random UUID.
-    /// Returns the swap data and its ID.
     fn create_test_btc_to_evm_swap() -> (ExtendedSwapStorageData, String) {
         let swap_id = Uuid::new_v4();
         let swap_params = create_test_swap_params(1);
@@ -2022,8 +1295,6 @@ mod tests {
         (data, swap_id.to_string())
     }
 
-    /// Creates a test EvmToBtc swap with a random UUID.
-    /// Returns the swap data and its ID.
     fn create_test_evm_to_btc_swap() -> (ExtendedSwapStorageData, String) {
         let swap_id = Uuid::new_v4();
         let swap_params = create_test_swap_params(2);
@@ -2078,8 +1349,6 @@ mod tests {
         (data, swap_id.to_string())
     }
 
-    /// Creates a test BtcToArkade swap with a random UUID.
-    /// Returns the swap data and its ID.
     fn create_test_btc_to_arkade_swap() -> (ExtendedSwapStorageData, String) {
         let swap_id = Uuid::new_v4();
         let swap_params = create_test_swap_params(3);
@@ -2121,8 +1390,44 @@ mod tests {
         (data, swap_id.to_string())
     }
 
-    /// Creates a test VtxoSwap with a random UUID.
-    /// Returns the swap data and its ID.
+    fn create_test_onchain_to_evm_swap() -> (ExtendedSwapStorageData, String) {
+        let swap_id = Uuid::new_v4();
+        let swap_params = create_test_swap_params(5);
+
+        let response = OnchainToEvmSwapResponse {
+            id: swap_id,
+            status: SwapStatus::Pending,
+            btc_htlc_address: "bc1phtlc...".to_string(),
+            fee_sats: 1500,
+            btc_server_pk: "02serverpk".to_string(),
+            evm_hash_lock: "0xdeadbeefcafebabe".to_string(),
+            btc_hash_lock: "abcd1234".to_string(),
+            btc_refund_locktime: 1700000000,
+            btc_fund_txid: None,
+            btc_claim_txid: None,
+            evm_fund_txid: None,
+            evm_claim_txid: None,
+            network: "bitcoin".to_string(),
+            created_at: OffsetDateTime::now_utc(),
+            chain: "Polygon".to_string(),
+            client_evm_address: "0xclient".to_string(),
+            evm_htlc_address: "0xhtlc".to_string(),
+            server_evm_address: "0xserver".to_string(),
+            evm_refund_locktime: 1699999000,
+            source_token: TokenId::BtcOnchain,
+            target_token: TokenId::Coin("wbtc_pol".to_string()),
+            target_amount: 0.001,
+            source_amount: 100000,
+        };
+
+        let data = ExtendedSwapStorageData {
+            response: GetSwapResponse::OnchainToEvm(response),
+            swap_params,
+        };
+
+        (data, swap_id.to_string())
+    }
+
     fn create_test_vtxo_swap() -> (ExtendedVtxoSwapStorageData, String) {
         let swap_id = Uuid::new_v4();
         let swap_params = create_test_swap_params(4);
@@ -2165,27 +1470,29 @@ mod tests {
 
     #[tokio::test]
     async fn test_wallet_storage() {
-        let storage = create_test_storage();
+        let storage = SqliteStorage::in_memory().await.unwrap();
 
-        // Use unique test values to avoid conflicts with other tests
-        let test_mnemonic = format!("test mnemonic phrase {}", Uuid::new_v4());
-        let test_key_index = rand::random::<u32>() % 1000 + 100; // Random index 100-1099
+        // Initially no mnemonic
+        assert!(storage.get_mnemonic().await.unwrap().is_none());
 
         // Set and get mnemonic
-        storage.set_mnemonic(&test_mnemonic).await.unwrap();
+        storage.set_mnemonic("test mnemonic phrase").await.unwrap();
         assert_eq!(
             storage.get_mnemonic().await.unwrap(),
-            Some(test_mnemonic.clone())
+            Some("test mnemonic phrase".to_string())
         );
 
+        // Key index starts at 0
+        assert_eq!(storage.get_key_index().await.unwrap(), 0);
+
         // Set and get key index
-        storage.set_key_index(test_key_index).await.unwrap();
-        assert_eq!(storage.get_key_index().await.unwrap(), test_key_index);
+        storage.set_key_index(5).await.unwrap();
+        assert_eq!(storage.get_key_index().await.unwrap(), 5);
     }
 
     #[tokio::test]
     async fn test_wallet_storage_update_mnemonic() {
-        let storage = create_test_storage();
+        let storage = SqliteStorage::in_memory().await.unwrap();
 
         // Set initial mnemonic
         storage.set_mnemonic("first mnemonic").await.unwrap();
@@ -2208,7 +1515,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_btc_to_evm_swap_crud() {
-        let storage = create_test_storage();
+        let storage = create_test_storage().await;
         let (data, swap_id) = create_test_btc_to_evm_swap();
 
         // CREATE
@@ -2226,9 +1533,9 @@ mod tests {
             panic!("Expected BtcToEvm response");
         }
 
-        // LIST - verify our swap is in the list
+        // LIST
         let ids = SwapStorage::list(&storage).await.unwrap();
-        assert!(ids.contains(&swap_id), "Swap should be in the list");
+        assert!(ids.contains(&swap_id));
 
         // UPDATE (change status)
         let mut updated_data = data.clone();
@@ -2254,12 +1561,9 @@ mod tests {
         let deleted = SwapStorage::get(&storage, &swap_id).await.unwrap();
         assert!(deleted.is_none());
 
-        // Verify our swap is no longer in the list
+        // LIST should not contain our swap
         let ids = SwapStorage::list(&storage).await.unwrap();
-        assert!(
-            !ids.contains(&swap_id),
-            "Deleted swap should not be in the list"
-        );
+        assert!(!ids.contains(&swap_id));
     }
 
     // =========================================================================
@@ -2268,7 +1572,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_evm_to_btc_swap_crud() {
-        let storage = create_test_storage();
+        let storage = create_test_storage().await;
         let (data, swap_id) = create_test_evm_to_btc_swap();
 
         // CREATE
@@ -2320,7 +1624,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_btc_to_arkade_swap_crud() {
-        let storage = create_test_storage();
+        let storage = create_test_storage().await;
         let (data, swap_id) = create_test_btc_to_arkade_swap();
 
         // CREATE
@@ -2367,16 +1671,97 @@ mod tests {
     }
 
     // =========================================================================
+    // SwapStorage CRUD Tests - OnchainToEvm
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_onchain_to_evm_swap_crud() {
+        let storage = create_test_storage().await;
+        let (data, swap_id) = create_test_onchain_to_evm_swap();
+
+        // CREATE
+        SwapStorage::store(&storage, &swap_id, &data).await.unwrap();
+
+        // READ
+        let retrieved = SwapStorage::get(&storage, &swap_id).await.unwrap();
+        assert!(retrieved.is_some());
+        let retrieved = retrieved.unwrap();
+        if let GetSwapResponse::OnchainToEvm(ref r) = retrieved.response {
+            assert_eq!(r.id.to_string(), swap_id);
+            assert_eq!(r.btc_htlc_address, "bc1phtlc...");
+            assert_eq!(r.source_amount, 100000);
+            assert_eq!(r.chain, "Polygon");
+            assert_eq!(r.client_evm_address, "0xclient");
+            assert_eq!(r.source_token, TokenId::BtcOnchain);
+        } else {
+            panic!("Expected OnchainToEvm response");
+        }
+
+        // LIST
+        let ids = SwapStorage::list(&storage).await.unwrap();
+        assert!(ids.contains(&swap_id));
+
+        // UPDATE (change status and add txids)
+        let mut updated_data = data.clone();
+        if let GetSwapResponse::OnchainToEvm(ref mut r) = updated_data.response {
+            r.status = SwapStatus::ClientFunded;
+            r.btc_fund_txid = Some("btctxid123".to_string());
+        }
+        SwapStorage::store(&storage, &swap_id, &updated_data)
+            .await
+            .unwrap();
+
+        // Verify update
+        let retrieved = SwapStorage::get(&storage, &swap_id).await.unwrap().unwrap();
+        if let GetSwapResponse::OnchainToEvm(ref r) = retrieved.response {
+            assert_eq!(r.status, SwapStatus::ClientFunded);
+            assert_eq!(r.btc_fund_txid, Some("btctxid123".to_string()));
+        } else {
+            panic!("Expected OnchainToEvm response");
+        }
+
+        // UPDATE to ServerFunded with EVM txid
+        let mut server_funded_data = updated_data.clone();
+        if let GetSwapResponse::OnchainToEvm(ref mut r) = server_funded_data.response {
+            r.status = SwapStatus::ServerFunded;
+            r.evm_fund_txid = Some("0xevmfundtx".to_string());
+        }
+        SwapStorage::store(&storage, &swap_id, &server_funded_data)
+            .await
+            .unwrap();
+
+        let retrieved = SwapStorage::get(&storage, &swap_id).await.unwrap().unwrap();
+        if let GetSwapResponse::OnchainToEvm(ref r) = retrieved.response {
+            assert_eq!(r.status, SwapStatus::ServerFunded);
+            assert_eq!(r.evm_fund_txid, Some("0xevmfundtx".to_string()));
+            // Verify previous update is preserved
+            assert_eq!(r.btc_fund_txid, Some("btctxid123".to_string()));
+        } else {
+            panic!("Expected OnchainToEvm response");
+        }
+
+        // DELETE
+        SwapStorage::delete(&storage, &swap_id).await.unwrap();
+        let deleted = SwapStorage::get(&storage, &swap_id).await.unwrap();
+        assert!(deleted.is_none());
+
+        // LIST should not contain our swap
+        let ids = SwapStorage::list(&storage).await.unwrap();
+        assert!(!ids.contains(&swap_id));
+    }
+
+    // =========================================================================
     // SwapStorage - Multiple Swaps and get_all
     // =========================================================================
 
     #[tokio::test]
     async fn test_swap_storage_multiple_swaps_get_all() {
-        let storage = create_test_storage();
+        let storage = create_test_storage().await;
 
         let (btc_to_evm, id1) = create_test_btc_to_evm_swap();
         let (evm_to_btc, id2) = create_test_evm_to_btc_swap();
         let (btc_to_arkade, id3) = create_test_btc_to_arkade_swap();
+        let (onchain_to_evm, id4) = create_test_onchain_to_evm_swap();
 
         // Store all
         SwapStorage::store(&storage, &id1, &btc_to_evm)
@@ -2388,57 +1773,50 @@ mod tests {
         SwapStorage::store(&storage, &id3, &btc_to_arkade)
             .await
             .unwrap();
+        SwapStorage::store(&storage, &id4, &onchain_to_evm)
+            .await
+            .unwrap();
 
-        // Verify list contains our new swaps
+        // Verify list contains all our swaps
         let ids = SwapStorage::list(&storage).await.unwrap();
-        assert!(ids.contains(&id1), "List should contain BtcToEvm swap");
-        assert!(ids.contains(&id2), "List should contain EvmToBtc swap");
-        assert!(ids.contains(&id3), "List should contain BtcToArkade swap");
+        assert!(ids.contains(&id1));
+        assert!(ids.contains(&id2));
+        assert!(ids.contains(&id3));
+        assert!(ids.contains(&id4));
 
         // Verify get_all returns our swaps
         let all_swaps = SwapStorage::get_all(&storage).await.unwrap();
 
-        // Helper to find swap by ID
-        let find_swap = |id: &str| -> bool {
-            all_swaps.iter().any(|s| match &s.response {
-                GetSwapResponse::BtcToEvm(r) => r.common.id.to_string() == id,
-                GetSwapResponse::EvmToBtc(r) => r.common.id.to_string() == id,
-                GetSwapResponse::BtcToArkade(r) => r.id.to_string() == id,
-                GetSwapResponse::OnchainToEvm(r) => r.id.to_string() == id,
+        // Verify each of our swaps is present by ID
+        let swap_ids: Vec<String> = all_swaps
+            .iter()
+            .map(|s| match &s.response {
+                GetSwapResponse::BtcToEvm(r) => r.common.id.to_string(),
+                GetSwapResponse::EvmToBtc(r) => r.common.id.to_string(),
+                GetSwapResponse::BtcToArkade(r) => r.id.to_string(),
+                GetSwapResponse::OnchainToEvm(r) => r.id.to_string(),
             })
-        };
+            .collect();
+        assert!(swap_ids.contains(&id1), "Missing BtcToEvm swap");
+        assert!(swap_ids.contains(&id2), "Missing EvmToBtc swap");
+        assert!(swap_ids.contains(&id3), "Missing BtcToArkade swap");
+        assert!(swap_ids.contains(&id4), "Missing OnchainToEvm swap");
 
-        assert!(find_swap(&id1), "get_all should contain BtcToEvm swap");
-        assert!(find_swap(&id2), "get_all should contain EvmToBtc swap");
-        assert!(find_swap(&id3), "get_all should contain BtcToArkade swap");
-
-        // Delete one and verify it's no longer in get_all
+        // Delete one and verify
         SwapStorage::delete(&storage, &id1).await.unwrap();
-        let all_swaps = SwapStorage::get_all(&storage).await.unwrap();
-        let find_swap_after_delete = |id: &str| -> bool {
-            all_swaps.iter().any(|s| match &s.response {
-                GetSwapResponse::BtcToEvm(r) => r.common.id.to_string() == id,
-                GetSwapResponse::EvmToBtc(r) => r.common.id.to_string() == id,
-                GetSwapResponse::BtcToArkade(r) => r.id.to_string() == id,
-                GetSwapResponse::OnchainToEvm(r) => r.id.to_string() == id,
-            })
-        };
-        assert!(
-            !find_swap_after_delete(&id1),
-            "Deleted swap should not be in get_all"
-        );
-        assert!(
-            find_swap_after_delete(&id2),
-            "EvmToBtc swap should still exist"
-        );
-        assert!(
-            find_swap_after_delete(&id3),
-            "BtcToArkade swap should still exist"
-        );
+        let ids = SwapStorage::list(&storage).await.unwrap();
+        assert!(!ids.contains(&id1));
+        assert!(ids.contains(&id2));
 
-        // Cleanup remaining test swaps
+        // Delete remaining and verify none of our swaps are present
         SwapStorage::delete(&storage, &id2).await.unwrap();
         SwapStorage::delete(&storage, &id3).await.unwrap();
+        SwapStorage::delete(&storage, &id4).await.unwrap();
+        let ids = SwapStorage::list(&storage).await.unwrap();
+        assert!(!ids.contains(&id1));
+        assert!(!ids.contains(&id2));
+        assert!(!ids.contains(&id3));
+        assert!(!ids.contains(&id4));
     }
 
     // =========================================================================
@@ -2447,7 +1825,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_vtxo_swap_crud() {
-        let storage = create_test_storage();
+        let storage = create_test_storage().await;
         let (data, swap_id) = create_test_vtxo_swap();
 
         // CREATE
@@ -2464,9 +1842,9 @@ mod tests {
         assert_eq!(retrieved.response.server_fund_amount_sats, 49500);
         assert_eq!(retrieved.response.status, VtxoSwapStatus::Pending);
 
-        // LIST - verify our swap is in the list
+        // LIST
         let ids = VtxoSwapStorage::list(&storage).await.unwrap();
-        assert!(ids.contains(&swap_id), "Swap should be in the list");
+        assert!(ids.contains(&swap_id));
 
         // UPDATE
         let mut updated_data = data.clone();
@@ -2489,10 +1867,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_vtxo_swap_get_all() {
-        let storage = create_test_storage();
-
-        // Get initial count
-        let initial_count = VtxoSwapStorage::get_all(&storage).await.unwrap().len();
+        let storage = create_test_storage().await;
 
         let (data1, id1) = create_test_vtxo_swap();
         let (data2, id2) = create_test_vtxo_swap();
@@ -2505,20 +1880,20 @@ mod tests {
             .unwrap();
 
         let all_swaps = VtxoSwapStorage::get_all(&storage).await.unwrap();
-        assert_eq!(all_swaps.len(), initial_count + 2);
-
-        // Verify our swaps are in the list
-        let has_id1 = all_swaps.iter().any(|s| s.response.id.to_string() == id1);
-        let has_id2 = all_swaps.iter().any(|s| s.response.id.to_string() == id2);
-        assert!(has_id1, "Should contain first swap");
-        assert!(has_id2, "Should contain second swap");
+        let swap_ids: Vec<String> = all_swaps
+            .iter()
+            .map(|s| s.response.id.to_string())
+            .collect();
+        assert!(swap_ids.contains(&id1));
+        assert!(swap_ids.contains(&id2));
 
         // Cleanup
         VtxoSwapStorage::delete(&storage, &id1).await.unwrap();
         VtxoSwapStorage::delete(&storage, &id2).await.unwrap();
 
-        let all_swaps = VtxoSwapStorage::get_all(&storage).await.unwrap();
-        assert_eq!(all_swaps.len(), initial_count);
+        let ids = VtxoSwapStorage::list(&storage).await.unwrap();
+        assert!(!ids.contains(&id1));
+        assert!(!ids.contains(&id2));
     }
 
     // =========================================================================
@@ -2527,14 +1902,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_nonexistent_swap() {
-        let storage = create_test_storage();
+        let storage = create_test_storage().await;
         let result = SwapStorage::get(&storage, "nonexistent-id").await.unwrap();
         assert!(result.is_none());
     }
 
     #[tokio::test]
     async fn test_delete_nonexistent_swap() {
-        let storage = create_test_storage();
+        let storage = create_test_storage().await;
         // Should not error when deleting non-existent swap
         SwapStorage::delete(&storage, "nonexistent-id")
             .await
@@ -2543,7 +1918,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_nonexistent_vtxo_swap() {
-        let storage = create_test_storage();
+        let storage = create_test_storage().await;
         let result = VtxoSwapStorage::get(&storage, "nonexistent-id")
             .await
             .unwrap();
@@ -2552,7 +1927,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_swap_params_roundtrip() {
-        let storage = create_test_storage();
+        let storage = create_test_storage().await;
         let (data, swap_id) = create_test_btc_to_evm_swap();
 
         // Store

@@ -1,4 +1,47 @@
 # =============================================================================
+# Database (SQLx migrations for core)
+# =============================================================================
+# Default database path for development/testing
+
+DB_PATH := './lendaswap-client.db'
+DB_URL := 'sqlite:' + DB_PATH
+
+# Create the database file if it doesn't exist
+db-create:
+    #!/usr/bin/env bash
+    cd core
+    if [ ! -f "{{ DB_PATH }}" ]; then
+        echo "Creating database at {{ DB_PATH }}..."
+        mkdir -p "$(dirname "{{ DB_PATH }}")"
+        touch "{{ DB_PATH }}"
+        echo "Database created."
+    else
+        echo "Database already exists at {{ DB_PATH }}"
+    fi
+
+# Prepare SQLx offline query data (run after changing queries)
+
+# Note: doesn't need db-create since it only analyzes queries, doesn't connect to DB
+db-prepare: db-create
+    cd core && cargo sqlx prepare
+
+# Add a new migration (creates up/down SQL files)
+db-add-migration name:
+    sqlx migrate add --source ./core/migrations -r {{ name }}
+
+# Run pending migrations
+db-run-migration: db-create
+    sqlx migrate run --source ./core/migrations --database-url={{ DB_URL }}
+
+# Revert the last migration
+db-revert-migration:
+    sqlx migrate revert --source ./core/migrations --database-url={{ DB_URL }}
+
+# Show migration status
+db-status:
+    sqlx migrate info --source ./core/migrations --database-url={{ DB_URL }}
+
+# =============================================================================
 # WASM SDK (browser)
 # =============================================================================
 
@@ -46,6 +89,7 @@ bump-native-version version:
     cd node-sdk && npm version {{ version }} --no-git-tag-version
 
 # Publish native SDK (current platform only - use CI for multi-platform)
+
 # NOTE: For production, use GitHub Actions to build all platforms
 publish-native-dry-run: build-native
     cd node-sdk && npm publish --dry-run

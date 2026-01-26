@@ -22,8 +22,9 @@ pub struct SqliteStorageHandle {
 impl SqliteStorageHandle {
     /// Open or create a SQLite database at the given path.
     #[napi(factory)]
-    pub fn open(path: String) -> Result<Self> {
+    pub async fn open(path: String) -> Result<Self> {
         let storage = SqliteStorage::open(&path)
+            .await
             .map_err(|e| Error::from_reason(format!("Failed to open SQLite database: {}", e)))?;
         Ok(Self {
             storage: Arc::new(storage),
@@ -32,10 +33,12 @@ impl SqliteStorageHandle {
 
     /// Create an in-memory SQLite database (useful for testing).
     #[napi(factory)]
-    pub fn in_memory() -> Result<Self> {
-        let storage = SqliteStorage::in_memory().map_err(|e| {
-            Error::from_reason(format!("Failed to create in-memory database: {}", e))
-        })?;
+    pub async fn in_memory() -> Result<Self> {
+        let storage = SqliteStorage::in_memory()
+            .await
+            .map_err(|e| {
+                Error::from_reason(format!("Failed to create in-memory database: {}", e))
+            })?;
         Ok(Self {
             storage: Arc::new(storage),
         })
