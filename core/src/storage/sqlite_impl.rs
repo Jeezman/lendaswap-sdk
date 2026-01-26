@@ -1908,6 +1908,50 @@ mod tests {
     use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
 
     // =========================================================================
+    // Test Helper - Database Setup
+    // =========================================================================
+    //
+    // By default, tests use an in-memory SQLite database. To use a file-based
+    // database instead (useful for debugging or inspecting test data), set the
+    // `TEST_SQLITE_DB_PATH` environment variable:
+    //
+    // ```sh
+    // # Run tests with a file-based database
+    // TEST_SQLITE_DB_PATH=/tmp/lendaswap-test.db cargo test -p lendaswap-core --features sqlite
+    //
+    // # Run a specific test with a file-based database
+    // TEST_SQLITE_DB_PATH=./test.db cargo test -p lendaswap-core --features sqlite -- test_wallet_storage
+    // ```
+    //
+    // =========================================================================
+
+    /// Environment variable name for specifying a file-based test database path.
+    /// If set, tests will use a file-based SQLite database at the specified path.
+    /// If not set, tests will use an in-memory database.
+    const TEST_DB_PATH_ENV: &str = "TEST_SQLITE_DB_PATH";
+
+    /// Creates a test storage instance.
+    ///
+    /// If `TEST_SQLITE_DB_PATH` environment variable is set, creates a file-based
+    /// database at that path. Otherwise, creates an in-memory database.
+    ///
+    /// When using a file-based database, each test should use a unique identifier
+    /// to avoid conflicts between parallel tests.
+    fn create_test_storage() -> SqliteStorage {
+        match std::env::var(TEST_DB_PATH_ENV) {
+            Ok(path) => {
+                // Create parent directories if they don't exist
+                if let Some(parent) = std::path::Path::new(&path).parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                SqliteStorage::open(&path)
+                    .unwrap_or_else(|e| panic!("Failed to open test database at {}: {}", path, e))
+            }
+            Err(_) => SqliteStorage::in_memory().expect("Failed to create in-memory test database"),
+        }
+    }
+
+    // =========================================================================
     // Test Fixtures
     // =========================================================================
 
@@ -1929,8 +1973,10 @@ mod tests {
         }
     }
 
-    fn create_test_btc_to_evm_swap(id: &str) -> (ExtendedSwapStorageData, String) {
-        let swap_id = Uuid::parse_str(id).unwrap();
+    /// Creates a test BtcToEvm swap with a random UUID.
+    /// Returns the swap data and its ID.
+    fn create_test_btc_to_evm_swap() -> (ExtendedSwapStorageData, String) {
+        let swap_id = Uuid::new_v4();
         let swap_params = create_test_swap_params(1);
 
         let common = SwapCommonFields {
@@ -1973,11 +2019,13 @@ mod tests {
             swap_params,
         };
 
-        (data, id.to_string())
+        (data, swap_id.to_string())
     }
 
-    fn create_test_evm_to_btc_swap(id: &str) -> (ExtendedSwapStorageData, String) {
-        let swap_id = Uuid::parse_str(id).unwrap();
+    /// Creates a test EvmToBtc swap with a random UUID.
+    /// Returns the swap data and its ID.
+    fn create_test_evm_to_btc_swap() -> (ExtendedSwapStorageData, String) {
+        let swap_id = Uuid::new_v4();
         let swap_params = create_test_swap_params(2);
 
         let common = SwapCommonFields {
@@ -2027,11 +2075,13 @@ mod tests {
             swap_params,
         };
 
-        (data, id.to_string())
+        (data, swap_id.to_string())
     }
 
-    fn create_test_btc_to_arkade_swap(id: &str) -> (ExtendedSwapStorageData, String) {
-        let swap_id = Uuid::parse_str(id).unwrap();
+    /// Creates a test BtcToArkade swap with a random UUID.
+    /// Returns the swap data and its ID.
+    fn create_test_btc_to_arkade_swap() -> (ExtendedSwapStorageData, String) {
+        let swap_id = Uuid::new_v4();
         let swap_params = create_test_swap_params(3);
 
         let response = BtcToArkadeSwapResponse {
@@ -2068,11 +2118,13 @@ mod tests {
             swap_params,
         };
 
-        (data, id.to_string())
+        (data, swap_id.to_string())
     }
 
-    fn create_test_vtxo_swap(id: &str) -> (ExtendedVtxoSwapStorageData, String) {
-        let swap_id = Uuid::parse_str(id).unwrap();
+    /// Creates a test VtxoSwap with a random UUID.
+    /// Returns the swap data and its ID.
+    fn create_test_vtxo_swap() -> (ExtendedVtxoSwapStorageData, String) {
+        let swap_id = Uuid::new_v4();
         let swap_params = create_test_swap_params(4);
 
         let response = VtxoSwapResponse {
@@ -2104,7 +2156,7 @@ mod tests {
             swap_params,
         };
 
-        (data, id.to_string())
+        (data, swap_id.to_string())
     }
 
     // =========================================================================
@@ -2113,29 +2165,27 @@ mod tests {
 
     #[tokio::test]
     async fn test_wallet_storage() {
-        let storage = SqliteStorage::in_memory().unwrap();
+        let storage = create_test_storage();
 
-        // Initially no mnemonic
-        assert!(storage.get_mnemonic().await.unwrap().is_none());
+        // Use unique test values to avoid conflicts with other tests
+        let test_mnemonic = format!("test mnemonic phrase {}", Uuid::new_v4());
+        let test_key_index = rand::random::<u32>() % 1000 + 100; // Random index 100-1099
 
         // Set and get mnemonic
-        storage.set_mnemonic("test mnemonic phrase").await.unwrap();
+        storage.set_mnemonic(&test_mnemonic).await.unwrap();
         assert_eq!(
             storage.get_mnemonic().await.unwrap(),
-            Some("test mnemonic phrase".to_string())
+            Some(test_mnemonic.clone())
         );
 
-        // Key index starts at 0
-        assert_eq!(storage.get_key_index().await.unwrap(), 0);
-
         // Set and get key index
-        storage.set_key_index(5).await.unwrap();
-        assert_eq!(storage.get_key_index().await.unwrap(), 5);
+        storage.set_key_index(test_key_index).await.unwrap();
+        assert_eq!(storage.get_key_index().await.unwrap(), test_key_index);
     }
 
     #[tokio::test]
     async fn test_wallet_storage_update_mnemonic() {
-        let storage = SqliteStorage::in_memory().unwrap();
+        let storage = create_test_storage();
 
         // Set initial mnemonic
         storage.set_mnemonic("first mnemonic").await.unwrap();
@@ -2158,8 +2208,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_btc_to_evm_swap_crud() {
-        let storage = SqliteStorage::in_memory().unwrap();
-        let (data, swap_id) = create_test_btc_to_evm_swap("11111111-1111-1111-1111-111111111111");
+        let storage = create_test_storage();
+        let (data, swap_id) = create_test_btc_to_evm_swap();
 
         // CREATE
         SwapStorage::store(&storage, &swap_id, &data).await.unwrap();
@@ -2176,10 +2226,9 @@ mod tests {
             panic!("Expected BtcToEvm response");
         }
 
-        // LIST
+        // LIST - verify our swap is in the list
         let ids = SwapStorage::list(&storage).await.unwrap();
-        assert_eq!(ids.len(), 1);
-        assert!(ids.contains(&swap_id));
+        assert!(ids.contains(&swap_id), "Swap should be in the list");
 
         // UPDATE (change status)
         let mut updated_data = data.clone();
@@ -2205,9 +2254,12 @@ mod tests {
         let deleted = SwapStorage::get(&storage, &swap_id).await.unwrap();
         assert!(deleted.is_none());
 
-        // LIST should be empty
+        // Verify our swap is no longer in the list
         let ids = SwapStorage::list(&storage).await.unwrap();
-        assert!(ids.is_empty());
+        assert!(
+            !ids.contains(&swap_id),
+            "Deleted swap should not be in the list"
+        );
     }
 
     // =========================================================================
@@ -2216,8 +2268,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_evm_to_btc_swap_crud() {
-        let storage = SqliteStorage::in_memory().unwrap();
-        let (data, swap_id) = create_test_evm_to_btc_swap("22222222-2222-2222-2222-222222222222");
+        let storage = create_test_storage();
+        let (data, swap_id) = create_test_evm_to_btc_swap();
 
         // CREATE
         SwapStorage::store(&storage, &swap_id, &data).await.unwrap();
@@ -2268,9 +2320,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_btc_to_arkade_swap_crud() {
-        let storage = SqliteStorage::in_memory().unwrap();
-        let (data, swap_id) =
-            create_test_btc_to_arkade_swap("33333333-3333-3333-3333-333333333333");
+        let storage = create_test_storage();
+        let (data, swap_id) = create_test_btc_to_arkade_swap();
 
         // CREATE
         SwapStorage::store(&storage, &swap_id, &data).await.unwrap();
@@ -2321,12 +2372,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_swap_storage_multiple_swaps_get_all() {
-        let storage = SqliteStorage::in_memory().unwrap();
+        let storage = create_test_storage();
 
-        let (btc_to_evm, id1) = create_test_btc_to_evm_swap("11111111-1111-1111-1111-111111111111");
-        let (evm_to_btc, id2) = create_test_evm_to_btc_swap("22222222-2222-2222-2222-222222222222");
-        let (btc_to_arkade, id3) =
-            create_test_btc_to_arkade_swap("33333333-3333-3333-3333-333333333333");
+        let (btc_to_evm, id1) = create_test_btc_to_evm_swap();
+        let (evm_to_btc, id2) = create_test_evm_to_btc_swap();
+        let (btc_to_arkade, id3) = create_test_btc_to_arkade_swap();
 
         // Store all
         SwapStorage::store(&storage, &id1, &btc_to_evm)
@@ -2339,42 +2389,56 @@ mod tests {
             .await
             .unwrap();
 
-        // Verify list
+        // Verify list contains our new swaps
         let ids = SwapStorage::list(&storage).await.unwrap();
-        assert_eq!(ids.len(), 3);
+        assert!(ids.contains(&id1), "List should contain BtcToEvm swap");
+        assert!(ids.contains(&id2), "List should contain EvmToBtc swap");
+        assert!(ids.contains(&id3), "List should contain BtcToArkade swap");
 
-        // Verify get_all returns all swaps
+        // Verify get_all returns our swaps
         let all_swaps = SwapStorage::get_all(&storage).await.unwrap();
-        assert_eq!(all_swaps.len(), 3);
 
-        // Verify each type is present
-        let mut has_btc_to_evm = false;
-        let mut has_evm_to_btc = false;
-        let mut has_btc_to_arkade = false;
+        // Helper to find swap by ID
+        let find_swap = |id: &str| -> bool {
+            all_swaps.iter().any(|s| match &s.response {
+                GetSwapResponse::BtcToEvm(r) => r.common.id.to_string() == id,
+                GetSwapResponse::EvmToBtc(r) => r.common.id.to_string() == id,
+                GetSwapResponse::BtcToArkade(r) => r.id.to_string() == id,
+                GetSwapResponse::OnchainToEvm(r) => r.id.to_string() == id,
+            })
+        };
 
-        for swap in &all_swaps {
-            match &swap.response {
-                GetSwapResponse::BtcToEvm(_) => has_btc_to_evm = true,
-                GetSwapResponse::EvmToBtc(_) => has_evm_to_btc = true,
-                GetSwapResponse::BtcToArkade(_) => has_btc_to_arkade = true,
-                GetSwapResponse::OnchainToEvm(_) => {}
-            }
-        }
+        assert!(find_swap(&id1), "get_all should contain BtcToEvm swap");
+        assert!(find_swap(&id2), "get_all should contain EvmToBtc swap");
+        assert!(find_swap(&id3), "get_all should contain BtcToArkade swap");
 
-        assert!(has_btc_to_evm, "Missing BtcToEvm swap");
-        assert!(has_evm_to_btc, "Missing EvmToBtc swap");
-        assert!(has_btc_to_arkade, "Missing BtcToArkade swap");
-
-        // Delete one and verify
+        // Delete one and verify it's no longer in get_all
         SwapStorage::delete(&storage, &id1).await.unwrap();
         let all_swaps = SwapStorage::get_all(&storage).await.unwrap();
-        assert_eq!(all_swaps.len(), 2);
+        let find_swap_after_delete = |id: &str| -> bool {
+            all_swaps.iter().any(|s| match &s.response {
+                GetSwapResponse::BtcToEvm(r) => r.common.id.to_string() == id,
+                GetSwapResponse::EvmToBtc(r) => r.common.id.to_string() == id,
+                GetSwapResponse::BtcToArkade(r) => r.id.to_string() == id,
+                GetSwapResponse::OnchainToEvm(r) => r.id.to_string() == id,
+            })
+        };
+        assert!(
+            !find_swap_after_delete(&id1),
+            "Deleted swap should not be in get_all"
+        );
+        assert!(
+            find_swap_after_delete(&id2),
+            "EvmToBtc swap should still exist"
+        );
+        assert!(
+            find_swap_after_delete(&id3),
+            "BtcToArkade swap should still exist"
+        );
 
-        // Delete remaining
+        // Cleanup remaining test swaps
         SwapStorage::delete(&storage, &id2).await.unwrap();
         SwapStorage::delete(&storage, &id3).await.unwrap();
-        let all_swaps = SwapStorage::get_all(&storage).await.unwrap();
-        assert!(all_swaps.is_empty());
     }
 
     // =========================================================================
@@ -2383,8 +2447,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_vtxo_swap_crud() {
-        let storage = SqliteStorage::in_memory().unwrap();
-        let (data, swap_id) = create_test_vtxo_swap("44444444-4444-4444-4444-444444444444");
+        let storage = create_test_storage();
+        let (data, swap_id) = create_test_vtxo_swap();
 
         // CREATE
         VtxoSwapStorage::store(&storage, &swap_id, &data)
@@ -2400,10 +2464,9 @@ mod tests {
         assert_eq!(retrieved.response.server_fund_amount_sats, 49500);
         assert_eq!(retrieved.response.status, VtxoSwapStatus::Pending);
 
-        // LIST
+        // LIST - verify our swap is in the list
         let ids = VtxoSwapStorage::list(&storage).await.unwrap();
-        assert_eq!(ids.len(), 1);
-        assert!(ids.contains(&swap_id));
+        assert!(ids.contains(&swap_id), "Swap should be in the list");
 
         // UPDATE
         let mut updated_data = data.clone();
@@ -2426,10 +2489,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_vtxo_swap_get_all() {
-        let storage = SqliteStorage::in_memory().unwrap();
+        let storage = create_test_storage();
 
-        let (data1, id1) = create_test_vtxo_swap("44444444-4444-4444-4444-444444444444");
-        let (data2, id2) = create_test_vtxo_swap("55555555-5555-5555-5555-555555555555");
+        // Get initial count
+        let initial_count = VtxoSwapStorage::get_all(&storage).await.unwrap().len();
+
+        let (data1, id1) = create_test_vtxo_swap();
+        let (data2, id2) = create_test_vtxo_swap();
 
         VtxoSwapStorage::store(&storage, &id1, &data1)
             .await
@@ -2439,14 +2505,20 @@ mod tests {
             .unwrap();
 
         let all_swaps = VtxoSwapStorage::get_all(&storage).await.unwrap();
-        assert_eq!(all_swaps.len(), 2);
+        assert_eq!(all_swaps.len(), initial_count + 2);
+
+        // Verify our swaps are in the list
+        let has_id1 = all_swaps.iter().any(|s| s.response.id.to_string() == id1);
+        let has_id2 = all_swaps.iter().any(|s| s.response.id.to_string() == id2);
+        assert!(has_id1, "Should contain first swap");
+        assert!(has_id2, "Should contain second swap");
 
         // Cleanup
         VtxoSwapStorage::delete(&storage, &id1).await.unwrap();
         VtxoSwapStorage::delete(&storage, &id2).await.unwrap();
 
         let all_swaps = VtxoSwapStorage::get_all(&storage).await.unwrap();
-        assert!(all_swaps.is_empty());
+        assert_eq!(all_swaps.len(), initial_count);
     }
 
     // =========================================================================
@@ -2455,14 +2527,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_nonexistent_swap() {
-        let storage = SqliteStorage::in_memory().unwrap();
+        let storage = create_test_storage();
         let result = SwapStorage::get(&storage, "nonexistent-id").await.unwrap();
         assert!(result.is_none());
     }
 
     #[tokio::test]
     async fn test_delete_nonexistent_swap() {
-        let storage = SqliteStorage::in_memory().unwrap();
+        let storage = create_test_storage();
         // Should not error when deleting non-existent swap
         SwapStorage::delete(&storage, "nonexistent-id")
             .await
@@ -2471,7 +2543,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_nonexistent_vtxo_swap() {
-        let storage = SqliteStorage::in_memory().unwrap();
+        let storage = create_test_storage();
         let result = VtxoSwapStorage::get(&storage, "nonexistent-id")
             .await
             .unwrap();
@@ -2480,8 +2552,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_swap_params_roundtrip() {
-        let storage = SqliteStorage::in_memory().unwrap();
-        let (data, swap_id) = create_test_btc_to_evm_swap("66666666-6666-6666-6666-666666666666");
+        let storage = create_test_storage();
+        let (data, swap_id) = create_test_btc_to_evm_swap();
 
         // Store
         SwapStorage::store(&storage, &swap_id, &data).await.unwrap();
