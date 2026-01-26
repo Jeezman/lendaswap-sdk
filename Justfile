@@ -41,6 +41,15 @@ db-revert-migration:
 db-status:
     sqlx migrate info --source ./core/migrations --database-url={{ DB_URL }}
 
+# Run SQLite tests with a file-based database (includes date and commit hash in filename)
+test-sqlite:
+    #!/usr/bin/env bash
+    DATE=$(date +%Y-%m-%d)
+    COMMIT=$(git rev-parse --short HEAD)
+    DB_FILE="./lendaswap-test_${DATE}_${COMMIT}.db"
+    echo "Running SQLite tests with database: $DB_FILE"
+    TEST_SQLITE_DB_PATH="$DB_FILE" cargo test -p lendaswap-core --features sqlite storage:: -- --test-threads=1
+
 # =============================================================================
 # WASM SDK (browser)
 # =============================================================================
