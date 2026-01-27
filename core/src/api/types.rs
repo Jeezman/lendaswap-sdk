@@ -45,6 +45,7 @@ pub enum Chain {
     Bitcoin,
     Polygon,
     Ethereum,
+    Arbitrum,
 }
 
 /// Token information.
@@ -449,6 +450,7 @@ pub enum GetSwapResponse {
 pub enum EvmChain {
     Ethereum,
     Polygon,
+    Arbitrum,
 }
 
 impl std::fmt::Display for EvmChain {
@@ -456,6 +458,7 @@ impl std::fmt::Display for EvmChain {
         match self {
             EvmChain::Ethereum => write!(f, "ethereum"),
             EvmChain::Polygon => write!(f, "polygon"),
+            EvmChain::Arbitrum => write!(f, "arbitrum"),
         }
     }
 }
@@ -467,8 +470,9 @@ impl std::str::FromStr for EvmChain {
         match s.to_lowercase().as_str() {
             "ethereum" => Ok(EvmChain::Ethereum),
             "polygon" => Ok(EvmChain::Polygon),
+            "arbitrum" => Ok(EvmChain::Arbitrum),
             _ => Err(format!(
-                "Unknown EVM chain: '{}'. Expected 'ethereum' or 'polygon'",
+                "Unknown EVM chain: '{}'. Expected 'ethereum', 'polygon', or 'arbitrum'",
                 s
             )),
         }

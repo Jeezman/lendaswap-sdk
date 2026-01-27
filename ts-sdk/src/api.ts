@@ -94,6 +94,9 @@ export type TokenIdString =
   | "xaut_eth"
   | "wbtc_pol"
   | "wbtc_eth"
+  | "usdc_arb"
+  | "usdt_arb"
+  | "wbtc_arb"
   | (string & {});
 
 /**
@@ -498,12 +501,12 @@ export class Client {
    * Create an Arkade to EVM swap (BTC → Token).
    *
    * @param request - The swap request parameters
-   * @param targetNetwork - Target EVM network (e.g., 'polygon', 'ethereum')
+   * @param targetNetwork - Target EVM network (e.g., 'polygon', 'ethereum', 'arbitrum')
    * @returns The created swap response
    */
   async createArkadeToEvmSwap(
     request: SwapRequest,
-    targetNetwork: "ethereum" | "polygon",
+    targetNetwork: "ethereum" | "polygon" | "arbitrum",
   ): Promise<BtcToEvmSwapResponse> {
     if (
       request.source_amount &&
@@ -527,12 +530,12 @@ export class Client {
    * Create a Lightning to EVM swap (BTC → Token).
    *
    * @param request - The swap request parameters
-   * @param targetNetwork - Target EVM network (e.g., 'polygon', 'ethereum')
+   * @param targetNetwork - Target EVM network (e.g., 'polygon', 'ethereum', 'arbitrum')
    * @returns The created swap response
    */
   async createLightningToEvmSwap(
     request: SwapRequest,
-    targetNetwork: "ethereum" | "polygon",
+    targetNetwork: "ethereum" | "polygon" | "arbitrum",
   ): Promise<BtcToEvmSwapResponse> {
     if (
       request.source_amount &&
@@ -556,12 +559,12 @@ export class Client {
    * Create an EVM to Arkade swap (Token → BTC).
    *
    * @param request - The swap request parameters
-   * @param sourceNetwork - Source EVM network (e.g., 'polygon', 'ethereum')
+   * @param sourceNetwork - Source EVM network (e.g., 'polygon', 'ethereum', 'arbitrum')
    * @returns The created swap response
    */
   async createEvmToArkadeSwap(
     request: EvmToArkadeSwapRequest,
-    sourceNetwork: "ethereum" | "polygon",
+    sourceNetwork: "ethereum" | "polygon" | "arbitrum",
   ): Promise<EvmToBtcSwapResponse> {
     return await this.wasmClient.createEvmToArkadeSwap(
       request.target_address,
@@ -577,12 +580,12 @@ export class Client {
    * Create an EVM to Lightning swap (Token → BTC).
    *
    * @param request - The swap request parameters
-   * @param sourceNetwork - Source EVM network (e.g., 'polygon', 'ethereum')
+   * @param sourceNetwork - Source EVM network (e.g., 'polygon', 'ethereum', 'arbitrum')
    * @returns The created swap response
    */
   async createEvmToLightningSwap(
     request: EvmToLightningSwapRequest,
-    sourceNetwork: "ethereum" | "polygon",
+    sourceNetwork: "ethereum" | "polygon" | "arbitrum",
   ): Promise<EvmToBtcSwapResponse> {
     return await this.wasmClient.createEvmToLightningSwap(
       request.bolt11_invoice,
@@ -838,7 +841,7 @@ export class Client {
    */
   async createOnchainToEvmSwap(
     request: OnchainToEvmSwapRequest,
-    targetNetwork: "ethereum" | "polygon",
+    targetNetwork: "ethereum" | "polygon" | "arbitrum",
   ): Promise<OnchainToEvmSwapResponse> {
     return await this.wasmClient.createOnchainToEvmSwap(
       request.target_address,

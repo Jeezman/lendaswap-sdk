@@ -19,6 +19,7 @@ pub enum Chain {
     Bitcoin,
     Polygon,
     Ethereum,
+    Arbitrum,
 }
 
 /// Bitcoin network type.
@@ -123,6 +124,7 @@ impl From<core_api::Chain> for Chain {
             core_api::Chain::Lightning => Chain::Lightning,
             core_api::Chain::Bitcoin => Chain::Bitcoin,
             core_api::Chain::Polygon => Chain::Polygon,
+            core_api::Chain::Arbitrum => Chain::Arbitrum,
             core_api::Chain::Ethereum => Chain::Ethereum,
         }
     }
