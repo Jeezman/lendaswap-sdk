@@ -9,10 +9,12 @@ import {
   type QuoteResponse,
   type TokenInfo,
 } from "./api/client.js";
+import { broadcastTransaction, findOutputByAddress } from "./esplora.js";
 import {
   type BitcoinNetwork,
   buildArkadeRefund,
   buildOnchainRefundTransaction,
+  verifyHtlcAddress,
 } from "./refund";
 import { bytesToHex, Signer, type SwapParams } from "./signer";
 import {
@@ -96,6 +98,10 @@ export interface RefundResult {
   fee?: bigint;
   /** Whether the transaction was broadcast to the network */
   broadcast?: boolean;
+  /** The HTLC address we computed locally (for debugging) */
+  htlcAddress?: string;
+  /** The HTLC address reported by the server (for debugging) */
+  serverHtlcAddress?: string;
 }
 
 /** Options for on-chain refund */
@@ -774,12 +780,58 @@ export class Client {
     const userPubKey =
       fullPubKey.length === 66 ? fullPubKey.slice(2) : fullPubKey;
 
+    // Verify that our computed HTLC address matches the server's address
+    const serverHtlcAddress = onchainSwap.btc_htlc_address;
+    const addressMatches = verifyHtlcAddress(
+      serverHtlcAddress,
+      onchainSwap.btc_hash_lock,
+      onchainSwap.btc_server_pk,
+      userPubKey,
+      onchainSwap.btc_refund_locktime,
+      network,
+    );
+
+    if (!addressMatches) {
+      return {
+        success: false,
+        message:
+          `HTLC address mismatch. The computed address does not match the server's address (${serverHtlcAddress}). ` +
+          `This could indicate different script construction. ` +
+          `Parameters: hashLock=${onchainSwap.btc_hash_lock}, serverPk=${onchainSwap.btc_server_pk}, ` +
+          `userPk=${userPubKey}, locktime=${onchainSwap.btc_refund_locktime}, network=${network}`,
+      };
+    }
+
+    // Find the correct vout by looking up the funding transaction
+    const esploraUrl = this.#config.esploraUrl ?? DEFAULT_ESPLORA_URLS[network];
+    if (!esploraUrl) {
+      return {
+        success: false,
+        message: `No Esplora URL configured for network ${network}. Cannot look up funding transaction.`,
+      };
+    }
+
+    const htlcOutput = await findOutputByAddress(
+      esploraUrl,
+      onchainSwap.btc_fund_txid,
+      serverHtlcAddress,
+    );
+
+    if (!htlcOutput) {
+      return {
+        success: false,
+        message:
+          `Could not find HTLC output in funding transaction ${onchainSwap.btc_fund_txid}. ` +
+          `Expected address: ${serverHtlcAddress}`,
+      };
+    }
+
     try {
       // Build the refund transaction
       const result = buildOnchainRefundTransaction({
         fundingTxId: onchainSwap.btc_fund_txid,
-        fundingVout: 0, // Assuming output index 0
-        htlcAmount: BigInt(onchainSwap.source_amount),
+        fundingVout: htlcOutput.vout,
+        htlcAmount: htlcOutput.amount,
         hashLock: onchainSwap.btc_hash_lock,
         serverPubKey: onchainSwap.btc_server_pk,
         userPubKey,
@@ -801,6 +853,8 @@ export class Client {
           refundAmount: result.refundAmount,
           fee: result.fee,
           broadcast: false,
+          htlcAddress: result.htlcAddress,
+          serverHtlcAddress,
         };
       }
 
@@ -818,11 +872,13 @@ export class Client {
           refundAmount: result.refundAmount,
           fee: result.fee,
           broadcast: false,
+          htlcAddress: result.htlcAddress,
+          serverHtlcAddress,
         };
       }
 
       try {
-        await this.#broadcastTransaction(esploraUrl, result.txHex);
+        await broadcastTransaction(esploraUrl, result.txHex);
         return {
           success: true,
           message: "Refund transaction broadcast successfully!",
@@ -831,6 +887,8 @@ export class Client {
           refundAmount: result.refundAmount,
           fee: result.fee,
           broadcast: true,
+          htlcAddress: result.htlcAddress,
+          serverHtlcAddress,
         };
       } catch (broadcastError) {
         const broadcastMessage =
@@ -847,6 +905,8 @@ export class Client {
           refundAmount: result.refundAmount,
           fee: result.fee,
           broadcast: false,
+          htlcAddress: result.htlcAddress,
+          serverHtlcAddress,
         };
       }
     } catch (error) {
@@ -965,31 +1025,6 @@ export class Client {
         message: `Failed to execute Arkade refund: ${message}`,
       };
     }
-  }
-
-  /**
-   * Broadcasts a raw transaction to the Bitcoin network via Esplora API.
-   * @internal
-   */
-  async #broadcastTransaction(
-    esploraUrl: string,
-    txHex: string,
-  ): Promise<string> {
-    const response = await fetch(`${esploraUrl}/tx`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "text/plain",
-      },
-      body: txHex,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Broadcast failed: ${response.status} - ${errorText}`);
-    }
-
-    // Esplora returns the txid on success
-    return response.text();
   }
 
   // =========================================================================

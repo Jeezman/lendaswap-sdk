@@ -116,7 +116,10 @@ pub fn build_htlc_scripts(
 
 /// Generate Taproot address from HTLC scripts.
 pub fn htlc_to_taproot_address(htlc: &HtlcScripts, network: Network) -> Address {
-    Address::p2tr_tweaked(htlc.spend_info.output_key(), network)
+    let key = htlc.spend_info.output_key();
+    let script = hex::encode(key.serialize());
+    dbg!(script);
+    Address::p2tr_tweaked(key, network)
 }
 
 /// Build a refund transaction to spend the HTLC after locktime expires.
@@ -247,7 +250,7 @@ mod tests {
     }
 
     #[test]
-    fn test_htlc_scripts_generation() {
+    fn onchain_htlc() {
         let secret = [42u8; 32];
         let hash_lock = compute_hash_lock(&secret);
 
@@ -266,8 +269,11 @@ mod tests {
 
         // Should be able to create Taproot address.
         let address = htlc_to_taproot_address(&htlc, Network::Regtest);
-        // Taproot addresses start with bcrt1p on regtest.
-        assert!(address.to_string().starts_with("bcrt1p"));
+        let address = address.to_string();
+        assert_eq!(
+            "bcrt1p9y8e33fmv06c9wr4rpcfkccpsankaqcu2kjkzlekjfv6lsmfhaqqplksqr",
+            &dbg!(address)
+        );
     }
 
     #[test]

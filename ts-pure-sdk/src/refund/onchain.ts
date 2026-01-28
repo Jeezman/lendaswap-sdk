@@ -55,6 +55,8 @@ export interface OnchainRefundResult {
   refundAmount: bigint;
   /** Fee paid in satoshis */
   fee: bigint;
+  /** The HTLC address that funds are being refunded from */
+  htlcAddress: string;
 }
 
 /**
@@ -67,9 +69,23 @@ const NUMS_POINT = hex.decode(
 );
 
 /**
+ * Regtest network configuration.
+ * btc-signer only provides NETWORK (mainnet) and TEST_NETWORK (testnet/signet),
+ * but regtest uses a different bech32 prefix ('bcrt' instead of 'tb').
+ */
+const REGTEST_NETWORK = {
+  bech32: "bcrt",
+  pubKeyHash: 0x6f,
+  scriptHash: 0xc4,
+  wif: 0xef,
+} as const;
+
+/**
  * Get the btc-signer network configuration.
  */
-function getNetwork(network: BitcoinNetwork): typeof btc.NETWORK {
+function getNetwork(
+  network: BitcoinNetwork,
+): typeof btc.NETWORK | typeof REGTEST_NETWORK {
   switch (network) {
     case "mainnet":
       return btc.NETWORK;
@@ -77,9 +93,7 @@ function getNetwork(network: BitcoinNetwork): typeof btc.NETWORK {
     case "signet":
       return btc.TEST_NETWORK;
     case "regtest":
-      // regtest uses same params as testnet but different bech32 prefix
-      // btc-signer handles this internally
-      return btc.TEST_NETWORK;
+      return REGTEST_NETWORK;
     default:
       throw new Error(`Unknown network: ${network}`);
   }
@@ -301,11 +315,18 @@ export function buildOnchainRefundTransaction(
   const txHex = hex.encode(tx.extract());
   const txId = tx.id;
 
+  // Compute the HTLC address
+  const htlcAddress = btc.Address(networkConfig).encode({
+    type: "tr",
+    pubkey: p2tr.tweakedPubkey,
+  });
+
   return {
     txHex,
     txId,
     refundAmount,
     fee,
+    htlcAddress,
   };
 }
 
