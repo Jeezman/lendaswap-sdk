@@ -42,6 +42,7 @@ export type BitcoinToArbitrumSwapRequest =
   components["schemas"]["BitcoinToArbitrumSwapRequest"];
 
 export type ClaimGelatoRequest = components["schemas"]["ClaimGelatoRequest"];
+export type ClaimGelatoResponse = components["schemas"]["ClaimGelatoResponse"];
 
 export interface ApiClientOptions {
   baseUrl: string;

@@ -8,6 +8,7 @@ interface Config {
   apiUrl: string;
   mnemonic?: string;
   apiKey?: string;
+  dbPath?: string;
 }
 
 export async function showInfo(client: Client, config: Config): Promise<void> {
@@ -51,6 +52,12 @@ export async function showInfo(client: Client, config: Config): Promise<void> {
     console.log(`  Status:      Error - ${message}`);
   }
 
+  console.log("");
+
+  // Storage info
+  console.log("Storage:");
+  console.log("-".repeat(40));
+  console.log(`  Database:    ${config.dbPath || "(in-memory)"}`);
   console.log("");
   console.log("=".repeat(60));
 }

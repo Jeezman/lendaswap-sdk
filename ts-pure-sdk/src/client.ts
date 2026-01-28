@@ -1,13 +1,79 @@
 import {
   type ApiClient,
   type AssetPair,
+  type BtcToEvmSwapResponse,
+  type ClaimGelatoResponse,
   createApiClient,
   type GetSwapResponse,
+  type OnchainToEvmSwapResponse,
   type QuoteResponse,
   type TokenInfo,
 } from "./api/client.js";
-import { Signer, type SwapParams } from "./signer";
-import type { WalletStorage } from "./storage";
+import { bytesToHex, Signer, type SwapParams } from "./signer";
+import {
+  type StoredSwap,
+  SWAP_STORAGE_VERSION,
+  type SwapStorage,
+  type WalletStorage,
+} from "./storage";
+
+/** Supported EVM chains for swaps */
+export type EvmChain = "polygon" | "arbitrum" | "ethereum";
+
+/** Options for creating an Arkade or Lightning to EVM swap */
+export interface BtcToEvmSwapOptions {
+  /** Target EVM address to receive tokens */
+  targetAddress: string;
+  /** Target token ID (e.g., "usdc_pol", "usdt_arb") */
+  targetToken: string;
+  /** Target EVM chain */
+  targetChain: EvmChain;
+  /** Amount in satoshis to send (optional if targetAmount is set) */
+  sourceAmount?: number;
+  /** Amount of target token to receive (optional if sourceAmount is set) */
+  targetAmount?: number;
+  /** Optional referral code for fee exemption */
+  referralCode?: string;
+}
+
+/** Options for creating a Bitcoin (on-chain) to EVM swap */
+export interface BitcoinToEvmSwapOptions {
+  /** Target EVM address to receive tokens */
+  targetAddress: string;
+  /** Target token ID (e.g., "usdc_pol", "usdt_arb") */
+  targetToken: string;
+  /** Target EVM chain */
+  targetChain: EvmChain;
+  /** Amount in satoshis to send */
+  sourceAmount: number;
+  /** Optional referral code for fee exemption */
+  referralCode?: string;
+}
+
+/** Result of creating a BTC to EVM swap */
+export interface BtcToEvmSwapResult {
+  /** The swap response from the API */
+  response: BtcToEvmSwapResponse;
+  /** The swap parameters used (for storage/recovery) */
+  swapParams: SwapParams;
+}
+
+/**
+ * Union type for Bitcoin on-chain swap responses.
+ * Note: The API returns different types for different chains due to spec inconsistency.
+ * All chains actually return OnchainToEvmSwapResponse in practice.
+ */
+export type BitcoinToEvmSwapResponse =
+  | BtcToEvmSwapResponse
+  | OnchainToEvmSwapResponse;
+
+/** Result of creating a Bitcoin (on-chain) to EVM swap */
+export interface BitcoinToEvmSwapResult {
+  /** The swap response from the API */
+  response: BitcoinToEvmSwapResponse;
+  /** The swap parameters used (for storage/recovery) */
+  swapParams: SwapParams;
+}
 
 const DEFAULT_BASE_URL = "https://apilendaswap.lendasat.com/";
 
@@ -45,6 +111,7 @@ export class ClientBuilder {
   #baseUrl: string = DEFAULT_BASE_URL;
   #apiKey?: string;
   #signerStorage?: WalletStorage;
+  #swapStorage?: SwapStorage;
   #mnemonic?: string;
 
   /**
@@ -74,6 +141,19 @@ export class ClientBuilder {
    */
   withSignerStorage(storage: WalletStorage): this {
     this.#signerStorage = storage;
+    return this;
+  }
+
+  /**
+   * Sets the storage backend for swap data.
+   *
+   * When configured, swaps will be automatically persisted after creation.
+   *
+   * @param storage - The swap storage implementation to use.
+   * @returns The builder instance for chaining.
+   */
+  withSwapStorage(storage: SwapStorage): this {
+    this.#swapStorage = storage;
     return this;
   }
 
@@ -136,6 +216,7 @@ export class ClientBuilder {
       },
       signer,
       this.#signerStorage,
+      this.#swapStorage,
     );
   }
 }
@@ -169,6 +250,7 @@ export class Client {
   readonly #config: ClientConfig;
   readonly #signer: Signer;
   readonly #signerStorage?: WalletStorage;
+  readonly #swapStorage?: SwapStorage;
 
   /**
    * Creates a new Client instance.
@@ -181,6 +263,7 @@ export class Client {
     config: ClientConfig,
     signer: Signer,
     signerStorage?: WalletStorage,
+    swapStorage?: SwapStorage,
   ) {
     this.#config = config;
     this.#apiClient = createApiClient({
@@ -189,6 +272,7 @@ export class Client {
     });
     this.#signer = signer;
     this.#signerStorage = signerStorage;
+    this.#swapStorage = swapStorage;
   }
 
   /**
@@ -207,6 +291,11 @@ export class Client {
   /** The base URL of the API. */
   get baseUrl(): string {
     return this.#config.baseUrl;
+  }
+
+  /** The swap storage, if configured. */
+  get swapStorage(): SwapStorage | undefined {
+    return this.#swapStorage;
   }
 
   // =========================================================================
@@ -372,8 +461,8 @@ export class Client {
     const { data, error } = await this.#apiClient.GET("/quote", {
       params: {
         query: {
-          from: from as "btc_lightning",
-          to: to as "btc_lightning",
+          from: from,
+          to: to,
           base_amount: baseAmount,
         },
       },
@@ -408,5 +497,335 @@ export class Client {
       throw new Error("No swap data returned");
     }
     return data;
+  }
+
+  /**
+   * Claims a swap using Gelato Relay (gasless execution).
+   *
+   * This reveals the preimage to claim the EVM HTLC. The server will
+   * submit the transaction via Gelato for gasless execution.
+   *
+   * @param id - The UUID of the swap.
+   * @param secret - The preimage/secret (32-byte hex string, with or without 0x prefix).
+   * @returns A promise that resolves to the claim response with task ID and tx hash.
+   * @throws Error if the swap is not in the correct state or claim fails.
+   *
+   * @example
+   * ```ts
+   * const result = await client.claimGelato(swapId, storedSwap.preimage);
+   * console.log("Claim TX:", result.tx_hash);
+   * console.log("Gelato Task:", result.task_id);
+   * ```
+   */
+  async claimGelato(id: string, secret: string): Promise<ClaimGelatoResponse> {
+    const { data, error } = await this.#apiClient.POST(
+      "/swap/{id}/claim-gelato",
+      {
+        params: { path: { id } },
+        body: { secret },
+      },
+    );
+    if (error) {
+      throw new Error(`Failed to claim swap: ${JSON.stringify(error)}`);
+    }
+    if (!data) {
+      throw new Error("No claim response returned");
+    }
+    return data;
+  }
+
+  // =========================================================================
+  // Swap Creation - BTC to EVM
+  // =========================================================================
+
+  /**
+   * Stores a swap in the configured swap storage.
+   * @internal
+   */
+  async #storeSwap(
+    swapId: string,
+    swapParams: SwapParams,
+    response: GetSwapResponse,
+  ): Promise<void> {
+    if (!this.#swapStorage) return;
+
+    const storedSwap: StoredSwap = {
+      version: SWAP_STORAGE_VERSION,
+      swapId,
+      keyIndex: swapParams.keyIndex,
+      response,
+      publicKey: bytesToHex(swapParams.publicKey),
+      preimage: bytesToHex(swapParams.preimage),
+      preimageHash: bytesToHex(swapParams.preimageHash),
+      secretKey: bytesToHex(swapParams.secretKey),
+      storedAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    await this.#swapStorage.store(storedSwap);
+  }
+
+  /**
+   * Creates a new Arkade to EVM swap.
+   *
+   * Automatically derives swap parameters and increments the key index.
+   *
+   * @param options - The swap options.
+   * @returns The swap response and parameters for storage.
+   * @throws Error if the swap creation fails.
+   *
+   * @example
+   * ```ts
+   * const result = await client.createArkadeToEvmSwap({
+   *   targetAddress: "0x1234...",
+   *   targetToken: "usdc_pol",
+   *   targetChain: "polygon",
+   *   sourceAmount: 100000, // 100k sats
+   * });
+   * console.log("Fund this address:", result.response.htlc_address_arkade);
+   * ```
+   */
+  async createArkadeToEvmSwap(
+    options: BtcToEvmSwapOptions,
+  ): Promise<BtcToEvmSwapResult> {
+    const swapParams = await this.deriveSwapParams();
+    const hashLock = `0x${bytesToHex(swapParams.preimageHash)}`;
+    const refundPk = bytesToHex(swapParams.publicKey);
+    const userId = bytesToHex(swapParams.userId);
+
+    const body = {
+      hash_lock: hashLock,
+      refund_pk: refundPk,
+      user_id: userId,
+      target_address: options.targetAddress,
+      target_token: options.targetToken,
+      source_amount: options.sourceAmount,
+      target_amount: options.targetAmount,
+      referral_code: options.referralCode,
+    };
+
+    let response: BtcToEvmSwapResponse;
+
+    switch (options.targetChain) {
+      case "polygon": {
+        const { data, error } = await this.#apiClient.POST(
+          "/swap/arkade/polygon",
+          { body },
+        );
+        if (error)
+          throw new Error(`Failed to create swap: ${JSON.stringify(error)}`);
+        if (!data) throw new Error("No swap data returned");
+        response = data;
+        break;
+      }
+      case "arbitrum": {
+        const { data, error } = await this.#apiClient.POST(
+          "/swap/arkade/arbitrum",
+          { body },
+        );
+        if (error)
+          throw new Error(`Failed to create swap: ${JSON.stringify(error)}`);
+        if (!data) throw new Error("No swap data returned");
+        response = data;
+        break;
+      }
+      case "ethereum": {
+        const { data, error } = await this.#apiClient.POST(
+          "/swap/arkade/ethereum",
+          { body },
+        );
+        if (error)
+          throw new Error(`Failed to create swap: ${JSON.stringify(error)}`);
+        if (!data) throw new Error("No swap data returned");
+        response = data;
+        break;
+      }
+      default:
+        throw new Error(`Unsupported target chain: ${options.targetChain}`);
+    }
+
+    // Store the swap if storage is configured
+    await this.#storeSwap(response.id, swapParams, {
+      ...response,
+      direction: "btc_to_evm",
+    });
+
+    return { response, swapParams };
+  }
+
+  /**
+   * Creates a new Lightning to EVM swap.
+   *
+   * Automatically derives swap parameters and increments the key index.
+   *
+   * @param options - The swap options.
+   * @returns The swap response and parameters for storage.
+   * @throws Error if the swap creation fails.
+   *
+   * @example
+   * ```ts
+   * const result = await client.createLightningToEvmSwap({
+   *   targetAddress: "0x1234...",
+   *   targetToken: "usdc_pol",
+   *   targetChain: "polygon",
+   *   sourceAmount: 100000, // 100k sats
+   * });
+   * console.log("Pay this invoice:", result.response.ln_invoice);
+   * ```
+   */
+  async createLightningToEvmSwap(
+    options: BtcToEvmSwapOptions,
+  ): Promise<BtcToEvmSwapResult> {
+    const swapParams = await this.deriveSwapParams();
+    const hashLock = `0x${bytesToHex(swapParams.preimageHash)}`;
+    const refundPk = bytesToHex(swapParams.publicKey);
+    const userId = bytesToHex(swapParams.userId);
+
+    const body = {
+      hash_lock: hashLock,
+      refund_pk: refundPk,
+      user_id: userId,
+      target_address: options.targetAddress,
+      target_token: options.targetToken,
+      source_amount: options.sourceAmount,
+      target_amount: options.targetAmount,
+      referral_code: options.referralCode,
+    };
+
+    let response: BtcToEvmSwapResponse;
+
+    switch (options.targetChain) {
+      case "polygon": {
+        const { data, error } = await this.#apiClient.POST(
+          "/swap/lightning/polygon",
+          { body },
+        );
+        if (error)
+          throw new Error(`Failed to create swap: ${JSON.stringify(error)}`);
+        if (!data) throw new Error("No swap data returned");
+        response = data;
+        break;
+      }
+      case "arbitrum": {
+        const { data, error } = await this.#apiClient.POST(
+          "/swap/lightning/arbitrum",
+          { body },
+        );
+        if (error)
+          throw new Error(`Failed to create swap: ${JSON.stringify(error)}`);
+        if (!data) throw new Error("No swap data returned");
+        response = data;
+        break;
+      }
+      case "ethereum": {
+        const { data, error } = await this.#apiClient.POST(
+          "/swap/lightning/ethereum",
+          { body },
+        );
+        if (error)
+          throw new Error(`Failed to create swap: ${JSON.stringify(error)}`);
+        if (!data) throw new Error("No swap data returned");
+        response = data;
+        break;
+      }
+      default:
+        throw new Error(`Unsupported target chain: ${options.targetChain}`);
+    }
+
+    // Store the swap if storage is configured
+    await this.#storeSwap(response.id, swapParams, {
+      ...response,
+      direction: "btc_to_evm",
+    });
+
+    return { response, swapParams };
+  }
+
+  /**
+   * Creates a new Bitcoin (on-chain) to EVM swap.
+   *
+   * Automatically derives swap parameters and increments the key index.
+   *
+   * @param options - The swap options.
+   * @returns The swap response and parameters for storage.
+   * @throws Error if the swap creation fails.
+   *
+   * @example
+   * ```ts
+   * const result = await client.createBitcoinToEvmSwap({
+   *   targetAddress: "0x1234...",
+   *   targetToken: "usdc_pol",
+   *   targetChain: "polygon",
+   *   sourceAmount: 100000, // 100k sats
+   * });
+   * console.log("Send BTC to:", result.response.btc_htlc_address);
+   * ```
+   */
+  async createBitcoinToEvmSwap(
+    options: BitcoinToEvmSwapOptions,
+  ): Promise<BitcoinToEvmSwapResult> {
+    const swapParams = await this.deriveSwapParams();
+    const hashLock = `0x${bytesToHex(swapParams.preimageHash)}`;
+    const refundPk = bytesToHex(swapParams.publicKey);
+    const userId = bytesToHex(swapParams.userId);
+
+    const body = {
+      hash_lock: hashLock,
+      refund_pk: refundPk,
+      user_id: userId,
+      target_address: options.targetAddress,
+      target_token: options.targetToken,
+      source_amount: options.sourceAmount,
+      referral_code: options.referralCode,
+    };
+
+    let response: BitcoinToEvmSwapResponse;
+
+    switch (options.targetChain) {
+      case "polygon": {
+        const { data, error } = await this.#apiClient.POST(
+          "/swap/bitcoin/polygon",
+          { body },
+        );
+        if (error)
+          throw new Error(`Failed to create swap: ${JSON.stringify(error)}`);
+        if (!data) throw new Error("No swap data returned");
+        response = data;
+        break;
+      }
+      case "arbitrum": {
+        const { data, error } = await this.#apiClient.POST(
+          "/swap/bitcoin/arbitrum",
+          { body },
+        );
+        if (error)
+          throw new Error(`Failed to create swap: ${JSON.stringify(error)}`);
+        if (!data) throw new Error("No swap data returned");
+        response = data;
+        break;
+      }
+      case "ethereum": {
+        const { data, error } = await this.#apiClient.POST(
+          "/swap/bitcoin/ethereum",
+          { body },
+        );
+        if (error)
+          throw new Error(`Failed to create swap: ${JSON.stringify(error)}`);
+        if (!data) throw new Error("No swap data returned");
+        response = data;
+        break;
+      }
+      default:
+        throw new Error(`Unsupported target chain: ${options.targetChain}`);
+    }
+
+    // Store the swap if storage is configured
+    // Use onchain_to_evm direction for Bitcoin on-chain swaps
+    await this.#storeSwap(response.id, swapParams, {
+      ...response,
+      direction: "onchain_to_evm",
+    } as GetSwapResponse);
+
+    return { response, swapParams };
   }
 }

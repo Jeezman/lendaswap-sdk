@@ -15,6 +15,7 @@ export type {
   BtcToArkadeSwapResponse,
   BtcToEvmSwapResponse,
   ClaimGelatoRequest,
+  ClaimGelatoResponse,
   components,
   EvmToBtcSwapResponse,
   GetSwapResponse,
@@ -31,7 +32,15 @@ export type {
 } from "./api/client.js";
 // API client
 export { createApiClient } from "./api/client.js";
-export type { ClientConfig } from "./client.js";
+export type {
+  BitcoinToEvmSwapOptions,
+  BitcoinToEvmSwapResponse,
+  BitcoinToEvmSwapResult,
+  BtcToEvmSwapOptions,
+  BtcToEvmSwapResult,
+  ClientConfig,
+  EvmChain,
+} from "./client.js";
 // Main client
 export { Client, ClientBuilder } from "./client.js";
 export type { SwapParams } from "./signer/index.js";
