@@ -1,0 +1,57 @@
+{
+  "name": "@lendasat/lendaswap-sdk-pure",
+  "version": "0.0.1",
+  "description": "Lendaswap Client SDK - Pure TypeScript, React Native compatible",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "generate:api": "openapi-typescript openapi.json -o src/generated/api.ts",
+    "build": "tsc",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@noble/hashes": "^1.7.1",
+    "@scure/bip32": "^1.6.2",
+    "@scure/bip39": "^1.5.4",
+    "openapi-fetch": "^0.15.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.3.7",
+    "@types/node": "^22.0.0",
+    "openapi-typescript": "^7.10.1",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "keywords": [
+    "lendaswap",
+    "bitcoin",
+    "swap",
+    "ark",
+    "arkade",
+    "react-native"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lendasat/lendaswap-sdk.git",
+    "directory": "client-sdk/ts-pure-sdk"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

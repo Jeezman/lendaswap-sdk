@@ -1,0 +1,2996 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Lendaswap API",
+    "description": "Seamlessly swap between BTC and Stables on Ethereum/Polygon/etc",
+    "license": { "name": "" },
+    "version": "0.1.71"
+  },
+  "paths": {
+    "/api/vtxo-swap": {
+      "post": {
+        "tags": ["vtxo-swap"],
+        "summary": "Create a new VTXO swap",
+        "operationId": "create_vtxo_swap",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateVtxoSwapRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Swap created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/VtxoSwapResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/vtxo-swap/estimate": {
+      "post": {
+        "tags": ["vtxo-swap"],
+        "summary": "Estimate fee for VTXO swap",
+        "operationId": "estimate_vtxo_swap",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EstimateVtxoSwapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Estimate calculated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EstimateVtxoSwapResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/vtxo-swap/{id}": {
+      "get": {
+        "tags": ["vtxo-swap"],
+        "summary": "Get VTXO swap by ID",
+        "operationId": "get_vtxo_swap",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Swap ID",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Swap found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/VtxoSwapResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "Swap not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/asset-pairs": {
+      "get": {
+        "tags": ["asset-pairs"],
+        "summary": "Get list of supported asset pair combinations for swaps",
+        "operationId": "get_asset_pairs",
+        "responses": {
+          "200": {
+            "description": "Return list of supported asset pair combinations for swaps",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/AssetPair" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": ["health"],
+        "summary": "Health check endpoint",
+        "operationId": "health_check",
+        "responses": {
+          "200": {
+            "description": "Service is healthy",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/quote": {
+      "get": {
+        "tags": ["quote"],
+        "summary": "Get a quote for swapping BTC to/from fiat tokens",
+        "description": "The base_amount is always in satoshis and represents the BTC amount being bought or sold",
+        "operationId": "get_quote",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Token to swap from (e.g., \"btc_arkade\", \"usdc_pol\", \"usdc_eth\")",
+            "required": true,
+            "schema": { "$ref": "#/components/schemas/TokenId" }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Token to swap to (e.g., \"usdc_pol\", \"btc_arkade\", \"usdc_eth\")",
+            "required": true,
+            "schema": { "$ref": "#/components/schemas/TokenId" }
+          },
+          {
+            "name": "base_amount",
+            "in": "query",
+            "description": "This is always the BTC amount to be either sold or received (in satoshis)",
+            "required": true,
+            "schema": { "type": "integer", "format": "int64", "minimum": 0 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Return a quote for swapping BTC to/from fiat tokens",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/QuoteResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/swap/arbitrum/arkade": {
+      "post": {
+        "tags": ["swap-arbitrum-arkade"],
+        "summary": "Create a new Arbitrum to Arkade swap request",
+        "operationId": "create_arbitrum_arkade_swap",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArbitrumToArkadeSwapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Swap created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvmToBtcSwapResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/swap/arbitrum/lightning": {
+      "post": {
+        "tags": ["swap-arbitrum-lightning"],
+        "summary": "Create a new Arbitrum to Lightning swap request",
+        "operationId": "arbitrum_to_lightning_swap",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArbitrumToLightningSwapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Swap created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvmToBtcSwapResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/swap/arkade/arbitrum": {
+      "post": {
+        "tags": ["swap-arkade-arbitrum"],
+        "summary": "Create a new BTC to Arbitrum swap request",
+        "operationId": "create_arkade_arbitrum_swap",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArkadeToArbitrumSwapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Swap created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BtcToEvmSwapResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/swap/arkade/ethereum": {
+      "post": {
+        "tags": ["swap-arkade-ethereum"],
+        "summary": "Create a new BTC to Ethereum swap request",
+        "operationId": "arkade_to_ethereum_swap",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArkadeToEthereumSwapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Swap created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BtcToEvmSwapResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/swap/arkade/polygon": {
+      "post": {
+        "tags": ["swap-arkade-polygon"],
+        "summary": "Create a new BTC to Polygon swap request",
+        "operationId": "create_arkade_polygon_swap",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArkadeToPolygonSwapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Swap created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BtcToEvmSwapResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/swap/bitcoin/arbitrum": {
+      "post": {
+        "tags": ["swap-bitcoin-arbitrum"],
+        "summary": "Create a new Bitcoin to Arbitrum swap request",
+        "operationId": "create_bitcoin_to_arbitrum_swap",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BitcoinToArbitrumSwapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Swap created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnchainToEvmSwapResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/swap/bitcoin/arkade": {
+      "post": {
+        "tags": ["swap-bitcoin-arkade"],
+        "summary": "Create a new Bitcoin (on-chain) to Arkade swap request",
+        "description": "The user provides an on-chain BTC amount to swap and receives Arkade VTXOs.\nFlow:\n1. User sends BTC to the Taproot HTLC address returned\n2. After 1 confirmation, server creates Arkade VHTLC for user\n3. User claims Arkade VHTLC with secret, revealing it\n4. Server claims on-chain BTC with the revealed secret",
+        "operationId": "bitcoin_to_arkade_swap",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BitcoinToArkadeSwapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Swap created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BtcToArkadeSwapResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/swap/bitcoin/ethereum": {
+      "post": {
+        "tags": ["swap-bitcoin-ethereum"],
+        "summary": "Create a new Bitcoin to Ethereum swap request",
+        "operationId": "create_bitcoin_to_ethereum_swap",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BitcoinToEthereumSwapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Swap created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BtcToEvmSwapResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/swap/bitcoin/polygon": {
+      "post": {
+        "tags": ["swap-bitcoin-polygon"],
+        "summary": "Create a new Bitcoin to Polygon swap request",
+        "operationId": "create_bitcoin_to_polygon_swap",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BitcoinToPolygonSwapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Swap created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BtcToEvmSwapResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/swap/ethereum/arkade": {
+      "post": {
+        "tags": ["swap-ethereum-arkade"],
+        "summary": "Create a new Ethereum to Arkade swap request",
+        "operationId": "ethereum_to_arkade_swap",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EthereumToArkadeSwapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Swap created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvmToBtcSwapResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/swap/ethereum/lightning": {
+      "post": {
+        "tags": ["swap-ethereum-lightning"],
+        "summary": "Create a new Ethereum to Lightning swap request",
+        "operationId": "ethereum_to_lightning_swap",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EthereumToLightningSwapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Swap created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvmToBtcSwapResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/swap/lightning/arbitrum": {
+      "post": {
+        "tags": ["swap-lightning-arbitrum"],
+        "summary": "Create a new Lightning to Arbitrum swap request",
+        "operationId": "create_lightning_to_arbitrum_swap",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LightningToArbitrumSwapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Swap created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BtcToEvmSwapResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/swap/lightning/ethereum": {
+      "post": {
+        "tags": ["swap-lightning-ethereum"],
+        "summary": "Create a new Lightning to Ethereum swap request",
+        "operationId": "lightning_to_ethereum_swap",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LightningToEthereumSwapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Swap created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BtcToEvmSwapResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/swap/lightning/polygon": {
+      "post": {
+        "tags": ["swap-lightning-polygon"],
+        "summary": "Create a new Lightning to Polygon swap request",
+        "operationId": "create_lightning_to_polygon_swap",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LightningToPolygonSwapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Swap created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BtcToEvmSwapResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/swap/polygon/arkade": {
+      "post": {
+        "tags": ["swap-polygon-arkade"],
+        "summary": "Create a new Polygon to Arkade swap request",
+        "operationId": "create_evm_to_arkade_swap",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolygonToArkadeSwapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Swap created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvmToBtcSwapResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/swap/polygon/lightning": {
+      "post": {
+        "tags": ["swap-polygon-lightning"],
+        "summary": "Create a new Polygon to Lightning swap request",
+        "operationId": "polygon_to_lightning_swap",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolygonToLightningSwapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Swap created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvmToBtcSwapResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/swap/recover": {
+      "post": {
+        "tags": ["recovery"],
+        "summary": "Recover swaps by deriving user_id keys from an Xpub",
+        "description": "This endpoint allows clients to recover their swap history after importing a mnemonic. The\nclient provides an Xpub they used to derive `user_id`s, and the server derives `user_id` keys at\nm/9419/121923/<index> for indices 0-99 and searches for matching swaps.",
+        "operationId": "recover_swaps",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RecoveryRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Swaps recovered successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RecoveryResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid xpub format",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/swap/{id}": {
+      "get": {
+        "tags": ["swaps"],
+        "summary": "Get swap status and details by ID",
+        "operationId": "get_swap",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Swap ID",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Swap found successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GetSwapResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - swap not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/swap/{id}/claim-gelato": {
+      "post": {
+        "tags": ["gelato"],
+        "summary": "Claims a swap using Gelato Relay (gasless execution via Gelato 1Balance)",
+        "operationId": "claim_swap_via_gelato",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Swap ID",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ClaimGelatoRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Swap claimed successfully via Gelato",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ClaimGelatoResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - swap not found or in wrong state",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/swap/{id}/gelato-submit": {
+      "post": {
+        "tags": ["gelato"],
+        "summary": "Submit signed transactions to Gelato for gasless execution",
+        "operationId": "submit_to_gelato",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Swap ID",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/GelatoSubmitRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Transaction submitted to Gelato successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GelatoSubmitResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - swap not found or invalid request",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tokens": {
+      "get": {
+        "tags": ["tokens"],
+        "summary": "Get list of available tokens for swaps",
+        "operationId": "get_tokens",
+        "responses": {
+          "200": {
+            "description": "Return list of available tokens for swaps",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/TokenInfo" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/version": {
+      "get": {
+        "tags": ["version"],
+        "summary": "Return the current git tag and commit hash.",
+        "operationId": "get_version",
+        "responses": {
+          "200": {
+            "description": "Return the deployed version and commit hash",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Version" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ws/prices": {
+      "get": {
+        "tags": ["websocket"],
+        "summary": "WebSocket endpoint for real-time price updates",
+        "description": "Upgrades to a WebSocket connection that streams real-time tiered price updates for all trading pairs.\nThe server sends `PriceUpdateMessage` JSON objects at regular intervals.\n\n**This is a one-way data stream** - the server sends price updates to the client, and no client messages are expected.\n\nUpon connection, the client immediately receives the cached price (if available), followed by live updates.\n\nExample message from server:\n```json\n{\n  \"timestamp\": 1234567890,\n  \"pairs\": [\n    {\n      \"pair\": \"USDC_POL-BTC\",\n      \"tiers\": {\n        \"tier_1\": 96000.50,\n        \"tier_100\": 96500.75,\n        \"tier_1000\": 97000.25,\n        \"tier_5000\": 97500.00\n      }\n    }\n  ]\n}\n```",
+        "operationId": "price_websocket",
+        "responses": {
+          "101": {
+            "description": "Switching Protocols - WebSocket connection established successfully. The server will stream PriceUpdateMessage objects containing real-time price updates.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PriceUpdateMessage" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ArbitrumToArkadeSwapRequest": {
+        "type": "object",
+        "required": [
+          "target_address",
+          "source_amount",
+          "source_token",
+          "hash_lock",
+          "receiver_pk",
+          "user_address",
+          "user_id"
+        ],
+        "properties": {
+          "hash_lock": {
+            "type": "string",
+            "description": "Hash lock provided by the client (32-byte hex string with 0x prefix)\nThe client generates a secret and computes SHA256(secret) = hash_lock\nClient will use the secret to claim the Arbitrum HTLC later"
+          },
+          "receiver_pk": {
+            "type": "string",
+            "description": "Receiver public key used to generate the Arkade VHTLC"
+          },
+          "referral_code": {
+            "type": ["string", "null"],
+            "description": "Optional referral code for fee exemption"
+          },
+          "source_amount": {
+            "type": "number",
+            "format": "double",
+            "description": "Amount to send in the source token"
+          },
+          "source_token": {
+            "$ref": "#/components/schemas/TokenId",
+            "description": "Source token to send (e.g., \"usdc_arb\", \"usdt_arb\")"
+          },
+          "target_address": {
+            "type": "string",
+            "description": "Arkade address where the user wants to receive their bitcoin"
+          },
+          "user_address": {
+            "type": "string",
+            "description": "User's Arbitrum wallet address (for checking allowance and building transactions)"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User ID derived from wallet for recovery purposes"
+          }
+        }
+      },
+      "ArbitrumToLightningSwapRequest": {
+        "type": "object",
+        "required": [
+          "bolt11_invoice",
+          "source_token",
+          "user_address",
+          "user_id"
+        ],
+        "properties": {
+          "bolt11_invoice": {
+            "type": "string",
+            "description": "Lightning BOLT11 invoice to pay"
+          },
+          "referral_code": {
+            "type": ["string", "null"],
+            "description": "Optional referral code for fee exemption"
+          },
+          "source_token": {
+            "$ref": "#/components/schemas/TokenId",
+            "description": "Source token to send (e.g., \"usdc_arb\", \"usdt_arb\")"
+          },
+          "user_address": {
+            "type": "string",
+            "description": "User's Arbitrum wallet address (for checking allowance and building transactions)"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User ID derived from wallet for recovery purposes"
+          }
+        }
+      },
+      "ArkadeToArbitrumSwapRequest": {
+        "type": "object",
+        "required": [
+          "target_address",
+          "target_token",
+          "hash_lock",
+          "refund_pk",
+          "user_id"
+        ],
+        "properties": {
+          "hash_lock": {
+            "type": "string",
+            "description": "Hash lock provided by the client (32-byte hex string with 0x prefix)\nThe client generates a secret and computes SHA256(secret) = hash_lock\nClient will use the secret to claim the Arbitrum HTLC later"
+          },
+          "referral_code": {
+            "type": ["string", "null"],
+            "description": "Optional referral code for fee exemption"
+          },
+          "refund_pk": {
+            "type": "string",
+            "description": "Refund public key used to generate the Arkade VHTLC"
+          },
+          "source_amount": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "How much the user wants to send. Expressed in sats",
+            "minimum": 0
+          },
+          "target_address": {
+            "type": "string",
+            "description": "Target Arbitrum address to receive the tokens"
+          },
+          "target_amount": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "How much the user wants to receive of target token\nNote: if [`source_amount`] and [`target_amount`] is specified we will prioritize [`target_amount`]"
+          },
+          "target_token": {
+            "$ref": "#/components/schemas/TokenId",
+            "description": "Target token to receive (e.g., \"usdc_arb\", \"usdt_arb\")"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User ID derived from wallet for recovery purposes"
+          }
+        }
+      },
+      "ArkadeToEthereumSwapRequest": {
+        "type": "object",
+        "required": [
+          "target_address",
+          "target_token",
+          "hash_lock",
+          "refund_pk",
+          "user_id"
+        ],
+        "properties": {
+          "hash_lock": {
+            "type": "string",
+            "description": "Hash lock provided by the client (32-byte hex string with 0x prefix)\nThe client generates a secret and computes SHA256(secret) = hash_lock\nClient will use the secret to claim the Ethereum HTLC later"
+          },
+          "referral_code": {
+            "type": ["string", "null"],
+            "description": "Optional referral code for fee exemption"
+          },
+          "refund_pk": {
+            "type": "string",
+            "description": "Refund public key used to generate the Arkade VHTLC"
+          },
+          "source_amount": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "How much the user wants to send. Expressed in sats",
+            "minimum": 0
+          },
+          "target_address": {
+            "type": "string",
+            "description": "Target Ethereum address to receive the tokens"
+          },
+          "target_amount": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "How much the user wants to receive of target token\nNote: if [`source_amount`] and [`target_amount`] is specified we will prioritize [`target_amount`]\nNote2: this is always just approximately due to price fluctations"
+          },
+          "target_token": {
+            "$ref": "#/components/schemas/TokenId",
+            "description": "Target token to receive (e.g., \"usdc_eth\", \"usdt_eth\")"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User ID derived from wallet for recovery purposes"
+          }
+        }
+      },
+      "ArkadeToPolygonSwapRequest": {
+        "type": "object",
+        "required": [
+          "target_address",
+          "target_token",
+          "hash_lock",
+          "refund_pk",
+          "user_id"
+        ],
+        "properties": {
+          "hash_lock": {
+            "type": "string",
+            "description": "Hash lock provided by the client (32-byte hex string with 0x prefix)\nThe client generates a secret and computes SHA256(secret) = hash_lock\nClient will use the secret to claim the Polygon HTLC later"
+          },
+          "referral_code": {
+            "type": ["string", "null"],
+            "description": "Optional referral code for fee exemption"
+          },
+          "refund_pk": {
+            "type": "string",
+            "description": "Refund public key used to generate the Arkade VHTLC"
+          },
+          "source_amount": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "How much the user wants to send. Expressed in sats",
+            "minimum": 0
+          },
+          "target_address": {
+            "type": "string",
+            "description": "Target Polygon address to receive the tokens"
+          },
+          "target_amount": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "How much the user wants to receive of target token\nNote: if [`source_amount`] and [`target_amount`] is specified we will prioritize [`target_amount`]"
+          },
+          "target_token": {
+            "$ref": "#/components/schemas/TokenId",
+            "description": "Target token to receive (e.g., \"usdc_pol\", \"usdt0_pol\")"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User ID derived from wallet for recovery purposes"
+          }
+        }
+      },
+      "AssetPair": {
+        "type": "object",
+        "required": ["source", "target"],
+        "properties": {
+          "source": { "$ref": "#/components/schemas/TokenInfo" },
+          "target": { "$ref": "#/components/schemas/TokenInfo" }
+        }
+      },
+      "BitcoinToArbitrumSwapRequest": {
+        "type": "object",
+        "required": [
+          "target_address",
+          "source_amount",
+          "target_token",
+          "hash_lock",
+          "refund_pk",
+          "user_id"
+        ],
+        "properties": {
+          "hash_lock": {
+            "type": "string",
+            "description": "Hash lock provided by the client (32-byte hex string with 0x prefix)\nThe client generates a secret and computes SHA256(secret) = hash_lock\nClient will use the secret to claim the Arbitrum HTLC later"
+          },
+          "referral_code": {
+            "type": ["string", "null"],
+            "description": "Optional referral code for fee exemption"
+          },
+          "refund_pk": {
+            "type": "string",
+            "description": "Refund public key used to generate the Bitcoin HTLC"
+          },
+          "source_amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "How much the user wants to send. Expressed in sats",
+            "minimum": 0
+          },
+          "target_address": {
+            "type": "string",
+            "description": "Target Arbitrum address to receive the tokens"
+          },
+          "target_token": {
+            "$ref": "#/components/schemas/TokenId",
+            "description": "Target token to receive (e.g., \"usdc_arb\", \"usdt_arb\")"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User ID derived from wallet for recovery purposes"
+          }
+        }
+      },
+      "BitcoinToArkadeSwapRequest": {
+        "type": "object",
+        "required": [
+          "target_arkade_address",
+          "sats_receive",
+          "claim_pk",
+          "refund_pk",
+          "hash_lock",
+          "user_id"
+        ],
+        "properties": {
+          "claim_pk": {
+            "type": "string",
+            "description": "User's claim public key for the Arkade VHTLC"
+          },
+          "hash_lock": {
+            "type": "string",
+            "description": "Hash lock provided by the client (20-byte hex string, no 0x prefix).\nThe client generates a secret and computes HASH160(secret) = RIPEMD160(SHA256(secret)).\nThis hash is used for both the on-chain Bitcoin HTLC (OP_HASH160) and the Arkade VHTLC.\nClient will use the secret to claim the Arkade VHTLC later."
+          },
+          "referral_code": {
+            "type": ["string", "null"],
+            "description": "Optional referral code for fee exemption"
+          },
+          "refund_pk": {
+            "type": "string",
+            "description": "User's refund public key for the on-chain Bitcoin HTLC"
+          },
+          "sats_receive": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Amount the user wants to receive on Arkade in satoshis"
+          },
+          "target_arkade_address": {
+            "type": "string",
+            "description": "User's target Arkade address to receive VTXOs"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User ID derived from wallet for recovery purposes"
+          }
+        }
+      },
+      "BitcoinToEthereumSwapRequest": {
+        "type": "object",
+        "required": [
+          "target_address",
+          "source_amount",
+          "target_token",
+          "hash_lock",
+          "refund_pk",
+          "user_id"
+        ],
+        "properties": {
+          "hash_lock": {
+            "type": "string",
+            "description": "Hash lock provided by the client (32-byte hex string with 0x prefix)\nThe client generates a secret and computes SHA256(secret) = hash_lock\nClient will use the secret to claim the Ethereum HTLC later"
+          },
+          "referral_code": {
+            "type": ["string", "null"],
+            "description": "Optional referral code for fee exemption"
+          },
+          "refund_pk": {
+            "type": "string",
+            "description": "Refund public key used to generate the Bitcoin HTLC"
+          },
+          "source_amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "How much the user wants to send. Expressed in sats",
+            "minimum": 0
+          },
+          "target_address": {
+            "type": "string",
+            "description": "Target Ethereum address to receive the tokens"
+          },
+          "target_token": {
+            "$ref": "#/components/schemas/TokenId",
+            "description": "Target token to receive (e.g., \"usdc_eth\", \"usdt0_eth\")"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User ID derived from wallet for recovery purposes"
+          }
+        }
+      },
+      "BitcoinToPolygonSwapRequest": {
+        "type": "object",
+        "required": [
+          "target_address",
+          "source_amount",
+          "target_token",
+          "hash_lock",
+          "refund_pk",
+          "user_id"
+        ],
+        "properties": {
+          "hash_lock": {
+            "type": "string",
+            "description": "Hash lock provided by the client (32-byte hex string with 0x prefix)\nThe client generates a secret and computes SHA256(secret) = hash_lock\nClient will use the secret to claim the Polygon HTLC later"
+          },
+          "referral_code": {
+            "type": ["string", "null"],
+            "description": "Optional referral code for fee exemption"
+          },
+          "refund_pk": {
+            "type": "string",
+            "description": "Refund public key used to generate the Bitcoin HTLC"
+          },
+          "source_amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "How much the user wants to send. Expressed in sats",
+            "minimum": 0
+          },
+          "target_address": {
+            "type": "string",
+            "description": "Target Polygon address to receive the tokens"
+          },
+          "target_token": {
+            "$ref": "#/components/schemas/TokenId",
+            "description": "Target token to receive (e.g., \"usdc_pol\", \"usdt0_pol\")"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User ID derived from wallet for recovery purposes"
+          }
+        }
+      },
+      "BtcToArkadeSwapResponse": {
+        "type": "object",
+        "description": "BTC → Arkade swap response",
+        "required": [
+          "id",
+          "status",
+          "btc_htlc_address",
+          "asset_amount",
+          "sats_receive",
+          "fee_sats",
+          "hash_lock",
+          "btc_refund_locktime",
+          "arkade_vhtlc_address",
+          "target_arkade_address",
+          "network",
+          "created_at",
+          "server_vhtlc_pk",
+          "arkade_server_pk",
+          "vhtlc_refund_locktime",
+          "unilateral_claim_delay",
+          "unilateral_refund_delay",
+          "unilateral_refund_without_receiver_delay",
+          "source_token",
+          "target_token",
+          "target_amount",
+          "source_amount"
+        ],
+        "properties": {
+          "arkade_claim_txid": {
+            "type": ["string", "null"],
+            "description": "Arkade VHTLC claim transaction ID (user claim)"
+          },
+          "arkade_fund_txid": {
+            "type": ["string", "null"],
+            "description": "Arkade VHTLC fund transaction ID"
+          },
+          "arkade_server_pk": {
+            "type": "string",
+            "description": "Arkade server's public key"
+          },
+          "arkade_vhtlc_address": {
+            "type": "string",
+            "description": "Arkade VHTLC address"
+          },
+          "asset_amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Amount user must send in satoshis\nDeprecated: please use [`target_amount`]"
+          },
+          "btc_claim_txid": {
+            "type": ["string", "null"],
+            "description": "On-chain claim transaction ID (server claim)"
+          },
+          "btc_fund_txid": {
+            "type": ["string", "null"],
+            "description": "On-chain funding transaction ID"
+          },
+          "btc_htlc_address": {
+            "type": "string",
+            "description": "On-chain Bitcoin HTLC P2WSH address (user sends BTC here)"
+          },
+          "btc_refund_locktime": {
+            "type": "integer",
+            "format": "int64",
+            "description": "On-chain refund locktime (unix timestamp)"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp of when the swap was created"
+          },
+          "fee_sats": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Protocol fee in satoshis"
+          },
+          "hash_lock": {
+            "type": "string",
+            "description": "Hash lock (32-byte hex, no 0x prefix)"
+          },
+          "id": { "type": "string", "description": "Unique swap identifier" },
+          "network": { "type": "string", "description": "Bitcoin network" },
+          "sats_receive": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Amount user will receive on Arkade in satoshis"
+          },
+          "server_vhtlc_pk": {
+            "type": "string",
+            "description": "Server's VHTLC public key (sender in the VHTLC)"
+          },
+          "source_amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Amount user must send in satoshis",
+            "minimum": 0
+          },
+          "source_token": {
+            "$ref": "#/components/schemas/TokenId",
+            "description": "Source token (always btc_onchain for this swap type)"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SwapStatus",
+            "description": "Current status of the swap"
+          },
+          "target_amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Amount the user will receive",
+            "minimum": 0
+          },
+          "target_arkade_address": {
+            "type": "string",
+            "description": "User's target Arkade address"
+          },
+          "target_token": {
+            "$ref": "#/components/schemas/TokenId",
+            "description": "Target token (always btc_arkade for this swap type)"
+          },
+          "unilateral_claim_delay": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Unilateral claim delay in seconds"
+          },
+          "unilateral_refund_delay": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Unilateral refund delay in seconds"
+          },
+          "unilateral_refund_without_receiver_delay": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Unilateral refund without receiver delay in seconds"
+          },
+          "vhtlc_refund_locktime": {
+            "type": "integer",
+            "format": "int64",
+            "description": "VHTLC refund locktime (unix timestamp)"
+          }
+        }
+      },
+      "BtcToEvmSwapResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SwapCommonFields",
+            "description": "Common swap fields"
+          },
+          {
+            "type": "object",
+            "required": [
+              "htlc_address_evm",
+              "htlc_address_arkade",
+              "user_address_evm",
+              "ln_invoice",
+              "sats_receive",
+              "target_amount",
+              "source_amount"
+            ],
+            "properties": {
+              "bitcoin_htlc_claim_txid": {
+                "type": ["string", "null"],
+                "description": "Bitcoin HTLC claim transaction ID"
+              },
+              "bitcoin_htlc_fund_txid": {
+                "type": ["string", "null"],
+                "description": "Bitcoin HTLC fund transaction ID"
+              },
+              "evm_htlc_claim_txid": {
+                "type": ["string", "null"],
+                "description": "EVM HTLC claim transaction ID"
+              },
+              "evm_htlc_fund_txid": {
+                "type": ["string", "null"],
+                "description": "EVM HTLC fund transaction ID"
+              },
+              "htlc_address_arkade": {
+                "type": "string",
+                "description": "Arkade VHTLC address"
+              },
+              "htlc_address_evm": {
+                "type": "string",
+                "description": "EVM HTLC contract address"
+              },
+              "ln_invoice": {
+                "type": "string",
+                "description": "Lightning invoice for payment"
+              },
+              "sats_receive": {
+                "type": "integer",
+                "format": "int64",
+                "description": "The amount of satoshis we expect to receive\nDeprecated: please use [`source_amount`]"
+              },
+              "source_amount": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Amount user must send in satoshis",
+                "minimum": 0
+              },
+              "target_amount": {
+                "type": "number",
+                "format": "double",
+                "description": "Amount the user will receive of the target asset"
+              },
+              "user_address_evm": {
+                "type": "string",
+                "description": "User's EVM address to receive tokens"
+              }
+            }
+          }
+        ],
+        "description": "BTC → EVM swap response"
+      },
+      "Chain": {
+        "type": "string",
+        "description": "Supported blockchain networks",
+        "enum": [
+          "Arkade",
+          "Lightning",
+          "Bitcoin",
+          "Polygon",
+          "Ethereum",
+          "Arbitrum"
+        ]
+      },
+      "ClaimGelatoRequest": {
+        "type": "object",
+        "required": ["secret"],
+        "properties": {
+          "secret": {
+            "type": "string",
+            "description": "The secret to reveal (32-byte hex string, with or without 0x prefix)"
+          }
+        }
+      },
+      "ClaimGelatoResponse": {
+        "type": "object",
+        "required": ["id", "status", "task_id", "tx_hash", "message"],
+        "properties": {
+          "id": { "type": "string", "description": "Swap ID" },
+          "message": { "type": "string", "description": "Success message" },
+          "status": { "type": "string", "description": "Current swap status" },
+          "task_id": { "type": "string", "description": "Gelato task ID" },
+          "tx_hash": { "type": "string", "description": "Transaction hash" }
+        }
+      },
+      "CreateVtxoSwapRequest": {
+        "type": "object",
+        "required": ["vtxos", "preimage_hash", "client_pk", "user_id"],
+        "properties": {
+          "client_pk": {
+            "type": "string",
+            "description": "Client's public key for the VHTLC"
+          },
+          "preimage_hash": {
+            "type": "string",
+            "description": "SHA256(preimage) - client generates the secret"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User ID for recovery purposes"
+          },
+          "vtxos": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "List of VTXO outpoints to refresh"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": ["error"],
+        "properties": { "error": { "type": "string" } }
+      },
+      "EstimateVtxoSwapRequest": {
+        "type": "object",
+        "required": ["vtxos"],
+        "properties": {
+          "vtxos": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "List of VTXO outpoints to refresh (\"txid:vout\" format)"
+          }
+        }
+      },
+      "EstimateVtxoSwapResponse": {
+        "type": "object",
+        "required": [
+          "fee_sats",
+          "total_input_sats",
+          "output_sats",
+          "vtxo_count",
+          "expected_vtxo_expiry"
+        ],
+        "properties": {
+          "expected_vtxo_expiry": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Expected expiry timestamp (Unix) of the resulting VTXOs.\nThis is the minimum expiry among the server's VTXOs that will be used to fund the swap."
+          },
+          "fee_sats": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total fee in satoshis"
+          },
+          "output_sats": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Amount user will receive (total_input_sats - fee_sats)"
+          },
+          "total_input_sats": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total input amount in satoshis"
+          },
+          "vtxo_count": {
+            "type": "integer",
+            "description": "Number of VTXOs being refreshed",
+            "minimum": 0
+          }
+        }
+      },
+      "EthereumToArkadeSwapRequest": {
+        "type": "object",
+        "required": [
+          "target_address",
+          "source_amount",
+          "source_token",
+          "hash_lock",
+          "receiver_pk",
+          "user_address",
+          "user_id"
+        ],
+        "properties": {
+          "hash_lock": {
+            "type": "string",
+            "description": "Hash lock provided by the client (32-byte hex string with 0x prefix)\nThe client generates a secret and computes SHA256(secret) = hash_lock\nClient will use the secret to claim the Ethereum HTLC later"
+          },
+          "receiver_pk": {
+            "type": "string",
+            "description": "Receiver public key used to generate the Arkade VHTLC"
+          },
+          "referral_code": {
+            "type": ["string", "null"],
+            "description": "Optional referral code for fee exemption"
+          },
+          "source_amount": {
+            "type": "number",
+            "format": "double",
+            "description": "Amount to send in the source token"
+          },
+          "source_token": {
+            "$ref": "#/components/schemas/TokenId",
+            "description": "Source token to send (e.g., \"usdc_eth\", \"usdt_eth\", \"wbtc_eth\")"
+          },
+          "target_address": {
+            "type": "string",
+            "description": "Arkade address where the user wants to receive their bitcoin"
+          },
+          "user_address": {
+            "type": "string",
+            "description": "User's Ethereum wallet address (for checking allowance and building transactions)"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User ID derived from wallet for recovery purposes"
+          }
+        }
+      },
+      "EthereumToLightningSwapRequest": {
+        "type": "object",
+        "required": [
+          "bolt11_invoice",
+          "source_token",
+          "user_address",
+          "user_id"
+        ],
+        "properties": {
+          "bolt11_invoice": {
+            "type": "string",
+            "description": "Lightning BOLT11 invoice to pay"
+          },
+          "referral_code": {
+            "type": ["string", "null"],
+            "description": "Optional referral code for fee exemption"
+          },
+          "source_token": {
+            "$ref": "#/components/schemas/TokenId",
+            "description": "Source token to send (e.g., \"usdc_eth\", \"usdt_eth\", \"wbtc_eth\")"
+          },
+          "user_address": {
+            "type": "string",
+            "description": "User's Ethereum wallet address (for checking allowance and building transactions)"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User ID derived from wallet for recovery purposes"
+          }
+        }
+      },
+      "EvmToBtcSwapResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SwapCommonFields",
+            "description": "Common swap fields"
+          },
+          {
+            "type": "object",
+            "required": [
+              "htlc_address_evm",
+              "htlc_address_arkade",
+              "user_address_evm",
+              "ln_invoice",
+              "sats_receive",
+              "source_token_address",
+              "target_amount",
+              "source_amount"
+            ],
+            "properties": {
+              "approve_tx": {
+                "type": ["string", "null"],
+                "description": "Token approval transaction hash"
+              },
+              "bitcoin_htlc_claim_txid": {
+                "type": ["string", "null"],
+                "description": "Bitcoin HTLC claim transaction ID"
+              },
+              "bitcoin_htlc_fund_txid": {
+                "type": ["string", "null"],
+                "description": "Bitcoin HTLC fund transaction ID"
+              },
+              "create_swap_tx": {
+                "type": ["string", "null"],
+                "description": "Create swap transaction hash"
+              },
+              "evm_htlc_claim_txid": {
+                "type": ["string", "null"],
+                "description": "EVM HTLC claim transaction ID"
+              },
+              "evm_htlc_fund_txid": {
+                "type": ["string", "null"],
+                "description": "EVM HTLC fund transaction ID"
+              },
+              "gelato_forwarder_address": {
+                "type": ["string", "null"],
+                "description": "Gelato forwarder contract address"
+              },
+              "gelato_user_deadline": {
+                "type": ["string", "null"],
+                "description": "Gelato user deadline timestamp"
+              },
+              "gelato_user_nonce": {
+                "type": ["string", "null"],
+                "description": "Gelato user nonce for replay protection"
+              },
+              "htlc_address_arkade": {
+                "type": "string",
+                "description": "Arkade VHTLC address"
+              },
+              "htlc_address_evm": {
+                "type": "string",
+                "description": "EVM HTLC contract address"
+              },
+              "ln_invoice": {
+                "type": "string",
+                "description": "Lightning invoice for payment"
+              },
+              "sats_receive": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Net satoshis user will receive\nDeprecated: please use [`target_amount`]"
+              },
+              "source_amount": {
+                "type": "number",
+                "format": "double",
+                "description": "Amount user must send of the source asset"
+              },
+              "source_token_address": {
+                "type": "string",
+                "description": "ERC20 token address for approve target"
+              },
+              "target_amount": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Amount the user will receive in sats",
+                "minimum": 0
+              },
+              "user_address_arkade": {
+                "type": ["string", "null"],
+                "description": "User's Arkade address to receive BTC (optional)"
+              },
+              "user_address_evm": {
+                "type": "string",
+                "description": "User's EVM address sending tokens"
+              }
+            }
+          }
+        ],
+        "description": "EVM → BTC swap response"
+      },
+      "GelatoSubmitRequest": {
+        "type": "object",
+        "required": ["create_swap_signature", "user_nonce", "user_deadline"],
+        "properties": {
+          "create_swap_signature": {
+            "type": "string",
+            "description": "EIP-712 signature for createSwap transaction (required)"
+          },
+          "user_deadline": {
+            "type": "string",
+            "description": "Deadline used for signing (must match what was provided in CreateSwapResponse)"
+          },
+          "user_nonce": {
+            "type": "string",
+            "description": "Nonce used for signing (must match what was provided in CreateSwapResponse)"
+          }
+        }
+      },
+      "GelatoSubmitResponse": {
+        "type": "object",
+        "required": ["create_swap_task_id", "message"],
+        "properties": {
+          "create_swap_task_id": {
+            "type": "string",
+            "description": "Gelato task ID for createSwap transaction"
+          },
+          "message": { "type": "string", "description": "Success message" }
+        }
+      },
+      "GetSwapResponse": {
+        "oneOf": [
+          {
+            "allOf": [
+              { "$ref": "#/components/schemas/BtcToEvmSwapResponse" },
+              {
+                "type": "object",
+                "required": ["direction"],
+                "properties": {
+                  "direction": { "type": "string", "enum": ["btc_to_evm"] }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              { "$ref": "#/components/schemas/EvmToBtcSwapResponse" },
+              {
+                "type": "object",
+                "required": ["direction"],
+                "properties": {
+                  "direction": { "type": "string", "enum": ["evm_to_btc"] }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              { "$ref": "#/components/schemas/BtcToArkadeSwapResponse" },
+              {
+                "type": "object",
+                "required": ["direction"],
+                "properties": {
+                  "direction": { "type": "string", "enum": ["btc_to_arkade"] }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              { "$ref": "#/components/schemas/OnchainToEvmSwapResponse" },
+              {
+                "type": "object",
+                "required": ["direction"],
+                "properties": {
+                  "direction": { "type": "string", "enum": ["onchain_to_evm"] }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "LightningToArbitrumSwapRequest": {
+        "type": "object",
+        "required": [
+          "target_address",
+          "target_token",
+          "hash_lock",
+          "refund_pk",
+          "user_id"
+        ],
+        "properties": {
+          "hash_lock": {
+            "type": "string",
+            "description": "Hash lock provided by the client (32-byte hex string with 0x prefix)\nThe client generates a secret and computes SHA256(secret) = hash_lock\nClient will use the secret to claim the Arbitrum HTLC later"
+          },
+          "referral_code": {
+            "type": ["string", "null"],
+            "description": "Optional referral code for fee exemption"
+          },
+          "refund_pk": {
+            "type": "string",
+            "description": "Refund public key used to generate the Arkade VHTLC"
+          },
+          "source_amount": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "How much the user wants to send. Expressed in sats",
+            "minimum": 0
+          },
+          "target_address": {
+            "type": "string",
+            "description": "Target Arbitrum address to receive the tokens"
+          },
+          "target_amount": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "How much the user wants to receive of target token\nNote: if [`source_amount`] and [`target_amount`] is specified we will prioritize [`target_amount`]\nNote2: this is always just approximately due to price fluctations"
+          },
+          "target_token": {
+            "$ref": "#/components/schemas/TokenId",
+            "description": "Target token to receive (e.g., \"usdc_arb\", \"usdt_arb\")"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User ID derived from wallet for recovery purposes"
+          }
+        }
+      },
+      "LightningToEthereumSwapRequest": {
+        "type": "object",
+        "required": [
+          "target_address",
+          "target_token",
+          "hash_lock",
+          "refund_pk",
+          "user_id"
+        ],
+        "properties": {
+          "hash_lock": {
+            "type": "string",
+            "description": "Hash lock provided by the client (32-byte hex string with 0x prefix)\nThe client generates a secret and computes SHA256(secret) = hash_lock\nClient will use the secret to claim the Ethereum HTLC later"
+          },
+          "referral_code": {
+            "type": ["string", "null"],
+            "description": "Optional referral code for fee exemption"
+          },
+          "refund_pk": {
+            "type": "string",
+            "description": "Refund public key used to generate the Arkade VHTLC"
+          },
+          "source_amount": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "How much the user wants to send. Expressed in sats",
+            "minimum": 0
+          },
+          "target_address": {
+            "type": "string",
+            "description": "Target Ethereum address to receive the tokens"
+          },
+          "target_amount": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "How much the user wants to receive of target token\nNote: if [`source_amount`] and [`target_amount`] is specified we will prioritize [`target_amount`]\nNote2: this is always just approximately due to price fluctations"
+          },
+          "target_token": {
+            "$ref": "#/components/schemas/TokenId",
+            "description": "Target token to receive (e.g., \"usdc_eth\", \"usdt_eth\")"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User ID derived from wallet for recovery purposes"
+          }
+        }
+      },
+      "LightningToPolygonSwapRequest": {
+        "type": "object",
+        "required": [
+          "target_address",
+          "target_token",
+          "hash_lock",
+          "refund_pk",
+          "user_id"
+        ],
+        "properties": {
+          "hash_lock": {
+            "type": "string",
+            "description": "Hash lock provided by the client (32-byte hex string with 0x prefix)\nThe client generates a secret and computes SHA256(secret) = hash_lock\nClient will use the secret to claim the Polygon HTLC later"
+          },
+          "referral_code": {
+            "type": ["string", "null"],
+            "description": "Optional referral code for fee exemption"
+          },
+          "refund_pk": {
+            "type": "string",
+            "description": "Refund public key used to generate the Arkade VHTLC"
+          },
+          "source_amount": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "How much the user wants to send. Expressed in sats",
+            "minimum": 0
+          },
+          "target_address": {
+            "type": "string",
+            "description": "Target Polygon address to receive the tokens"
+          },
+          "target_amount": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "How much the user wants to receive of target token\nNote: if [`source_amount`] and [`target_amount`] is specified we will prioritize [`target_amount`]\nNote2: this is always just approximately due to price fluctations"
+          },
+          "target_token": {
+            "$ref": "#/components/schemas/TokenId",
+            "description": "Target token to receive (e.g., \"usdc_pol\", \"usdt0_pol\")"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User ID derived from wallet for recovery purposes"
+          }
+        }
+      },
+      "OnchainToEvmSwapResponse": {
+        "type": "object",
+        "description": "On-chain BTC → EVM swap response",
+        "required": [
+          "id",
+          "status",
+          "btc_htlc_address",
+          "fee_sats",
+          "evm_hash_lock",
+          "btc_hash_lock",
+          "btc_server_pk",
+          "btc_refund_locktime",
+          "network",
+          "created_at",
+          "chain",
+          "client_evm_address",
+          "evm_htlc_address",
+          "server_evm_address",
+          "evm_refund_locktime",
+          "source_token",
+          "target_token",
+          "target_amount",
+          "source_amount"
+        ],
+        "properties": {
+          "btc_claim_txid": {
+            "type": ["string", "null"],
+            "description": "On-chain claim transaction ID (server claim)"
+          },
+          "btc_fund_txid": {
+            "type": ["string", "null"],
+            "description": "On-chain funding transaction ID"
+          },
+          "btc_hash_lock": {
+            "type": "string",
+            "description": "Hash lock (20-byte hex)\n\nTo be used for bitcoin htlc. This is the [`ripemd160(evm_hash_lock)`]"
+          },
+          "btc_htlc_address": {
+            "type": "string",
+            "description": "On-chain Bitcoin HTLC P2WSH address (user sends BTC here)"
+          },
+          "btc_refund_locktime": {
+            "type": "integer",
+            "format": "int64",
+            "description": "On-chain BTC refund locktime (unix timestamp)"
+          },
+          "btc_server_pk": {
+            "type": "string",
+            "description": "The server's pk inside the htlc"
+          },
+          "chain": {
+            "type": "string",
+            "description": "EVM chain (Polygon, Ethereum)"
+          },
+          "client_evm_address": {
+            "type": "string",
+            "description": "Client's EVM address (where tokens will be received)"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp of when the swap was created"
+          },
+          "evm_claim_txid": {
+            "type": ["string", "null"],
+            "description": "EVM HTLC claim transaction ID (user claim)"
+          },
+          "evm_fund_txid": {
+            "type": ["string", "null"],
+            "description": "EVM HTLC fund transaction ID"
+          },
+          "evm_hash_lock": {
+            "type": "string",
+            "description": "Hash lock (32-byte hex)\n\nTo be used for EVM htlc"
+          },
+          "evm_htlc_address": {
+            "type": "string",
+            "description": "EVM HTLC contract address"
+          },
+          "evm_refund_locktime": {
+            "type": "integer",
+            "format": "int64",
+            "description": "EVM HTLC refund locktime (unix timestamp)"
+          },
+          "fee_sats": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Protocol fee in satoshis"
+          },
+          "id": { "type": "string", "description": "Unique swap identifier" },
+          "network": { "type": "string", "description": "Bitcoin network" },
+          "server_evm_address": {
+            "type": "string",
+            "description": "Server's EVM address"
+          },
+          "source_amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Amount user must send in satoshis",
+            "minimum": 0
+          },
+          "source_token": {
+            "$ref": "#/components/schemas/TokenId",
+            "description": "Source token (e.g., btc_onchain)"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SwapStatus",
+            "description": "Current status of the swap"
+          },
+          "target_amount": {
+            "type": "number",
+            "format": "double",
+            "description": "How much the user will receive of the target asset"
+          },
+          "target_token": {
+            "$ref": "#/components/schemas/TokenId",
+            "description": "Target token (e.g., polygon_usdc)"
+          }
+        }
+      },
+      "PolygonToArkadeSwapRequest": {
+        "type": "object",
+        "required": [
+          "target_address",
+          "source_amount",
+          "source_token",
+          "hash_lock",
+          "receiver_pk",
+          "user_address",
+          "user_id"
+        ],
+        "properties": {
+          "hash_lock": {
+            "type": "string",
+            "description": "Hash lock provided by the client (32-byte hex string with 0x prefix)\nThe client generates a secret and computes SHA256(secret) = hash_lock\nClient will use the secret to claim the Polygon HTLC later"
+          },
+          "receiver_pk": {
+            "type": "string",
+            "description": "Receiver public key used to generate the Arkade VHTLC"
+          },
+          "referral_code": {
+            "type": ["string", "null"],
+            "description": "Optional referral code for fee exemption"
+          },
+          "source_amount": {
+            "type": "number",
+            "format": "double",
+            "description": "Amount to send in the source token"
+          },
+          "source_token": {
+            "$ref": "#/components/schemas/TokenId",
+            "description": "Source token to send (e.g., \"usdc_pol\", \"usdt0_pol\", \"dai_pol\")"
+          },
+          "target_address": {
+            "type": "string",
+            "description": "Arkade address where the user wants to receive their bitcoin"
+          },
+          "user_address": {
+            "type": "string",
+            "description": "User's Polygon wallet address (for checking allowance and building transactions)"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User ID derived from wallet for recovery purposes"
+          }
+        }
+      },
+      "PolygonToLightningSwapRequest": {
+        "type": "object",
+        "required": [
+          "bolt11_invoice",
+          "source_token",
+          "user_address",
+          "user_id"
+        ],
+        "properties": {
+          "bolt11_invoice": {
+            "type": "string",
+            "description": "Lightning BOLT11 invoice to pay"
+          },
+          "referral_code": {
+            "type": ["string", "null"],
+            "description": "Optional referral code for fee exemption"
+          },
+          "source_token": {
+            "$ref": "#/components/schemas/TokenId",
+            "description": "Source token to send (e.g., \"usdc_pol\", \"usdt0_pol\", \"dai_pol\")"
+          },
+          "user_address": {
+            "type": "string",
+            "description": "User's Polygon wallet address (for checking allowance and building transactions)"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User ID derived from wallet for recovery purposes"
+          }
+        }
+      },
+      "PriceTiers": {
+        "type": "object",
+        "required": ["tier_1", "tier_100", "tier_1000", "tier_5000"],
+        "properties": {
+          "tier_1": {
+            "type": "number",
+            "format": "double",
+            "description": "Price per BTC when swapping 1 unit of the quote asset"
+          },
+          "tier_100": {
+            "type": "number",
+            "format": "double",
+            "description": "Price per BTC when swapping 100 units of the quote asset"
+          },
+          "tier_1000": {
+            "type": "number",
+            "format": "double",
+            "description": "Price per BTC when swapping 1,000 units of the quote asset"
+          },
+          "tier_5000": {
+            "type": "number",
+            "format": "double",
+            "description": "Price per BTC when swapping 5,000 units of the quote asset"
+          }
+        }
+      },
+      "PriceUpdateMessage": {
+        "type": "object",
+        "description": "WebSocket message containing tiered prices for all trading pairs",
+        "required": ["timestamp", "pairs"],
+        "properties": {
+          "pairs": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/TradingPairPrices" },
+            "description": "List of trading pairs with their tiered prices"
+          },
+          "timestamp": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Unix timestamp in seconds",
+            "minimum": 0
+          }
+        }
+      },
+      "QuoteResponse": {
+        "type": "object",
+        "required": [
+          "exchange_rate",
+          "network_fee",
+          "protocol_fee",
+          "protocol_fee_rate",
+          "min_amount",
+          "max_amount"
+        ],
+        "properties": {
+          "exchange_rate": {
+            "type": "string",
+            "description": "Exchange rate: how much fiat you get/pay per BTC"
+          },
+          "max_amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Maximum swap amount in satoshis (lesser of: config max or 90% of available balance)",
+            "minimum": 0
+          },
+          "min_amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Minimum swap amount in satoshis (from config)",
+            "minimum": 0
+          },
+          "network_fee": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Network fee estimate (in satoshis)",
+            "minimum": 0
+          },
+          "protocol_fee": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Protocol fee (in satoshis)",
+            "minimum": 0
+          },
+          "protocol_fee_rate": {
+            "type": "number",
+            "format": "double",
+            "description": "Protocol fee rate (as decimal, e.g., 0.0025 = 0.25%)"
+          }
+        }
+      },
+      "RecoveredSwap": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/GetSwapResponse",
+            "description": "The swap data"
+          },
+          {
+            "type": "object",
+            "required": ["index"],
+            "properties": {
+              "index": {
+                "type": "integer",
+                "format": "int32",
+                "description": "The derivation index used for this swap",
+                "minimum": 0
+              }
+            }
+          }
+        ]
+      },
+      "RecoveryRequest": {
+        "type": "object",
+        "required": ["xpub"],
+        "properties": {
+          "xpub": {
+            "type": "string",
+            "description": "Extended public key derived from the user's wallet.\n\nUsed to derive `user_id`s for that user."
+          }
+        }
+      },
+      "RecoveryResponse": {
+        "type": "object",
+        "required": ["swaps", "highest_index"],
+        "properties": {
+          "highest_index": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The highest index used in any recovered swap.\n\nClient should set their next derivation index to this + 1.",
+            "minimum": 0
+          },
+          "swaps": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/RecoveredSwap" },
+            "description": "List of recovered swaps with their derivation indices"
+          }
+        }
+      },
+      "SwapCommonFields": {
+        "type": "object",
+        "description": "Common fields shared across all swap directions",
+        "required": [
+          "id",
+          "status",
+          "hash_lock",
+          "fee_sats",
+          "asset_amount",
+          "sender_pk",
+          "receiver_pk",
+          "server_pk",
+          "evm_refund_locktime",
+          "vhtlc_refund_locktime",
+          "unilateral_claim_delay",
+          "unilateral_refund_delay",
+          "unilateral_refund_without_receiver_delay",
+          "network",
+          "source_token",
+          "target_token",
+          "created_at"
+        ],
+        "properties": {
+          "asset_amount": {
+            "type": "number",
+            "format": "double",
+            "description": "For evm-btc swaps, this is the source asset amount, for btc-evm swaps, this is the target asset amount\nDeprecated"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp of when the swap was created"
+          },
+          "evm_refund_locktime": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Timestamp past which refund is permitted on the EVM chain",
+            "minimum": 0
+          },
+          "fee_sats": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Protocol fee amount in satoshis"
+          },
+          "hash_lock": {
+            "type": "string",
+            "description": "Hash lock for the HTLC (32-byte hex string with 0x prefix)"
+          },
+          "id": { "type": "string", "description": "Unique swap identifier" },
+          "network": {
+            "type": "string",
+            "description": "Bitcoin network (e.g., \"signet\", \"mainnet\")"
+          },
+          "receiver_pk": {
+            "type": "string",
+            "description": "Lendaswap's public key"
+          },
+          "sender_pk": {
+            "type": "string",
+            "description": "Client's public key (refund_pk or claim_pk)"
+          },
+          "server_pk": {
+            "type": "string",
+            "description": "Arkade server's public key"
+          },
+          "source_token": {
+            "$ref": "#/components/schemas/TokenId",
+            "description": "Token being sent (source)"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SwapStatus",
+            "description": "Current status of the swap"
+          },
+          "target_token": {
+            "$ref": "#/components/schemas/TokenId",
+            "description": "Token being received (target)"
+          },
+          "unilateral_claim_delay": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Relative timelock for claim in seconds"
+          },
+          "unilateral_refund_delay": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Relative timelock for refund in seconds"
+          },
+          "unilateral_refund_without_receiver_delay": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Relative timelock for refund without receiver in seconds"
+          },
+          "vhtlc_refund_locktime": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Timestamp past which refund is permitted on Arkade",
+            "minimum": 0
+          }
+        }
+      },
+      "SwapStatus": {
+        "type": "string",
+        "description": "Atomic swap state machine for BTC --> Target Asset swaps using HTLCs.\n\n# Overview\n\nThis enum tracks the state of an atomic swap between Bitcoin (via Lightning/Arkade)\nand Target Asset (on Polygon, Ethereum, etc). The swap uses Hash Time-Locked Contracts (HTLCs) to ensure\natomicity without requiring trust.\n\n# Normal Flow\n\n```text\nPending → ClientFunded → ServerFunded → ClientRedeemed → ServerRedeemed\n```\n\n1. Client creates swap request → `Pending`\n2. Client sends BTC → `ClientFunded`\n3. Server locks WBTC in Polygon HTLC → `ServerFunded`\n4. Client reveals secret to claim Target Asset → `ClientRedeemed`\n5. Server uses secret to claim BTC → `ServerRedeemed` (terminal)\n\n# Refund Flows\n\n```text\nPending → Expired (no funding)\nClientFunded → ClientRefunded (client refunds before server funds)\nServerFunded → ClientFundedServerRefunded (HTLC timeout)\n```\n\n# State Diagram\n\nSee `swap_states.md` for a complete state diagram and detailed documentation.\n\n# Security\n\n- Bitcoin HTLC timeout must be longer than Polygon HTLC timeout\n- Secret becomes public when client claims TargetAsset on Polygon\n- `ClientRefundedServerFunded` is an error state that should never occur",
+        "enum": [
+          "pending",
+          "clientfundingseen",
+          "clientfunded",
+          "clientrefunded",
+          "serverfunded",
+          "clientredeeming",
+          "clientredeemed",
+          "serverredeemed",
+          "clientfundedserverrefunded",
+          "clientrefundedserverfunded",
+          "clientrefundedserverrefunded",
+          "expired",
+          "clientinvalidfunded",
+          "clientfundedtoolate",
+          "clientredeemedandclientrefunded"
+        ]
+      },
+      "TokenId": {
+        "oneOf": [
+          {
+            "type": "string",
+            "title": "btc_lightning",
+            "enum": ["btc_lightning"]
+          },
+          { "type": "string", "title": "btc_arkade", "enum": ["btc_arkade"] },
+          { "type": "string", "title": "btc_onchain", "enum": ["btc_onchain"] },
+          { "type": "string", "title": "wbtc_eth", "enum": ["wbtc_eth"] },
+          { "type": "string", "title": "wbtc_pol", "enum": ["wbtc_pol"] },
+          { "type": "string", "title": "wbtc_arb", "enum": ["wbtc_arb"] },
+          {
+            "type": "object",
+            "required": ["coin"],
+            "properties": { "coin": { "type": "string" } }
+          }
+        ],
+        "description": "Token identifier with chain suffix"
+      },
+      "TokenInfo": {
+        "type": "object",
+        "required": ["token_id", "symbol", "chain", "name", "decimals"],
+        "properties": {
+          "chain": { "$ref": "#/components/schemas/Chain" },
+          "decimals": { "type": "integer", "format": "int32", "minimum": 0 },
+          "name": { "type": "string" },
+          "symbol": { "type": "string" },
+          "token_id": { "$ref": "#/components/schemas/TokenId" }
+        }
+      },
+      "TradingPairPrices": {
+        "type": "object",
+        "required": ["pair", "source", "target", "tiers"],
+        "properties": {
+          "pair": {
+            "type": "string",
+            "description": "Trading pair identifier (e.g., \"USDC_POL-BTC\" or \"USDT0_POL-BTC\")\nkept for backwards compatibility, equals [`source`]-[`target`]"
+          },
+          "source": { "$ref": "#/components/schemas/TokenId" },
+          "target": { "$ref": "#/components/schemas/TokenId" },
+          "tiers": {
+            "$ref": "#/components/schemas/PriceTiers",
+            "description": "Price tiers for different swap amounts"
+          }
+        }
+      },
+      "Version": {
+        "type": "object",
+        "required": ["tag", "commit_hash"],
+        "properties": {
+          "commit_hash": { "type": "string" },
+          "tag": { "type": "string" }
+        }
+      },
+      "VtxoSwapResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "created_at",
+          "client_vhtlc_address",
+          "client_fund_amount_sats",
+          "client_pk",
+          "client_locktime",
+          "client_unilateral_claim_delay",
+          "client_unilateral_refund_delay",
+          "client_unilateral_refund_without_receiver_delay",
+          "server_vhtlc_address",
+          "server_fund_amount_sats",
+          "server_pk",
+          "server_locktime",
+          "server_unilateral_claim_delay",
+          "server_unilateral_refund_delay",
+          "server_unilateral_refund_without_receiver_delay",
+          "arkade_server_pk",
+          "preimage_hash",
+          "fee_sats",
+          "network"
+        ],
+        "properties": {
+          "arkade_server_pk": { "type": "string" },
+          "client_fund_amount_sats": { "type": "integer", "format": "int64" },
+          "client_locktime": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "client_pk": { "type": "string" },
+          "client_unilateral_claim_delay": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "client_unilateral_refund_delay": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "client_unilateral_refund_without_receiver_delay": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "client_vhtlc_address": { "type": "string" },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp"
+          },
+          "fee_sats": { "type": "integer", "format": "int64" },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Swap ID"
+          },
+          "network": { "type": "string" },
+          "preimage_hash": { "type": "string" },
+          "server_fund_amount_sats": { "type": "integer", "format": "int64" },
+          "server_locktime": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "server_pk": { "type": "string" },
+          "server_unilateral_claim_delay": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "server_unilateral_refund_delay": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "server_unilateral_refund_without_receiver_delay": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "server_vhtlc_address": { "type": "string" },
+          "status": {
+            "$ref": "#/components/schemas/VtxoSwapStatus",
+            "description": "Swap status"
+          }
+        }
+      },
+      "VtxoSwapStatus": {
+        "type": "string",
+        "description": "VTXO Swap state machine for BTC-to-BTC (Arkade refresh) swaps.\n\n# Overview\n\nThis enum tracks the state of a VTXO refresh swap where users exchange\nold VTXOs for new ones with refreshed expiry times.\n\n# Normal Flow\n\n```text\nPending -> ClientFunded -> ServerFunded -> ClientRedeemed -> ServerRedeemed\n```\n\n1. Swap created -> `Pending`\n2. Client funds their VHTLC -> `ClientFunded`\n3. Server funds their VHTLC -> `ServerFunded`\n4. Client claims server's VHTLC (reveals preimage) -> `ClientRedeemed`\n5. Server claims client's VHTLC -> `ServerRedeemed` (terminal)\n\n# Refund Flows\n\n```text\nPending -> Expired (no funding)\nClientFunded -> ClientRefunded (server didn't fund in time)\nServerFunded -> ClientFundedServerRefunded (client didn't claim in time)\n```",
+        "enum": [
+          "pending",
+          "clientfunded",
+          "serverfunded",
+          "clientredeemed",
+          "serverredeemed",
+          "clientrefunded",
+          "clientfundedserverrefunded",
+          "expired"
+        ]
+      }
+    }
+  },
+  "tags": [
+    { "name": "version", "description": "Check API version information." },
+    { "name": "tokens", "description": "Get available tokens for swaps." },
+    {
+      "name": "asset-pairs",
+      "description": "Get supported asset pair combinations."
+    },
+    { "name": "quote", "description": "Get quotes for token swaps." },
+    {
+      "name": "swap-arkade-polygon",
+      "description": "Create BTC to Polygon swaps."
+    },
+    {
+      "name": "swap-polygon-arkade",
+      "description": "Create Polygon to Arkade swaps."
+    },
+    {
+      "name": "swap-polygon-lightning",
+      "description": "Create Polygon to Lightning swaps."
+    },
+    {
+      "name": "swap-arkade-ethereum",
+      "description": "Create BTC to Ethereum swaps."
+    },
+    {
+      "name": "swap-ethereum-arkade",
+      "description": "Create Ethereum to Arkade swaps."
+    },
+    {
+      "name": "swap-ethereum-lightning",
+      "description": "Create Ethereum to Lightning swaps."
+    },
+    {
+      "name": "swap-bitcoin-arkade",
+      "description": "Create on-chain Bitcoin to Arkade swaps."
+    },
+    {
+      "name": "swap-onchain-polygon",
+      "description": "Create on-chain Bitcoin to Polygon swaps."
+    },
+    {
+      "name": "swap-onchain-ethereum",
+      "description": "Create on-chain Bitcoin to Ethereum swaps."
+    },
+    {
+      "name": "swap-arkade-arbitrum",
+      "description": "Create BTC to Arbitrum swaps."
+    },
+    {
+      "name": "swap-arbitrum-arkade",
+      "description": "Create Arbitrum to Arkade swaps."
+    },
+    {
+      "name": "swap-arbitrum-lightning",
+      "description": "Create Arbitrum to Lightning swaps."
+    },
+    {
+      "name": "swap-lightning-arbitrum",
+      "description": "Create Lightning to Arbitrum swaps."
+    },
+    {
+      "name": "swap-onchain-arbitrum",
+      "description": "Create on-chain Bitcoin to Arbitrum swaps."
+    },
+    {
+      "name": "gelato",
+      "description": "Gelato gasless transaction operations."
+    },
+    { "name": "swaps", "description": "Get swap details and status." },
+    {
+      "name": "recovery",
+      "description": "Recover swaps from extended public key."
+    },
+    { "name": "health", "description": "Health check endpoint." },
+    {
+      "name": "websocket",
+      "description": "WebSocket endpoints for real-time data streaming."
+    }
+  ]
+}
