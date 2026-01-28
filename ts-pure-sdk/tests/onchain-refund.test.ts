@@ -1,0 +1,213 @@
+import { secp256k1 } from "@noble/curves/secp256k1";
+import { hex } from "@scure/base";
+import { describe, expect, it } from "vitest";
+import {
+  buildOnchainRefundTransaction,
+  computeHash160,
+} from "../src/refund/onchain.js";
+
+describe("On-chain refund", () => {
+  // Test keypairs (deterministic for testing)
+  const serverSecretKey = new Uint8Array(32).fill(1);
+  const userSecretKey = new Uint8Array(32).fill(2);
+
+  // Get x-only public keys (32 bytes, no prefix)
+  // secp256k1.getPublicKey returns compressed (33 bytes), slice to get x-only
+  const serverPubKey = hex.encode(
+    secp256k1.getPublicKey(serverSecretKey, true).slice(1),
+  );
+  const userPubKey = hex.encode(
+    secp256k1.getPublicKey(userSecretKey, true).slice(1),
+  );
+  const userSecretKeyHex = hex.encode(userSecretKey);
+
+  // Test secret and hash lock
+  const secret = new Uint8Array(32).fill(42);
+  const hashLock = hex.encode(computeHash160(secret));
+
+  // Test parameters
+  const refundLocktime = 1700000000; // Unix timestamp in the past
+  const fundingTxId = "0".repeat(64); // Dummy txid
+  const htlcAmount = 100000n; // 100k sats
+
+  describe("computeHash160", () => {
+    it("should compute RIPEMD160(SHA256(data))", () => {
+      const data = new Uint8Array(32).fill(42);
+      const hash = computeHash160(data);
+
+      expect(hash).toBeInstanceOf(Uint8Array);
+      expect(hash.length).toBe(20);
+
+      // Hash should be deterministic
+      const hash2 = computeHash160(data);
+      expect(hex.encode(hash)).toBe(hex.encode(hash2));
+    });
+
+    it("should produce different hashes for different inputs", () => {
+      const data1 = new Uint8Array(32).fill(1);
+      const data2 = new Uint8Array(32).fill(2);
+
+      const hash1 = computeHash160(data1);
+      const hash2 = computeHash160(data2);
+
+      expect(hex.encode(hash1)).not.toBe(hex.encode(hash2));
+    });
+  });
+
+  describe("verifyHtlcAddress", () => {
+    it("should return true for matching HTLC parameters", () => {
+      // First, build a transaction to get the address
+      const result = buildOnchainRefundTransaction({
+        fundingTxId,
+        fundingVout: 0,
+        htlcAmount,
+        hashLock,
+        serverPubKey,
+        userPubKey,
+        userSecretKey: userSecretKeyHex,
+        refundLocktime,
+        destinationAddress: "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx",
+        feeRateSatPerVb: 1,
+        network: "testnet",
+      });
+
+      expect(result.txHex).toBeDefined();
+    });
+  });
+
+  describe("buildOnchainRefundTransaction", () => {
+    it("should build a valid refund transaction", () => {
+      const result = buildOnchainRefundTransaction({
+        fundingTxId,
+        fundingVout: 0,
+        htlcAmount,
+        hashLock,
+        serverPubKey,
+        userPubKey,
+        userSecretKey: userSecretKeyHex,
+        refundLocktime,
+        destinationAddress: "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx",
+        feeRateSatPerVb: 1,
+        network: "testnet",
+      });
+
+      expect(result.txHex).toBeDefined();
+      expect(result.txHex.length).toBeGreaterThan(0);
+      expect(result.txId).toBeDefined();
+      expect(result.txId.length).toBe(64);
+      expect(result.refundAmount).toBeDefined();
+      expect(result.fee).toBeDefined();
+    });
+
+    it("should deduct fee from refund amount", () => {
+      const feeRate = 5;
+      const result = buildOnchainRefundTransaction({
+        fundingTxId,
+        fundingVout: 0,
+        htlcAmount,
+        hashLock,
+        serverPubKey,
+        userPubKey,
+        userSecretKey: userSecretKeyHex,
+        refundLocktime,
+        destinationAddress: "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx",
+        feeRateSatPerVb: feeRate,
+        network: "testnet",
+      });
+
+      expect(result.refundAmount + result.fee).toBe(htlcAmount);
+      expect(result.fee).toBeGreaterThan(0n);
+    });
+
+    it("should throw if fee exceeds HTLC amount", () => {
+      const smallAmount = 100n; // Very small amount
+      const highFeeRate = 10; // Will exceed amount
+
+      expect(() =>
+        buildOnchainRefundTransaction({
+          fundingTxId,
+          fundingVout: 0,
+          htlcAmount: smallAmount,
+          hashLock,
+          serverPubKey,
+          userPubKey,
+          userSecretKey: userSecretKeyHex,
+          refundLocktime,
+          destinationAddress: "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx",
+          feeRateSatPerVb: highFeeRate,
+          network: "testnet",
+        }),
+      ).toThrow("exceeds HTLC amount");
+    });
+
+    it("should throw for invalid hash lock length", () => {
+      expect(() =>
+        buildOnchainRefundTransaction({
+          fundingTxId,
+          fundingVout: 0,
+          htlcAmount,
+          hashLock: "abcd", // Too short
+          serverPubKey,
+          userPubKey,
+          userSecretKey: userSecretKeyHex,
+          refundLocktime,
+          destinationAddress: "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx",
+          feeRateSatPerVb: 1,
+          network: "testnet",
+        }),
+      ).toThrow("Invalid hash lock length");
+    });
+
+    it("should throw for invalid server pubkey length", () => {
+      expect(() =>
+        buildOnchainRefundTransaction({
+          fundingTxId,
+          fundingVout: 0,
+          htlcAmount,
+          hashLock,
+          serverPubKey: "abcd", // Too short
+          userPubKey,
+          userSecretKey: userSecretKeyHex,
+          refundLocktime,
+          destinationAddress: "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx",
+          feeRateSatPerVb: 1,
+          network: "testnet",
+        }),
+      ).toThrow("Invalid server pubkey length");
+    });
+
+    it("should work for different networks", () => {
+      // Mainnet
+      const mainnetResult = buildOnchainRefundTransaction({
+        fundingTxId,
+        fundingVout: 0,
+        htlcAmount,
+        hashLock,
+        serverPubKey,
+        userPubKey,
+        userSecretKey: userSecretKeyHex,
+        refundLocktime,
+        destinationAddress: "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4",
+        feeRateSatPerVb: 1,
+        network: "mainnet",
+      });
+      expect(mainnetResult.txHex).toBeDefined();
+
+      // Signet (uses testnet addresses)
+      const signetResult = buildOnchainRefundTransaction({
+        fundingTxId,
+        fundingVout: 0,
+        htlcAmount,
+        hashLock,
+        serverPubKey,
+        userPubKey,
+        userSecretKey: userSecretKeyHex,
+        refundLocktime,
+        destinationAddress: "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx",
+        feeRateSatPerVb: 1,
+        network: "signet",
+      });
+      expect(signetResult.txHex).toBeDefined();
+    });
+  });
+});

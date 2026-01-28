@@ -9,6 +9,10 @@ import {
   type QuoteResponse,
   type TokenInfo,
 } from "./api/client.js";
+import {
+  type BitcoinNetwork,
+  buildOnchainRefundTransaction,
+} from "./refund/index.js";
 import { bytesToHex, Signer, type SwapParams } from "./signer";
 import {
   type StoredSwap,
@@ -77,15 +81,40 @@ export interface BitcoinToEvmSwapResult {
 
 /** Result of attempting a refund */
 export interface RefundResult {
-  /** Whether the refund was successful or not applicable */
+  /** Whether the refund was successful */
   success: boolean;
   /** Human-readable message about the refund status */
   message: string;
-  /** Transaction hash if an on-chain refund was executed */
-  txHash?: string;
+  /** Raw transaction hex (for on-chain refunds) */
+  txHex?: string;
+  /** Transaction ID (for on-chain refunds) */
+  txId?: string;
+  /** Amount being refunded in satoshis (after fees) */
+  refundAmount?: bigint;
+  /** Fee paid in satoshis */
+  fee?: bigint;
+  /** Whether the transaction was broadcast to the network */
+  broadcast?: boolean;
+}
+
+/** Options for on-chain refund */
+export interface OnchainRefundOptions {
+  /** Destination address to receive refunded BTC */
+  destinationAddress: string;
+  /** Fee rate in satoshis per virtual byte (default: 2) */
+  feeRateSatPerVb?: number;
+  /** If true, only build the transaction without broadcasting (default: false) */
+  dryRun?: boolean;
 }
 
 const DEFAULT_BASE_URL = "https://apilendaswap.lendasat.com/";
+
+/** Default Esplora URLs by network */
+const DEFAULT_ESPLORA_URLS: Record<string, string> = {
+  mainnet: "https://mempool.space/api",
+  testnet: "https://mempool.space/testnet/api",
+  signet: "https://mempool.space/signet/api",
+};
 
 /** Configuration options for the Lendaswap client. */
 export interface ClientConfig {
@@ -93,6 +122,8 @@ export interface ClientConfig {
   baseUrl: string;
   /** Optional API key for authenticated requests. */
   apiKey?: string;
+  /** Optional Esplora API URL for broadcasting Bitcoin transactions. */
+  esploraUrl?: string;
 }
 
 /**
@@ -120,6 +151,7 @@ export interface ClientConfig {
 export class ClientBuilder {
   #baseUrl: string = DEFAULT_BASE_URL;
   #apiKey?: string;
+  #esploraUrl?: string;
   #signerStorage?: WalletStorage;
   #swapStorage?: SwapStorage;
   #mnemonic?: string;
@@ -141,6 +173,22 @@ export class ClientBuilder {
    */
   withApiKey(apiKey: string): this {
     this.#apiKey = apiKey;
+    return this;
+  }
+
+  /**
+   * Sets the Esplora API URL for broadcasting Bitcoin transactions.
+   *
+   * If not set, defaults will be used based on the network:
+   * - mainnet: https://mempool.space/api
+   * - testnet: https://mempool.space/testnet/api
+   * - signet: https://mempool.space/signet/api
+   *
+   * @param esploraUrl - The Esplora API base URL.
+   * @returns The builder instance for chaining.
+   */
+  withEsploraUrl(esploraUrl: string): this {
+    this.#esploraUrl = esploraUrl;
     return this;
   }
 
@@ -223,6 +271,7 @@ export class ClientBuilder {
       {
         baseUrl: this.#baseUrl,
         apiKey: this.#apiKey,
+        esploraUrl: this.#esploraUrl,
       },
       signer,
       this.#signerStorage,
@@ -555,26 +604,31 @@ export class Client {
    * - **Lightning to EVM**: Cannot refund - Lightning swaps auto-expire if not completed.
    *   The invoice will simply expire and no funds are locked.
    * - **Arkade to EVM**: Off-chain refund (not yet implemented)
-   * - **Bitcoin (on-chain) to EVM**: On-chain refund required (not yet implemented)
+   * - **Bitcoin (on-chain) to EVM**: Builds a signed refund transaction that the user
+   *   must broadcast to reclaim their funds after the locktime.
    *
    * @param id - The UUID of the swap to refund.
-   * @returns A RefundResult indicating success/failure and relevant details.
-   * @throws Error if the swap cannot be found or is in an invalid state.
+   * @param options - Options for on-chain refunds (required for btc_onchain swaps).
+   * @returns A RefundResult with the transaction details (for on-chain) or status message.
+   * @throws Error if the swap cannot be found, storage is not configured, or params are invalid.
    *
    * @example
    * ```ts
-   * const result = await client.refundSwap(swapId);
+   * // For on-chain swaps
+   * const result = await client.refundSwap(swapId, {
+   *   destinationAddress: "bc1q...",
+   *   feeRateSatPerVb: 5,
+   * });
    * if (result.success) {
-   *   console.log("Refund:", result.message);
-   *   if (result.txHash) {
-   *     console.log("TX Hash:", result.txHash);
-   *   }
-   * } else {
-   *   console.error("Refund failed:", result.message);
+   *   console.log("Broadcast this transaction:", result.txHex);
+   *   console.log("Transaction ID:", result.txId);
    * }
    * ```
    */
-  async refundSwap(id: string): Promise<RefundResult> {
+  async refundSwap(
+    id: string,
+    options?: OnchainRefundOptions,
+  ): Promise<RefundResult> {
     // Get the swap to determine its type
     const swap = await this.getSwap(id);
 
@@ -604,13 +658,7 @@ export class Client {
 
     // Bitcoin on-chain swaps require on-chain refund transaction
     if (sourceToken === "btc_onchain") {
-      // TODO: Implement Bitcoin on-chain refund
-      return {
-        success: false,
-        message:
-          "Bitcoin on-chain refund is not yet implemented. " +
-          "On-chain refund support will be added in a future version.",
-      };
+      return this.#buildOnchainRefund(id, swap, options);
     }
 
     // Unknown source token
@@ -618,6 +666,209 @@ export class Client {
       success: false,
       message: `Unknown source token type: ${sourceToken}. Cannot determine refund method.`,
     };
+  }
+
+  /**
+   * Builds an on-chain Bitcoin refund transaction.
+   * @internal
+   */
+  async #buildOnchainRefund(
+    id: string,
+    swap: GetSwapResponse,
+    options?: OnchainRefundOptions,
+  ): Promise<RefundResult> {
+    // Validate options
+    if (!options?.destinationAddress) {
+      return {
+        success: false,
+        message:
+          "Destination address is required for on-chain refunds. " +
+          'Provide it via the options parameter: { destinationAddress: "bc1q..." }',
+      };
+    }
+
+    // Check swap storage is configured
+    if (!this.#swapStorage) {
+      return {
+        success: false,
+        message:
+          "Swap storage is not configured. Cannot retrieve the secret key needed for refund.",
+      };
+    }
+
+    // Get stored swap data (contains secret key)
+    const storedSwap = await this.#swapStorage.get(id);
+    if (!storedSwap) {
+      return {
+        success: false,
+        message: `Swap ${id} not found in local storage. The secret key is required to sign the refund transaction.`,
+      };
+    }
+
+    // Ensure we have an on-chain swap response
+    if (swap.direction !== "onchain_to_evm") {
+      return {
+        success: false,
+        message: `Expected onchain_to_evm swap, got ${swap.direction}`,
+      };
+    }
+
+    // Type assertion - we've verified direction is onchain_to_evm
+    const onchainSwap = swap as OnchainToEvmSwapResponse & {
+      direction: "onchain_to_evm";
+    };
+
+    // Check if funding transaction exists
+    if (!onchainSwap.btc_fund_txid) {
+      return {
+        success: false,
+        message:
+          "No funding transaction found. The swap was not funded, so there is nothing to refund.",
+      };
+    }
+
+    // Check refund locktime
+    const now = Math.floor(Date.now() / 1000);
+    if (now < onchainSwap.btc_refund_locktime) {
+      const remainingSeconds = onchainSwap.btc_refund_locktime - now;
+      const remainingMinutes = Math.ceil(remainingSeconds / 60);
+      return {
+        success: false,
+        message:
+          `Refund is not yet available. The locktime expires in ${remainingMinutes} minutes ` +
+          `(at ${new Date(onchainSwap.btc_refund_locktime * 1000).toISOString()}).`,
+      };
+    }
+
+    // Map network string to BitcoinNetwork type
+    const networkMap: Record<string, BitcoinNetwork> = {
+      mainnet: "mainnet",
+      testnet: "testnet",
+      signet: "signet",
+      regtest: "regtest",
+    };
+    const network = networkMap[onchainSwap.network];
+    if (!network) {
+      return {
+        success: false,
+        message: `Unknown Bitcoin network: ${onchainSwap.network}`,
+      };
+    }
+
+    // Get user's x-only public key (32 bytes) from stored swap
+    // The stored publicKey is the full compressed pubkey (33 bytes)
+    // We need to extract the x-only portion (drop the first byte prefix)
+    const fullPubKey = storedSwap.publicKey;
+    const userPubKey =
+      fullPubKey.length === 66 ? fullPubKey.slice(2) : fullPubKey;
+
+    try {
+      // Build the refund transaction
+      const result = buildOnchainRefundTransaction({
+        fundingTxId: onchainSwap.btc_fund_txid,
+        fundingVout: 0, // Assuming output index 0
+        htlcAmount: BigInt(onchainSwap.source_amount),
+        hashLock: onchainSwap.btc_hash_lock,
+        serverPubKey: onchainSwap.btc_server_pk,
+        userPubKey,
+        userSecretKey: storedSwap.secretKey,
+        refundLocktime: onchainSwap.btc_refund_locktime,
+        destinationAddress: options.destinationAddress,
+        feeRateSatPerVb: options.feeRateSatPerVb ?? 2,
+        network,
+      });
+
+      // If dry run, just return the transaction without broadcasting
+      if (options.dryRun) {
+        return {
+          success: true,
+          message:
+            "Refund transaction built successfully (dry run - not broadcast).",
+          txHex: result.txHex,
+          txId: result.txId,
+          refundAmount: result.refundAmount,
+          fee: result.fee,
+          broadcast: false,
+        };
+      }
+
+      // Broadcast the transaction
+      const esploraUrl =
+        this.#config.esploraUrl ?? DEFAULT_ESPLORA_URLS[network];
+      if (!esploraUrl) {
+        return {
+          success: true,
+          message:
+            "Refund transaction built successfully. No Esplora URL configured for broadcast. " +
+            "Broadcast the txHex manually to the Bitcoin network.",
+          txHex: result.txHex,
+          txId: result.txId,
+          refundAmount: result.refundAmount,
+          fee: result.fee,
+          broadcast: false,
+        };
+      }
+
+      try {
+        await this.#broadcastTransaction(esploraUrl, result.txHex);
+        return {
+          success: true,
+          message: "Refund transaction broadcast successfully!",
+          txHex: result.txHex,
+          txId: result.txId,
+          refundAmount: result.refundAmount,
+          fee: result.fee,
+          broadcast: true,
+        };
+      } catch (broadcastError) {
+        const broadcastMessage =
+          broadcastError instanceof Error
+            ? broadcastError.message
+            : String(broadcastError);
+        return {
+          success: true,
+          message:
+            `Transaction built but broadcast failed: ${broadcastMessage}. ` +
+            "You can broadcast the txHex manually.",
+          txHex: result.txHex,
+          txId: result.txId,
+          refundAmount: result.refundAmount,
+          fee: result.fee,
+          broadcast: false,
+        };
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        message: `Failed to build refund transaction: ${message}`,
+      };
+    }
+  }
+
+  /**
+   * Broadcasts a raw transaction to the Bitcoin network via Esplora API.
+   * @internal
+   */
+  async #broadcastTransaction(
+    esploraUrl: string,
+    txHex: string,
+  ): Promise<string> {
+    const response = await fetch(`${esploraUrl}/tx`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain",
+      },
+      body: txHex,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Broadcast failed: ${response.status} - ${errorText}`);
+    }
+
+    // Esplora returns the txid on success
+    return response.text();
   }
 
   // =========================================================================

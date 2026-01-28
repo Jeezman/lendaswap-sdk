@@ -1,20 +1,55 @@
 /**
  * Refund a swap that has not completed.
+ *
+ * For Lightning swaps: No action needed (auto-expires)
+ * For on-chain swaps: Builds a refund transaction to broadcast
  */
 
-import type {Client, SwapStorage} from "@lendasat/lendaswap-sdk-pure";
+import type { Client, SwapStorage } from "@lendasat/lendaswap-sdk-pure";
 
 export async function refundSwap(
   client: Client,
   swapStorage: SwapStorage | undefined,
   swapId: string | undefined,
+  destinationAddress: string | undefined,
+  feeRateStr: string | undefined,
+  dryRunFlag: string | undefined,
 ): Promise<void> {
   if (!swapId) {
-    console.error("Usage: tsx src/index.ts refund <swap-id>");
+    console.error("Usage: tsx src/index.ts refund <swap-id> [destination-address] [fee-rate] [--dry-run]");
     console.error("");
-    console.error("Example:");
+    console.error("Arguments:");
+    console.error("  swap-id             The swap ID to refund");
+    console.error("  destination-address Bitcoin address to receive refund (required for on-chain swaps)");
+    console.error("  fee-rate            Fee rate in sat/vB (default: 2)");
+    console.error("  --dry-run           Build transaction without broadcasting");
+    console.error("");
+    console.error("Examples:");
+    console.error("  # Check if refund is available");
     console.error("  tsx src/index.ts refund 12345678-1234-1234-1234-123456789abc");
+    console.error("");
+    console.error("  # Refund on-chain swap to a Bitcoin address");
+    console.error("  tsx src/index.ts refund 12345678-... bc1q... 5");
+    console.error("");
+    console.error("  # Build refund transaction without broadcasting");
+    console.error("  tsx src/index.ts refund 12345678-... bc1q... 5 --dry-run");
     process.exit(1);
+  }
+
+  // Check for --dry-run flag in any position
+  const dryRun =
+    dryRunFlag === "--dry-run" ||
+    destinationAddress === "--dry-run" ||
+    feeRateStr === "--dry-run";
+
+  // Adjust arguments if --dry-run was in an unexpected position
+  let actualDestination = destinationAddress;
+  let actualFeeRate = feeRateStr;
+  if (destinationAddress === "--dry-run") {
+    actualDestination = undefined;
+    actualFeeRate = undefined;
+  } else if (feeRateStr === "--dry-run") {
+    actualFeeRate = undefined;
   }
 
   console.log(`Attempting to refund swap: ${swapId}`);
@@ -28,21 +63,82 @@ export async function refundSwap(
   console.log(`Target token:   ${swap.target_token}`);
   console.log("");
 
-  // Attempt the refund
+  // For on-chain swaps, require destination address
+  const isOnchainSwap = swap.source_token === "btc_onchain";
+  if (isOnchainSwap && !actualDestination) {
+    console.error("=".repeat(60));
+    console.error("DESTINATION ADDRESS REQUIRED");
+    console.error("=".repeat(60));
+    console.error("");
+    console.error("On-chain swaps require a Bitcoin address to receive the refund.");
+    console.error("");
+    console.error("Usage:");
+    console.error(`  npm run refund -- ${swapId} <bitcoin-address> [fee-rate]`);
+    console.error("");
+    console.error("Example:");
+    console.error(`  npm run refund -- ${swapId} bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4 5`);
+    console.error("");
+    console.error("=".repeat(60));
+    process.exit(1);
+  }
+
+  // Parse fee rate
+  const feeRateSatPerVb = actualFeeRate ? Number.parseFloat(actualFeeRate) : undefined;
+  if (actualFeeRate && (Number.isNaN(feeRateSatPerVb) || feeRateSatPerVb! <= 0)) {
+    console.error("Invalid fee rate. Must be a positive number.");
+    process.exit(1);
+  }
+
   console.log("Attempting refund...");
+  if (isOnchainSwap) {
+    console.log(`  Destination: ${actualDestination}`);
+    console.log(`  Fee rate:    ${feeRateSatPerVb ?? 2} sat/vB`);
+    if (dryRun) {
+      console.log("  Mode:        Dry run (no broadcast)");
+    }
+  }
   console.log("");
 
   try {
-    const result = await client.refundSwap(swapId);
+    const result = await client.refundSwap(swapId, {
+      destinationAddress: actualDestination ?? "",
+      feeRateSatPerVb,
+      dryRun,
+    });
 
     if (result.success) {
       console.log("=".repeat(60));
-      console.log("REFUND SUCCESSFUL");
+      if (result.broadcast) {
+        console.log("REFUND BROADCAST SUCCESSFULLY!");
+      } else {
+        console.log("REFUND TRANSACTION BUILT");
+      }
       console.log("=".repeat(60));
       console.log("");
-      console.log(`  Message: ${result.message}`);
-      if (result.txHash) {
-        console.log(`  TX Hash: ${result.txHash}`);
+      console.log(`  ${result.message}`);
+      console.log("");
+      if (result.txId) {
+        console.log(`  Transaction ID: ${result.txId}`);
+      }
+      if (result.refundAmount !== undefined) {
+        console.log(`  Refund amount:  ${result.refundAmount} sats`);
+      }
+      if (result.fee !== undefined) {
+        console.log(`  Network fee:    ${result.fee} sats`);
+      }
+      if (result.broadcast !== undefined) {
+        console.log(`  Broadcast:      ${result.broadcast ? "Yes" : "No"}`);
+      }
+      console.log("");
+      if (result.txHex && !result.broadcast) {
+        console.log("Raw Transaction (broadcast manually if needed):");
+        console.log("");
+        console.log(result.txHex);
+        console.log("");
+        console.log("You can broadcast using:");
+        console.log("  - https://mempool.space/tx/push");
+        console.log("  - bitcoin-cli sendrawtransaction <txhex>");
+        console.log("  - Any Bitcoin wallet that supports raw transaction broadcast");
       }
       console.log("");
       console.log("=".repeat(60));

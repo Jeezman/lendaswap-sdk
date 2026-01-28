@@ -40,6 +40,7 @@ export const CONFIG = {
   mnemonic: process.env.MNEMONIC,
   apiKey: process.env.LENDASWAP_API_KEY,
   dbPath: process.env.LENDASWAP_DB_PATH || path.join(os.homedir(), ".lendaswap", "data.db"),
+  esploraUrl: process.env.ESPLORA_URL, // Optional, defaults by network
 };
 
 // Ensure the database directory exists
@@ -71,6 +72,10 @@ async function createClient(): Promise<Client> {
     builder = builder.withMnemonic(CONFIG.mnemonic);
   }
 
+  if (CONFIG.esploraUrl) {
+    builder = builder.withEsploraUrl(CONFIG.esploraUrl);
+  }
+
   return builder.build();
 }
 
@@ -87,7 +92,7 @@ Commands:
   swap <from> <to> <amount> <addr>   Create a new swap
   watch <id>                         Watch a swap's status (polls backend)
   redeem <id>                        Redeem a swap (when serverfunded)
-  refund <id>                        Refund a swap (when pending/expired)
+  refund <id> [addr] [fee]           Refund a swap (addr/fee for on-chain)
   swaps                              List locally stored swaps
   info                               Show wallet info
   help                               Show this help message
@@ -98,7 +103,7 @@ Examples:
   tsx src/index.ts swap btc_lightning usdc_pol 100000 0x1234...
   tsx src/index.ts watch 12345678-1234-1234-1234-123456789abc
   tsx src/index.ts redeem 12345678-1234-1234-1234-123456789abc
-  tsx src/index.ts refund 12345678-1234-1234-1234-123456789abc
+  tsx src/index.ts refund 12345678-... bc1q... 5
   tsx src/index.ts swaps
   tsx src/index.ts info
 
@@ -107,6 +112,7 @@ Environment Variables:
   MNEMONIC            Wallet mnemonic (optional, generates new if not set)
   LENDASWAP_API_KEY   API key for authentication (optional)
   LENDASWAP_DB_PATH   SQLite database path (default: ~/.lendaswap/data.db)
+  ESPLORA_URL         Esplora API URL for broadcasting (default: mempool.space)
 `);
 }
 
@@ -143,7 +149,7 @@ async function main(): Promise<void> {
       await redeemSwap(client, swapStorage, args[1]);
       break;
     case "refund":
-      await refundSwap(client, swapStorage, args[1]);
+      await refundSwap(client, swapStorage, args[1], args[2], args[3], args[4]);
       break;
     case "swaps":
       await listSwaps(swapStorage);

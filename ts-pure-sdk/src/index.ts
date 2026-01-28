@@ -40,14 +40,23 @@ export type {
   BtcToEvmSwapResult,
   ClientConfig,
   EvmChain,
+  OnchainRefundOptions,
   RefundResult,
 } from "./client.js";
 // Main client
 export { Client, ClientBuilder } from "./client.js";
+// Refund module
+export {
+  type BitcoinNetwork,
+  buildOnchainRefundTransaction,
+  computeHash160,
+  type OnchainRefundParams,
+  type OnchainRefundResult,
+  verifyHtlcAddress,
+} from "./refund/index.js";
 export type { SwapParams } from "./signer/index.js";
 // Signer (HD wallet key derivation)
 export { bytesToHex, hexToBytes, Signer } from "./signer/index.js";
-
 // IndexedDB storage (browser)
 export {
   IdbSwapStorage,
