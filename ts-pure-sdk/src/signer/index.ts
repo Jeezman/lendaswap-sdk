@@ -208,17 +208,12 @@ export class Signer {
   /**
    * Get the serialized user ID Xpub string.
    *
-   * @returns The base58-encoded extended public key.
+   * @returns The base58check-encoded extended public key (xpub...).
    */
   getUserIdXpubString(): string {
     const xpub = this.deriveUserIdXpub();
-    // HDKey doesn't have a direct xpub serialization, we need to get the public key
-    // For now, return the hex-encoded public key at the derivation path
-    // TODO: Implement proper xpub serialization if needed
-    if (!xpub.publicKey) {
-      throw new Error("Failed to derive user ID xpub");
-    }
-    return bytesToHex(xpub.publicKey);
+    // HDKey.publicExtendedKey returns the base58check-encoded xpub
+    return xpub.publicExtendedKey;
   }
 }
 

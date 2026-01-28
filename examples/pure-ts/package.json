@@ -1,0 +1,22 @@
+{
+  "name": "lendaswap-pure-ts-example",
+  "version": "1.0.0",
+  "description": "Example CLI using Lendaswap Pure TypeScript SDK",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "pairs": "tsx src/index.ts pairs",
+    "quote": "tsx src/index.ts quote",
+    "swap": "tsx src/index.ts swap",
+    "swaps": "tsx src/index.ts swaps",
+    "info": "tsx src/index.ts info"
+  },
+  "dependencies": {
+    "@lendasat/lendaswap-sdk-pure": "file:../../ts-pure-sdk"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.10",
+    "tsx": "^4.7.0",
+    "typescript": "^5.8.3"
+  }
+}

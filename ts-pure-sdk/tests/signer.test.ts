@@ -107,15 +107,17 @@ describe("Signer", () => {
   });
 
   describe("getUserIdXpubString", () => {
-    it("should return a hex-encoded public key", () => {
+    it("should return a base58-encoded xpub", () => {
       const mnemonic =
         "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
       const signer = Signer.fromMnemonic(mnemonic);
       const xpub = signer.getUserIdXpubString();
 
-      // Should be a hex string (66 chars for compressed public key)
-      expect(xpub).toMatch(/^[0-9a-f]+$/);
-      expect(xpub).toHaveLength(66);
+      // Should be a base58-encoded extended public key starting with "xpub"
+      expect(xpub).toMatch(
+        /^xpub[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]+$/,
+      );
+      expect(xpub).toHaveLength(111); // Standard xpub length
     });
 
     it("should return same xpub for same mnemonic", () => {

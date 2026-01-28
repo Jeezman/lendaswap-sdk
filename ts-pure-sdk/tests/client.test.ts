@@ -165,8 +165,11 @@ describe("Client Signer", () => {
     const client = await Client.builder().withSignerStorage(storage).build();
 
     const xpub = client.getUserIdXpub();
-    expect(xpub).toMatch(/^[0-9a-f]+$/);
-    expect(xpub).toHaveLength(66);
+    // Should be a base58-encoded extended public key starting with "xpub"
+    expect(xpub).toMatch(
+      /^xpub[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]+$/,
+    );
+    expect(xpub).toHaveLength(111);
   });
 
   it("should set key index", async () => {
