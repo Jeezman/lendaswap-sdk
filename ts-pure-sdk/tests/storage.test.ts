@@ -3,6 +3,8 @@ import {
   InMemorySwapStorage,
   InMemoryWalletStorage,
   inMemoryStorageFactory,
+  type StoredSwap,
+  SWAP_STORAGE_VERSION,
 } from "../src/index.js";
 
 describe("InMemoryWalletStorage", () => {
@@ -76,16 +78,35 @@ describe("InMemoryWalletStorage", () => {
   });
 });
 
-describe("InMemorySwapStorage", () => {
-  interface TestSwap {
-    id: string;
-    amount: number;
-  }
+/** Helper to create a test StoredSwap */
+function createTestSwap(
+  swapId: string,
+  overrides: Partial<StoredSwap> = {},
+): StoredSwap {
+  return {
+    version: SWAP_STORAGE_VERSION,
+    swapId,
+    keyIndex: 0,
+    response: {
+      direction: "btc_to_evm",
+      id: swapId,
+      status: "pending",
+    } as StoredSwap["response"],
+    publicKey: `02${"a".repeat(64)}`,
+    preimage: "b".repeat(64),
+    preimageHash: "c".repeat(64),
+    secretKey: "d".repeat(64),
+    storedAt: Date.now(),
+    updatedAt: Date.now(),
+    ...overrides,
+  };
+}
 
-  let storage: InMemorySwapStorage<TestSwap>;
+describe("InMemorySwapStorage", () => {
+  let storage: InMemorySwapStorage;
 
   beforeEach(() => {
-    storage = new InMemorySwapStorage<TestSwap>();
+    storage = new InMemorySwapStorage();
   });
 
   describe("get/store", () => {
@@ -95,25 +116,49 @@ describe("InMemorySwapStorage", () => {
     });
 
     it("should store and retrieve swap", async () => {
-      const testSwap: TestSwap = { id: "swap-1", amount: 100 };
-      await storage.store("swap-1", testSwap);
+      const testSwap = createTestSwap("swap-1", { keyIndex: 5 });
+      await storage.store(testSwap);
 
       const retrieved = await storage.get("swap-1");
       expect(retrieved).toEqual(testSwap);
     });
 
     it("should overwrite existing swap", async () => {
-      await storage.store("swap-1", { id: "swap-1", amount: 100 });
-      await storage.store("swap-1", { id: "swap-1", amount: 200 });
+      await storage.store(createTestSwap("swap-1", { keyIndex: 1 }));
+      await storage.store(createTestSwap("swap-1", { keyIndex: 2 }));
 
       const retrieved = await storage.get("swap-1");
-      expect(retrieved?.amount).toBe(200);
+      expect(retrieved?.keyIndex).toBe(2);
+    });
+  });
+
+  describe("update", () => {
+    it("should update swap response", async () => {
+      const testSwap = createTestSwap("swap-1");
+      await storage.store(testSwap);
+
+      const updatedResponse = {
+        ...testSwap.response,
+        status: "clientredeemed",
+      } as StoredSwap["response"];
+      await storage.update("swap-1", updatedResponse);
+
+      const retrieved = await storage.get("swap-1");
+      expect(retrieved?.response.status).toBe("clientredeemed");
+      expect(retrieved?.updatedAt).toBeGreaterThanOrEqual(testSwap.updatedAt);
+    });
+
+    it("should throw when updating non-existent swap", async () => {
+      const response = createTestSwap("swap-1").response;
+      await expect(storage.update("non-existent", response)).rejects.toThrow(
+        "Swap not found: non-existent",
+      );
     });
   });
 
   describe("delete", () => {
     it("should delete existing swap", async () => {
-      await storage.store("swap-1", { id: "swap-1", amount: 100 });
+      await storage.store(createTestSwap("swap-1"));
       await storage.delete("swap-1");
 
       const retrieved = await storage.get("swap-1");
@@ -132,9 +177,9 @@ describe("InMemorySwapStorage", () => {
     });
 
     it("should return all swap IDs", async () => {
-      await storage.store("swap-1", { id: "swap-1", amount: 100 });
-      await storage.store("swap-2", { id: "swap-2", amount: 200 });
-      await storage.store("swap-3", { id: "swap-3", amount: 300 });
+      await storage.store(createTestSwap("swap-1"));
+      await storage.store(createTestSwap("swap-2"));
+      await storage.store(createTestSwap("swap-3"));
 
       const list = await storage.list();
       expect(list).toHaveLength(3);
@@ -151,20 +196,22 @@ describe("InMemorySwapStorage", () => {
     });
 
     it("should return all swaps", async () => {
-      await storage.store("swap-1", { id: "swap-1", amount: 100 });
-      await storage.store("swap-2", { id: "swap-2", amount: 200 });
+      const swap1 = createTestSwap("swap-1", { keyIndex: 0 });
+      const swap2 = createTestSwap("swap-2", { keyIndex: 1 });
+      await storage.store(swap1);
+      await storage.store(swap2);
 
       const all = await storage.getAll();
       expect(all).toHaveLength(2);
-      expect(all).toContainEqual({ id: "swap-1", amount: 100 });
-      expect(all).toContainEqual({ id: "swap-2", amount: 200 });
+      expect(all.map((s) => s.swapId)).toContain("swap-1");
+      expect(all.map((s) => s.swapId)).toContain("swap-2");
     });
   });
 
   describe("clear", () => {
     it("should clear all swaps", async () => {
-      await storage.store("swap-1", { id: "swap-1", amount: 100 });
-      await storage.store("swap-2", { id: "swap-2", amount: 200 });
+      await storage.store(createTestSwap("swap-1"));
+      await storage.store(createTestSwap("swap-2"));
 
       await storage.clear();
 
@@ -181,9 +228,7 @@ describe("inMemoryStorageFactory", () => {
   });
 
   it("should create swap storage", () => {
-    const swapStorage = inMemoryStorageFactory.createSwapStorage<{
-      test: string;
-    }>();
+    const swapStorage = inMemoryStorageFactory.createSwapStorage();
     expect(swapStorage).toBeInstanceOf(InMemorySwapStorage);
   });
 });

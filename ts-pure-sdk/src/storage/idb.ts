@@ -6,7 +6,8 @@
  */
 
 import Dexie, { type EntityTable } from "dexie";
-import type { SwapStorage, WalletStorage } from "./index.js";
+import type { GetSwapResponse } from "../api/client.js";
+import type { StoredSwap, SwapStorage, WalletStorage } from "./index.js";
 
 const DB_NAME = "lendaswap-v3";
 const DB_VERSION = 1;
@@ -17,26 +18,27 @@ interface WalletRecord {
   value: string | number;
 }
 
-// Swap record type for the database
-interface SwapRecord<T> {
-  swapId: string;
-  data: T;
-}
-
 /**
  * Dexie database class for Lendaswap storage.
+ *
+ * Schema versions:
+ * - v1: Initial schema with wallet and swaps tables
  */
 class LendaswapDatabase extends Dexie {
   wallet!: EntityTable<WalletRecord, "key">;
-  swaps!: EntityTable<SwapRecord<unknown>, "swapId">;
+  swaps!: EntityTable<StoredSwap, "swapId">;
 
   constructor() {
     super(DB_NAME);
 
+    // Version 1: Initial schema
     this.version(DB_VERSION).stores({
       wallet: "key",
       swaps: "swapId",
     });
+
+    // Future migrations would be added here:
+    // this.version(2).stores({ ... }).upgrade(tx => { ... });
   }
 }
 
@@ -117,24 +119,38 @@ export class IdbWalletStorage implements WalletStorage {
  *
  * @example
  * ```ts
- * const storage = new IdbSwapStorage<MySwapData>();
- * await storage.store("swap-id", { ... });
+ * const storage = new IdbSwapStorage();
+ * await storage.store({ swapId: "swap-id", ... });
  * ```
  */
-export class IdbSwapStorage<T> implements SwapStorage<T> {
+export class IdbSwapStorage implements SwapStorage {
   readonly #db: LendaswapDatabase;
 
   constructor() {
     this.#db = getDatabase();
   }
 
-  async get(swapId: string): Promise<T | null> {
+  async get(swapId: string): Promise<StoredSwap | null> {
     const record = await this.#db.swaps.get(swapId);
-    return (record?.data as T) ?? null;
+    return record ?? null;
   }
 
-  async store(swapId: string, data: T): Promise<void> {
-    await this.#db.swaps.put({ swapId, data });
+  async store(swap: StoredSwap): Promise<void> {
+    await this.#db.swaps.put(swap);
+  }
+
+  async update(swapId: string, response: GetSwapResponse): Promise<void> {
+    await this.#db.transaction("rw", this.#db.swaps, async () => {
+      const existing = await this.#db.swaps.get(swapId);
+      if (!existing) {
+        throw new Error(`Swap not found: ${swapId}`);
+      }
+      await this.#db.swaps.put({
+        ...existing,
+        response,
+        updatedAt: Date.now(),
+      });
+    });
   }
 
   async delete(swapId: string): Promise<void> {
@@ -146,9 +162,8 @@ export class IdbSwapStorage<T> implements SwapStorage<T> {
     return records.map((r) => r.swapId);
   }
 
-  async getAll(): Promise<T[]> {
-    const records = await this.#db.swaps.toArray();
-    return records.map((r) => r.data as T);
+  async getAll(): Promise<StoredSwap[]> {
+    return this.#db.swaps.toArray();
   }
 
   async clear(): Promise<void> {
@@ -163,5 +178,5 @@ export class IdbSwapStorage<T> implements SwapStorage<T> {
  */
 export const idbStorageFactory = {
   createWalletStorage: (): WalletStorage => new IdbWalletStorage(),
-  createSwapStorage: <T>(): SwapStorage<T> => new IdbSwapStorage<T>(),
+  createSwapStorage: (): SwapStorage => new IdbSwapStorage(),
 };

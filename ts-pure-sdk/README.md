@@ -69,7 +69,28 @@ Browser storage uses [Dexie](https://dexie.org/) for IndexedDB access with the d
 **Storage Types:**
 
 - `WalletStorage` - Stores mnemonic and key derivation index
-- `SwapStorage<T>` - Stores swap data (keyed by swap ID)
+- `SwapStorage` - Stores `StoredSwap` records (API response + client-side params)
+
+**StoredSwap Structure:**
+
+Each swap is stored with both the API response and client-side parameters needed for claim/refund operations:
+
+```typescript
+interface StoredSwap {
+  version: number;        // Schema version for migrations
+  swapId: string;         // Primary key
+  keyIndex: number;       // Key derivation index
+  response: GetSwapResponse;  // Full API response
+  publicKey: string;      // Hex-encoded compressed public key
+  preimage: string;       // Hex-encoded preimage for claiming HTLCs
+  preimageHash: string;   // Hex-encoded hash lock
+  secretKey: string;      // Hex-encoded secret key for signing
+  storedAt: number;       // Timestamp when first stored
+  updatedAt: number;      // Timestamp when last updated
+}
+```
+
+**Usage:**
 
 ```typescript
 import {
@@ -79,21 +100,35 @@ import {
   IdbSwapStorage,       // Browser only (IndexedDB via Dexie)
   idbStorageFactory,    // Factory for creating IDB storage
   inMemoryStorageFactory,
+  SWAP_STORAGE_VERSION,
+  type StoredSwap,
 } from "@lendasat/lendaswap-sdk-pure";
 
 // In-memory storage (for testing or temporary sessions)
 const walletStorage = new InMemoryWalletStorage();
-const swapStorage = new InMemorySwapStorage<MySwapData>();
+const swapStorage = new InMemorySwapStorage();
 
 // IndexedDB storage (for browser persistence)
 // Uses shared "lendaswap-v3" database with "wallet" and "swaps" tables
 const walletStorage = new IdbWalletStorage();
-const swapStorage = new IdbSwapStorage<MySwapData>();
+const swapStorage = new IdbSwapStorage();
 
-// Or use the factory
-const { createWalletStorage, createSwapStorage } = idbStorageFactory;
-const walletStorage = createWalletStorage();
-const swapStorage = createSwapStorage<MySwapData>();
+// Store a swap
+await swapStorage.store({
+  version: SWAP_STORAGE_VERSION,
+  swapId: "uuid",
+  keyIndex: 0,
+  response: apiResponse,
+  publicKey: "02...",
+  preimage: "...",
+  preimageHash: "...",
+  secretKey: "...",
+  storedAt: Date.now(),
+  updatedAt: Date.now(),
+});
+
+// Update swap response (e.g., after polling for status)
+await swapStorage.update("uuid", newApiResponse);
 
 // Custom storage (implement the WalletStorage/SwapStorage interfaces)
 // For React Native, you might use AsyncStorage or SQLite
@@ -113,7 +148,8 @@ src/
 │   └── index.ts        # HD wallet key derivation (BIP39/BIP32)
 ├── storage/
 │   ├── index.ts        # Storage interfaces and in-memory implementations
-│   └── idb.ts          # IndexedDB storage for browsers
+│   ├── idb.ts          # IndexedDB storage for browsers
+│   └── types.ts        # StoredSwap type definition
 ├── client.ts           # High-level Client class with convenience methods
 └── index.ts            # Public exports
 ```

@@ -5,6 +5,12 @@
  * for different backends (IndexedDB, SQLite, etc.).
  */
 
+import type { GetSwapResponse } from "../api/client.js";
+import type { StoredSwap } from "./types.js";
+
+export type { StoredSwap } from "./types.js";
+export { SWAP_STORAGE_VERSION } from "./types.js";
+
 /**
  * Storage interface for wallet data (mnemonic, key index).
  *
@@ -52,22 +58,30 @@ export interface WalletStorage {
 /**
  * Storage interface for swap data.
  *
- * @template T - The type of swap data to store.
+ * Stores `StoredSwap` records which contain both the API response
+ * and client-side parameters needed for claim/refund operations.
  */
-export interface SwapStorage<T> {
+export interface SwapStorage {
   /**
    * Get swap data by ID.
    * @param swapId - The swap ID.
-   * @returns The swap data, or null if not found.
+   * @returns The stored swap data, or null if not found.
    */
-  get(swapId: string): Promise<T | null>;
+  get(swapId: string): Promise<StoredSwap | null>;
 
   /**
-   * Store swap data.
-   * @param swapId - The swap ID.
-   * @param data - The swap data to store.
+   * Store a new swap.
+   * @param swap - The swap data to store (must include swapId).
    */
-  store(swapId: string, data: T): Promise<void>;
+  store(swap: StoredSwap): Promise<void>;
+
+  /**
+   * Update an existing swap's API response.
+   * @param swapId - The swap ID.
+   * @param response - The updated API response.
+   * @throws Error if swap is not found.
+   */
+  update(swapId: string, response: GetSwapResponse): Promise<void>;
 
   /**
    * Delete swap data by ID.
@@ -83,9 +97,9 @@ export interface SwapStorage<T> {
 
   /**
    * Get all stored swaps.
-   * @returns Array of all swap data.
+   * @returns Array of all stored swap data.
    */
-  getAll(): Promise<T[]>;
+  getAll(): Promise<StoredSwap[]>;
 
   /**
    * Clear all swap data from storage.
@@ -145,19 +159,31 @@ export class InMemoryWalletStorage implements WalletStorage {
  *
  * @example
  * ```ts
- * const storage = new InMemorySwapStorage<MySwapData>();
- * await storage.store("swap-id", { ... });
+ * const storage = new InMemorySwapStorage();
+ * await storage.store({ swapId: "swap-id", ... });
  * ```
  */
-export class InMemorySwapStorage<T> implements SwapStorage<T> {
-  readonly #data = new Map<string, T>();
+export class InMemorySwapStorage implements SwapStorage {
+  readonly #data = new Map<string, StoredSwap>();
 
-  async get(swapId: string): Promise<T | null> {
+  async get(swapId: string): Promise<StoredSwap | null> {
     return this.#data.get(swapId) ?? null;
   }
 
-  async store(swapId: string, data: T): Promise<void> {
-    this.#data.set(swapId, data);
+  async store(swap: StoredSwap): Promise<void> {
+    this.#data.set(swap.swapId, swap);
+  }
+
+  async update(swapId: string, response: GetSwapResponse): Promise<void> {
+    const existing = this.#data.get(swapId);
+    if (!existing) {
+      throw new Error(`Swap not found: ${swapId}`);
+    }
+    this.#data.set(swapId, {
+      ...existing,
+      response,
+      updatedAt: Date.now(),
+    });
   }
 
   async delete(swapId: string): Promise<void> {
@@ -168,7 +194,7 @@ export class InMemorySwapStorage<T> implements SwapStorage<T> {
     return Array.from(this.#data.keys());
   }
 
-  async getAll(): Promise<T[]> {
+  async getAll(): Promise<StoredSwap[]> {
     return Array.from(this.#data.values());
   }
 
@@ -184,7 +210,7 @@ export class InMemorySwapStorage<T> implements SwapStorage<T> {
  */
 export type StorageFactory = {
   createWalletStorage: () => WalletStorage;
-  createSwapStorage: <T>() => SwapStorage<T>;
+  createSwapStorage: () => SwapStorage;
 };
 
 /**
@@ -194,5 +220,5 @@ export type StorageFactory = {
  */
 export const inMemoryStorageFactory: StorageFactory = {
   createWalletStorage: () => new InMemoryWalletStorage(),
-  createSwapStorage: <T>() => new InMemorySwapStorage<T>(),
+  createSwapStorage: () => new InMemorySwapStorage(),
 };

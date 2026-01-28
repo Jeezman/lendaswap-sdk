@@ -46,6 +46,7 @@ export {
 } from "./storage/idb.js";
 export type {
   StorageFactory,
+  StoredSwap,
   SwapStorage,
   WalletStorage,
 } from "./storage/index.js";
@@ -54,4 +55,5 @@ export {
   InMemorySwapStorage,
   InMemoryWalletStorage,
   inMemoryStorageFactory,
+  SWAP_STORAGE_VERSION,
 } from "./storage/index.js";
