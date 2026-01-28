@@ -3,9 +3,14 @@
  *
  * Provides refund transaction building for different swap types:
  * - On-chain Bitcoin HTLC refunds (BTC → EVM swaps)
- * - Arkade off-chain refunds (future)
+ * - Arkade off-chain VHTLC refunds (Arkade → EVM swaps)
  */
 
+export {
+  type ArkadeRefundParams,
+  type ArkadeRefundResult,
+  buildArkadeRefund,
+} from "./arkade.js";
 export {
   type BitcoinNetwork,
   buildOnchainRefundTransaction,

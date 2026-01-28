@@ -11,8 +11,9 @@ import {
 } from "./api/client.js";
 import {
   type BitcoinNetwork,
+  buildArkadeRefund,
   buildOnchainRefundTransaction,
-} from "./refund/index.js";
+} from "./refund";
 import { bytesToHex, Signer, type SwapParams } from "./signer";
 import {
   type StoredSwap,
@@ -105,6 +106,14 @@ export interface OnchainRefundOptions {
   feeRateSatPerVb?: number;
   /** If true, only build the transaction without broadcasting (default: false) */
   dryRun?: boolean;
+}
+
+/** Options for Arkade (off-chain) refund */
+export interface ArkadeRefundOptions {
+  /** Destination Arkade address to receive refunded BTC */
+  destinationAddress: string;
+  /** Arkade server URL (optional, uses default based on network) */
+  arkadeServerUrl?: string;
 }
 
 const DEFAULT_BASE_URL = "https://apilendaswap.lendasat.com/";
@@ -647,13 +656,7 @@ export class Client {
 
     // Arkade swaps require off-chain refund
     if (sourceToken === "btc_arkade") {
-      // TODO: Implement Arkade off-chain refund
-      return {
-        success: false,
-        message:
-          "Arkade refund is not yet implemented. " +
-          "Off-chain refund support will be added in a future version.",
-      };
+      return this.#buildArkadeRefund(id, swap, options as ArkadeRefundOptions);
     }
 
     // Bitcoin on-chain swaps require on-chain refund transaction
@@ -842,6 +845,115 @@ export class Client {
       return {
         success: false,
         message: `Failed to build refund transaction: ${message}`,
+      };
+    }
+  }
+
+  /**
+   * Builds and executes an Arkade (off-chain) VHTLC refund.
+   * @internal
+   */
+  async #buildArkadeRefund(
+    id: string,
+    swap: GetSwapResponse,
+    options?: ArkadeRefundOptions,
+  ): Promise<RefundResult> {
+    // Validate options
+    if (!options?.destinationAddress) {
+      return {
+        success: false,
+        message:
+          "Destination address is required for Arkade refunds. " +
+          'Provide it via the options parameter: { destinationAddress: "ark1..." }',
+      };
+    }
+
+    // Check swap storage is configured
+    if (!this.#swapStorage) {
+      return {
+        success: false,
+        message:
+          "Swap storage is not configured. Cannot retrieve the secret key needed for refund.",
+      };
+    }
+
+    // Get stored swap data (contains secret key)
+    const storedSwap = await this.#swapStorage.get(id);
+    if (!storedSwap) {
+      return {
+        success: false,
+        message: `Swap ${id} not found in local storage. The secret key is required to sign the refund transaction.`,
+      };
+    }
+
+    // Ensure we have a btc_to_evm swap response (Arkade swaps)
+    if (swap.direction !== "btc_to_evm") {
+      return {
+        success: false,
+        message: `Expected btc_to_evm swap, got ${swap.direction}`,
+      };
+    }
+
+    // Type assertion - we've verified direction is btc_to_evm
+    const arkadeSwap = swap as BtcToEvmSwapResponse & {
+      direction: "btc_to_evm";
+    };
+
+    // Check refund locktime
+    const now = Math.floor(Date.now() / 1000);
+    if (now < arkadeSwap.vhtlc_refund_locktime) {
+      const remainingSeconds = arkadeSwap.vhtlc_refund_locktime - now;
+      const remainingMinutes = Math.ceil(remainingSeconds / 60);
+      return {
+        success: false,
+        message:
+          `Refund is not yet available. The VHTLC locktime expires in ${remainingMinutes} minutes ` +
+          `(at ${new Date(arkadeSwap.vhtlc_refund_locktime * 1000).toISOString()}).`,
+      };
+    }
+
+    // Get user's x-only public key (32 bytes) from stored swap
+    // The stored publicKey is the full compressed pubkey (33 bytes)
+    // We need to extract the x-only portion (drop the first byte prefix)
+    const fullPubKey = storedSwap.publicKey;
+    const userPubKey =
+      fullPubKey.length === 66 ? fullPubKey.slice(2) : fullPubKey;
+
+    // Parse the hash lock - remove 0x prefix if present
+    const hashLock = arkadeSwap.hash_lock.startsWith("0x")
+      ? arkadeSwap.hash_lock.slice(2)
+      : arkadeSwap.hash_lock;
+
+    try {
+      const result = await buildArkadeRefund({
+        userSecretKey: storedSwap.secretKey,
+        userPubKey,
+        lendaswapPubKey: arkadeSwap.receiver_pk,
+        arkadeServerPubKey: arkadeSwap.server_pk,
+        hashLock,
+        vhtlcAddress: arkadeSwap.htlc_address_arkade,
+        refundLocktime: arkadeSwap.vhtlc_refund_locktime,
+        unilateralClaimDelay: arkadeSwap.unilateral_claim_delay,
+        unilateralRefundDelay: arkadeSwap.unilateral_refund_delay,
+        unilateralRefundWithoutReceiverDelay:
+          arkadeSwap.unilateral_refund_without_receiver_delay,
+        destinationAddress: options.destinationAddress,
+        network: arkadeSwap.network,
+        arkadeServerUrl: options.arkadeServerUrl,
+      });
+
+      return {
+        success: true,
+        message: "Arkade refund executed successfully!",
+        txId: result.txId,
+        refundAmount: result.refundAmount,
+        broadcast: true, // Arkade refunds are automatically submitted
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        message: `Failed to execute Arkade refund: ${message}`,
       };
     }
   }

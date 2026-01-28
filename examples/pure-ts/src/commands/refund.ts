@@ -3,6 +3,7 @@
  *
  * For Lightning swaps: No action needed (auto-expires)
  * For on-chain swaps: Builds a refund transaction to broadcast
+ * For Arkade swaps: Executes off-chain refund via Arkade protocol
  */
 
 import type { Client, SwapStorage } from "@lendasat/lendaswap-sdk-pure";
@@ -20,9 +21,11 @@ export async function refundSwap(
     console.error("");
     console.error("Arguments:");
     console.error("  swap-id             The swap ID to refund");
-    console.error("  destination-address Bitcoin address to receive refund (required for on-chain swaps)");
-    console.error("  fee-rate            Fee rate in sat/vB (default: 2)");
-    console.error("  --dry-run           Build transaction without broadcasting");
+    console.error("  destination-address Address to receive refund:");
+    console.error("                      - Bitcoin address for on-chain swaps");
+    console.error("                      - Arkade address for Arkade swaps");
+    console.error("  fee-rate            Fee rate in sat/vB (on-chain only, default: 2)");
+    console.error("  --dry-run           Build transaction without broadcasting (on-chain only)");
     console.error("");
     console.error("Examples:");
     console.error("  # Check if refund is available");
@@ -31,7 +34,10 @@ export async function refundSwap(
     console.error("  # Refund on-chain swap to a Bitcoin address");
     console.error("  tsx src/index.ts refund 12345678-... bc1q... 5");
     console.error("");
-    console.error("  # Build refund transaction without broadcasting");
+    console.error("  # Refund Arkade swap to an Arkade address");
+    console.error("  tsx src/index.ts refund 12345678-... ark1...");
+    console.error("");
+    console.error("  # Build refund transaction without broadcasting (on-chain only)");
     console.error("  tsx src/index.ts refund 12345678-... bc1q... 5 --dry-run");
     process.exit(1);
   }
@@ -63,26 +69,39 @@ export async function refundSwap(
   console.log(`Target token:   ${swap.target_token}`);
   console.log("");
 
-  // For on-chain swaps, require destination address
+  // Check which type of swap this is
   const isOnchainSwap = swap.source_token === "btc_onchain";
-  if (isOnchainSwap && !actualDestination) {
+  const isArkadeSwap = swap.source_token === "btc_arkade";
+
+  // Require destination address for refundable swaps
+  if ((isOnchainSwap || isArkadeSwap) && !actualDestination) {
     console.error("=".repeat(60));
     console.error("DESTINATION ADDRESS REQUIRED");
     console.error("=".repeat(60));
     console.error("");
-    console.error("On-chain swaps require a Bitcoin address to receive the refund.");
-    console.error("");
-    console.error("Usage:");
-    console.error(`  npm run refund -- ${swapId} <bitcoin-address> [fee-rate]`);
-    console.error("");
-    console.error("Example:");
-    console.error(`  npm run refund -- ${swapId} bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4 5`);
+    if (isOnchainSwap) {
+      console.error("On-chain swaps require a Bitcoin address to receive the refund.");
+      console.error("");
+      console.error("Usage:");
+      console.error(`  npm run refund -- ${swapId} <bitcoin-address> [fee-rate]`);
+      console.error("");
+      console.error("Example:");
+      console.error(`  npm run refund -- ${swapId} bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4 5`);
+    } else {
+      console.error("Arkade swaps require an Arkade address to receive the refund.");
+      console.error("");
+      console.error("Usage:");
+      console.error(`  npm run refund -- ${swapId} <arkade-address>`);
+      console.error("");
+      console.error("Example:");
+      console.error(`  npm run refund -- ${swapId} ark1...your_arkade_address...`);
+    }
     console.error("");
     console.error("=".repeat(60));
     process.exit(1);
   }
 
-  // Parse fee rate
+  // Parse fee rate (only for on-chain swaps)
   const feeRateSatPerVb = actualFeeRate ? Number.parseFloat(actualFeeRate) : undefined;
   if (actualFeeRate && (Number.isNaN(feeRateSatPerVb) || feeRateSatPerVb! <= 0)) {
     console.error("Invalid fee rate. Must be a positive number.");
@@ -96,20 +115,30 @@ export async function refundSwap(
     if (dryRun) {
       console.log("  Mode:        Dry run (no broadcast)");
     }
+  } else if (isArkadeSwap) {
+    console.log(`  Destination: ${actualDestination}`);
+    console.log("  Type:        Arkade off-chain refund");
   }
   console.log("");
 
   try {
-    const result = await client.refundSwap(swapId, {
-      destinationAddress: actualDestination ?? "",
-      feeRateSatPerVb,
-      dryRun,
-    });
+    // Build options based on swap type
+    const options = isOnchainSwap
+      ? {
+          destinationAddress: actualDestination ?? "",
+          feeRateSatPerVb,
+          dryRun,
+        }
+      : {
+          destinationAddress: actualDestination ?? "",
+        };
+
+    const result = await client.refundSwap(swapId, options);
 
     if (result.success) {
       console.log("=".repeat(60));
       if (result.broadcast) {
-        console.log("REFUND BROADCAST SUCCESSFULLY!");
+        console.log("REFUND EXECUTED SUCCESSFULLY!");
       } else {
         console.log("REFUND TRANSACTION BUILT");
       }
