@@ -11,16 +11,25 @@ npm install @lendasat/lendaswap-sdk-pure
 ## Usage
 
 ```typescript
-import { Client } from "@lendasat/lendaswap-sdk-pure";
+import { Client, IdbWalletStorage } from "@lendasat/lendaswap-sdk-pure";
 
-// Create a client with default settings
-const client = Client.builder().build();
-
-// Or with custom configuration
-const client = Client.builder()
-  .withBaseUrl("https://apilendaswap.lendasat.com/")
+// Create a client with persistent storage (browser)
+const client = await Client.builder()
+  .withSignerStorage(new IdbWalletStorage())
   .withApiKey("your-api-key")
   .build();
+
+// Or import an existing wallet
+const client = await Client.builder()
+  .withSignerStorage(new IdbWalletStorage())
+  .withMnemonic("abandon abandon abandon ...")
+  .build();
+
+// Get the mnemonic (for backup)
+const mnemonic = client.getMnemonic();
+
+// Derive swap parameters (auto-increments key index)
+const params = await client.deriveSwapParams();
 
 // Get available tokens
 const tokens = await client.getTokens();
@@ -30,6 +39,64 @@ const quote = await client.getQuote("btc_arkade", "usdc_pol", 100000);
 
 // Check swap status
 const swap = await client.getSwap("swap-uuid");
+```
+
+### Signer (Low-level HD Wallet)
+
+For advanced use cases, the `Signer` class provides direct BIP39/BIP32 key derivation:
+
+```typescript
+import { Signer, bytesToHex } from "@lendasat/lendaswap-sdk-pure";
+
+// Generate a new signer with a random 12-word mnemonic
+const signer = Signer.generate();
+console.log(signer.mnemonic);
+
+// Or restore from an existing mnemonic
+const signer = Signer.fromMnemonic("your twelve word mnemonic phrase ...");
+
+// Derive swap parameters at a specific index
+const params = signer.deriveSwapParams(0);
+console.log(bytesToHex(params.publicKey));    // Compressed public key
+console.log(bytesToHex(params.preimageHash)); // Hash lock for HTLC
+```
+
+### Storage
+
+The SDK provides pluggable storage interfaces for persisting wallet and swap data.
+Browser storage uses [Dexie](https://dexie.org/) for IndexedDB access with the database name `lendaswap-v3`.
+
+**Storage Types:**
+
+- `WalletStorage` - Stores mnemonic and key derivation index
+- `SwapStorage<T>` - Stores swap data (keyed by swap ID)
+
+```typescript
+import {
+  InMemoryWalletStorage,
+  InMemorySwapStorage,
+  IdbWalletStorage,     // Browser only (IndexedDB via Dexie)
+  IdbSwapStorage,       // Browser only (IndexedDB via Dexie)
+  idbStorageFactory,    // Factory for creating IDB storage
+  inMemoryStorageFactory,
+} from "@lendasat/lendaswap-sdk-pure";
+
+// In-memory storage (for testing or temporary sessions)
+const walletStorage = new InMemoryWalletStorage();
+const swapStorage = new InMemorySwapStorage<MySwapData>();
+
+// IndexedDB storage (for browser persistence)
+// Uses shared "lendaswap-v3" database with "wallet" and "swaps" tables
+const walletStorage = new IdbWalletStorage();
+const swapStorage = new IdbSwapStorage<MySwapData>();
+
+// Or use the factory
+const { createWalletStorage, createSwapStorage } = idbStorageFactory;
+const walletStorage = createWalletStorage();
+const swapStorage = createSwapStorage<MySwapData>();
+
+// Custom storage (implement the WalletStorage/SwapStorage interfaces)
+// For React Native, you might use AsyncStorage or SQLite
 ```
 
 ## Development
@@ -42,6 +109,11 @@ src/
 │   └── client.ts       # Low-level API client wrapper
 ├── generated/
 │   └── api.ts          # Auto-generated types from OpenAPI spec
+├── signer/
+│   └── index.ts        # HD wallet key derivation (BIP39/BIP32)
+├── storage/
+│   ├── index.ts        # Storage interfaces and in-memory implementations
+│   └── idb.ts          # IndexedDB storage for browsers
 ├── client.ts           # High-level Client class with convenience methods
 └── index.ts            # Public exports
 ```
@@ -96,3 +168,4 @@ When adding new functionality:
 - `@noble/hashes` - Cryptographic hash functions
 - `@scure/bip32` - BIP32 HD wallet derivation
 - `@scure/bip39` - BIP39 mnemonic phrase handling
+- `dexie` - IndexedDB wrapper for browser storage

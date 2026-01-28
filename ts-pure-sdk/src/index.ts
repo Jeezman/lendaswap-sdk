@@ -1,9 +1,5 @@
 export const VERSION = "0.0.1";
 
-// Main client
-export { Client, ClientBuilder } from "./client.js";
-export type { ClientConfig } from "./client.js";
-
 // API types
 export type {
   ApiClient,
@@ -35,3 +31,27 @@ export type {
 } from "./api/client.js";
 // API client
 export { createApiClient } from "./api/client.js";
+export type { ClientConfig } from "./client.js";
+// Main client
+export { Client, ClientBuilder } from "./client.js";
+export type { SwapParams } from "./signer/index.js";
+// Signer (HD wallet key derivation)
+export { bytesToHex, hexToBytes, Signer } from "./signer/index.js";
+
+// IndexedDB storage (browser)
+export {
+  IdbSwapStorage,
+  IdbWalletStorage,
+  idbStorageFactory,
+} from "./storage/idb.js";
+export type {
+  StorageFactory,
+  SwapStorage,
+  WalletStorage,
+} from "./storage/index.js";
+// Storage interfaces and implementations
+export {
+  InMemorySwapStorage,
+  InMemoryWalletStorage,
+  inMemoryStorageFactory,
+} from "./storage/index.js";
