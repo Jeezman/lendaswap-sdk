@@ -75,6 +75,16 @@ export interface BitcoinToEvmSwapResult {
   swapParams: SwapParams;
 }
 
+/** Result of attempting a refund */
+export interface RefundResult {
+  /** Whether the refund was successful or not applicable */
+  success: boolean;
+  /** Human-readable message about the refund status */
+  message: string;
+  /** Transaction hash if an on-chain refund was executed */
+  txHash?: string;
+}
+
 const DEFAULT_BASE_URL = "https://apilendaswap.lendasat.com/";
 
 /** Configuration options for the Lendaswap client. */
@@ -532,6 +542,82 @@ export class Client {
       throw new Error("No claim response returned");
     }
     return data;
+  }
+
+  // =========================================================================
+  // Refund
+  // =========================================================================
+
+  /**
+   * Attempts to refund a swap.
+   *
+   * Refund behavior depends on the swap type:
+   * - **Lightning to EVM**: Cannot refund - Lightning swaps auto-expire if not completed.
+   *   The invoice will simply expire and no funds are locked.
+   * - **Arkade to EVM**: Off-chain refund (not yet implemented)
+   * - **Bitcoin (on-chain) to EVM**: On-chain refund required (not yet implemented)
+   *
+   * @param id - The UUID of the swap to refund.
+   * @returns A RefundResult indicating success/failure and relevant details.
+   * @throws Error if the swap cannot be found or is in an invalid state.
+   *
+   * @example
+   * ```ts
+   * const result = await client.refundSwap(swapId);
+   * if (result.success) {
+   *   console.log("Refund:", result.message);
+   *   if (result.txHash) {
+   *     console.log("TX Hash:", result.txHash);
+   *   }
+   * } else {
+   *   console.error("Refund failed:", result.message);
+   * }
+   * ```
+   */
+  async refundSwap(id: string): Promise<RefundResult> {
+    // Get the swap to determine its type
+    const swap = await this.getSwap(id);
+
+    // Determine the source token to identify swap type
+    const sourceToken = swap.source_token;
+
+    // Lightning swaps cannot be refunded - they auto-expire
+    if (sourceToken === "btc_lightning") {
+      return {
+        success: false,
+        message:
+          "Lightning swaps cannot be refunded. If the invoice was paid, " +
+          "it will refund automatically.",
+      };
+    }
+
+    // Arkade swaps require off-chain refund
+    if (sourceToken === "btc_arkade") {
+      // TODO: Implement Arkade off-chain refund
+      return {
+        success: false,
+        message:
+          "Arkade refund is not yet implemented. " +
+          "Off-chain refund support will be added in a future version.",
+      };
+    }
+
+    // Bitcoin on-chain swaps require on-chain refund transaction
+    if (sourceToken === "btc_onchain") {
+      // TODO: Implement Bitcoin on-chain refund
+      return {
+        success: false,
+        message:
+          "Bitcoin on-chain refund is not yet implemented. " +
+          "On-chain refund support will be added in a future version.",
+      };
+    }
+
+    // Unknown source token
+    return {
+      success: false,
+      message: `Unknown source token type: ${sourceToken}. Cannot determine refund method.`,
+    };
   }
 
   // =========================================================================

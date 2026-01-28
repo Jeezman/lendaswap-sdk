@@ -40,6 +40,7 @@ export type {
   BtcToEvmSwapResult,
   ClientConfig,
   EvmChain,
+  RefundResult,
 } from "./client.js";
 // Main client
 export { Client, ClientBuilder } from "./client.js";

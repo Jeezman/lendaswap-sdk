@@ -10,6 +10,7 @@
     "swap": "tsx src/index.ts swap",
     "watch": "tsx src/index.ts watch",
     "redeem": "tsx src/index.ts redeem",
+    "refund": "tsx src/index.ts refund",
     "swaps": "tsx src/index.ts swaps",
     "info": "tsx src/index.ts info"
   },

@@ -11,6 +11,7 @@
  *   tsx src/index.ts swap <from> <to> <amount> <address> - Create a swap
  *   tsx src/index.ts watch <id>                     - Watch swap status
  *   tsx src/index.ts redeem <id>                    - Redeem a swap
+ *   tsx src/index.ts refund <id>                    - Refund a swap
  *   tsx src/index.ts swaps                          - List stored swaps
  *   tsx src/index.ts info                           - Show wallet info
  */
@@ -30,6 +31,7 @@ import { listSwaps } from "./commands/swaps.js";
 import { showInfo } from "./commands/info.js";
 import { watchSwap } from "./commands/watch.js";
 import { redeemSwap } from "./commands/redeem.js";
+import { refundSwap } from "./commands/refund.js";
 
 // Configuration from environment variables
 export const CONFIG = {
@@ -85,6 +87,7 @@ Commands:
   swap <from> <to> <amount> <addr>   Create a new swap
   watch <id>                         Watch a swap's status (polls backend)
   redeem <id>                        Redeem a swap (when serverfunded)
+  refund <id>                        Refund a swap (when pending/expired)
   swaps                              List locally stored swaps
   info                               Show wallet info
   help                               Show this help message
@@ -95,6 +98,7 @@ Examples:
   tsx src/index.ts swap btc_lightning usdc_pol 100000 0x1234...
   tsx src/index.ts watch 12345678-1234-1234-1234-123456789abc
   tsx src/index.ts redeem 12345678-1234-1234-1234-123456789abc
+  tsx src/index.ts refund 12345678-1234-1234-1234-123456789abc
   tsx src/index.ts swaps
   tsx src/index.ts info
 
@@ -137,6 +141,9 @@ async function main(): Promise<void> {
       break;
     case "redeem":
       await redeemSwap(client, swapStorage, args[1]);
+      break;
+    case "refund":
+      await refundSwap(client, swapStorage, args[1]);
       break;
     case "swaps":
       await listSwaps(swapStorage);

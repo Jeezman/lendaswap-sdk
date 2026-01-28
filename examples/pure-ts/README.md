@@ -32,6 +32,9 @@ npm run watch -- <swap-id>
 # Redeem a swap (when in serverfunded status)
 npm run redeem -- <swap-id>
 
+# Refund a swap (when pending/expired, not available for Lightning)
+npm run refund -- <swap-id>
+
 # List locally stored swaps
 npm run swaps
 
