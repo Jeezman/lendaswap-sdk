@@ -551,10 +551,15 @@ export class Client {
   /**
    * Gets the status and details of a swap by its ID.
    * @param id - The UUID of the swap.
+   * @param options - Optional settings.
+   * @param options.updateStorage - If true, updates the swap in storage after fetching.
    * @returns A promise that resolves to the swap details.
    * @throws Error if the request fails or swap is not found.
    */
-  async getSwap(id: string): Promise<GetSwapResponse> {
+  async getSwap(
+    id: string,
+    options?: { updateStorage?: boolean },
+  ): Promise<GetSwapResponse> {
     const { data, error } = await this.#apiClient.GET("/swap/{id}", {
       params: { path: { id } },
     });
@@ -564,6 +569,11 @@ export class Client {
     if (!data) {
       throw new Error("No swap data returned");
     }
+
+    if (options?.updateStorage && this.#swapStorage) {
+      await this.#swapStorage.update(id, data);
+    }
+
     return data;
   }
 
