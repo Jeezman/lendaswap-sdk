@@ -1,5 +1,10 @@
 export const VERSION = "0.0.1";
 
+// Main client
+export { Client, ClientBuilder } from "./client.js";
+export type { ClientConfig } from "./client.js";
+
+// API types
 export type {
   ApiClient,
   ApiClientOptions,
