@@ -1457,10 +1457,8 @@ export interface components {
          * @enum {string}
          */
         SwapStatus: "pending" | "clientfundingseen" | "clientfunded" | "clientrefunded" | "serverfunded" | "clientredeeming" | "clientredeemed" | "serverredeemed" | "clientfundedserverrefunded" | "clientrefundedserverfunded" | "clientrefundedserverrefunded" | "expired" | "clientinvalidfunded" | "clientfundedtoolate" | "clientredeemedandclientrefunded";
-        /** @description Token identifier with chain suffix */
-        TokenId: "btc_lightning" | "btc_arkade" | "btc_onchain" | "wbtc_eth" | "wbtc_pol" | "wbtc_arb" | {
-            coin: string;
-        };
+        /** @description Token identifier (e.g., 'btc_arkade', 'usdc_pol', 'usdt_eth') */
+        TokenId: string;
         TokenInfo: {
             chain: components["schemas"]["Chain"];
             /** Format: int32 */

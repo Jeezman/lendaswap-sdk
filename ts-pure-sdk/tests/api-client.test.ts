@@ -64,9 +64,9 @@ describe("API Client - Type Safety", () => {
         body: {
           target_address: "0x1234567890123456789012345678901234567890",
           target_token: "usdc_pol",
-          hash_lock: "0x" + "ab".repeat(32),
-          refund_pk: "02" + "cd".repeat(32),
-          user_id: "03" + "ef".repeat(32),
+          hash_lock: `0x${"ab".repeat(32)}`,
+          refund_pk: `02${"cd".repeat(32)}`,
+          user_id: `03${"ef".repeat(32)}`,
           source_amount: 100000,
         },
       });
@@ -76,9 +76,9 @@ describe("API Client - Type Safety", () => {
         body: {
           target_address: "0x1234567890123456789012345678901234567890",
           target_token: "usdc_pol",
-          hash_lock: "0x" + "ab".repeat(32),
-          refund_pk: "02" + "cd".repeat(32),
-          user_id: "03" + "ef".repeat(32),
+          hash_lock: `0x${"ab".repeat(32)}`,
+          refund_pk: `02${"cd".repeat(32)}`,
+          user_id: `03${"ef".repeat(32)}`,
           source_amount: 100000,
         },
       });
@@ -88,9 +88,9 @@ describe("API Client - Type Safety", () => {
         body: {
           target_address: "0x1234567890123456789012345678901234567890",
           target_token: "usdc_pol",
-          hash_lock: "0x" + "ab".repeat(32),
-          refund_pk: "02" + "cd".repeat(32),
-          user_id: "03" + "ef".repeat(32),
+          hash_lock: `0x${"ab".repeat(32)}`,
+          refund_pk: `02${"cd".repeat(32)}`,
+          user_id: `03${"ef".repeat(32)}`,
           source_amount: 100000,
         },
       });
