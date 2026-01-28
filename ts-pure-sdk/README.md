@@ -1,6 +1,7 @@
 # Lendaswap Pure TypeScript SDK
 
-A pure TypeScript SDK for interacting with the Lendaswap API. This SDK is designed to work in all JavaScript environments, including React Native.
+A pure TypeScript SDK for interacting with the Lendaswap API. This SDK is designed to work in all JavaScript
+environments, including React Native.
 
 ## Installation
 
@@ -8,57 +9,142 @@ A pure TypeScript SDK for interacting with the Lendaswap API. This SDK is design
 npm install @lendasat/lendaswap-sdk-pure
 ```
 
+## Supported Swaps
+
+This SDK currently supports the following swap directions:
+
+| Source       | Target                | Status    |
+| ------------ | --------------------- | --------- |
+| Lightning    | Polygon (USDC, USDT)  | Supported |
+| Lightning    | Arbitrum (USDC, USDT) | Supported |
+| Arkade       | Polygon (USDC, USDT)  | Supported |
+| Arkade       | Arbitrum (USDC, USDT) | Supported |
+| On-chain BTC | Polygon (USDC, USDT)  | Supported |
+| On-chain BTC | Arbitrum (USDC, USDT) | Supported |
+
+**Refund support:**
+
+- Lightning swaps: Auto-expire, no refund needed
+- Arkade swaps: Off-chain refund via Arkade protocol
+- On-chain BTC swaps: On-chain refund transaction after timelock
+
+> More swap directions (e.g., EVM to BTC) will be added in future versions.
+
 ## Usage
 
+### Setup
+
 ```typescript
-import { Client, IdbWalletStorage } from "@lendasat/lendaswap-sdk-pure";
+import { Client, IdbWalletStorage, IdbSwapStorage } from "@lendasat/lendaswap-sdk-pure";
 
 // Create a client with persistent storage (browser)
 const client = await Client.builder()
   .withSignerStorage(new IdbWalletStorage())
+  .withSwapStorage(new IdbSwapStorage())
   .withApiKey("your-api-key")
   .build();
 
 // Or import an existing wallet
 const client = await Client.builder()
   .withSignerStorage(new IdbWalletStorage())
+  .withSwapStorage(new IdbSwapStorage())
   .withMnemonic("abandon abandon abandon ...")
   .build();
 
 // Get the mnemonic (for backup)
 const mnemonic = client.getMnemonic();
-
-// Derive swap parameters (auto-increments key index)
-const params = await client.deriveSwapParams();
-
-// Get available tokens
-const tokens = await client.getTokens();
-
-// Get a quote
-const quote = await client.getQuote("btc_arkade", "usdc_pol", 100000);
-
-// Check swap status
-const swap = await client.getSwap("swap-uuid");
 ```
 
-### Signer (Low-level HD Wallet)
-
-For advanced use cases, the `Signer` class provides direct BIP39/BIP32 key derivation:
+### Get a Quote
 
 ```typescript
-import { Signer, bytesToHex } from "@lendasat/lendaswap-sdk-pure";
+// Get available asset pairs
+const pairs = await client.getAssetPairs();
 
-// Generate a new signer with a random 12-word mnemonic
-const signer = Signer.generate();
-console.log(signer.mnemonic);
+// Get a quote for swapping 100k sats to USDC on Polygon
+const quote = await client.getQuote("btc_arkade", "usdc_pol", 100000);
+console.log(`You'll receive: ${quote.target_amount} USDC`);
+```
 
-// Or restore from an existing mnemonic
-const signer = Signer.fromMnemonic("your twelve word mnemonic phrase ...");
+### Create a Swap
 
-// Derive swap parameters at a specific index
-const params = signer.deriveSwapParams(0);
-console.log(bytesToHex(params.publicKey));    // Compressed public key
-console.log(bytesToHex(params.preimageHash)); // Hash lock for HTLC
+#### Lightning to EVM
+
+```typescript
+const result = await client.createLightningToEvmSwap({
+  targetAddress: "0x1234567890abcdef1234567890abcdef12345678",
+  targetToken: "usdc_pol",    // or "usdc_arb", "usdt_pol", "usdt_arb"
+  targetChain: "polygon",      // or "arbitrum"
+  sourceAmount: 100000,        // Amount in sats
+});
+
+// Pay the Lightning invoice to complete the swap
+console.log(`Pay this invoice: ${result.response.ln_invoice}`);
+console.log(`Swap ID: ${result.response.id}`);
+```
+
+#### Arkade to EVM
+
+```typescript
+const result = await client.createArkadeToEvmSwap({
+  targetAddress: "0x1234567890abcdef1234567890abcdef12345678",
+  targetToken: "usdc_arb",
+  targetChain: "arbitrum",
+  sourceAmount: 100000,
+});
+
+// Send BTC to the Arkade VHTLC address
+console.log(`Send BTC to: ${result.response.htlc_address_arkade}`);
+console.log(`Swap ID: ${result.response.id}`);
+```
+
+#### On-chain BTC to EVM
+
+```typescript
+const result = await client.createBitcoinToEvmSwap({
+  targetAddress: "0x1234567890abcdef1234567890abcdef12345678",
+  targetToken: "usdc_pol",
+  targetChain: "polygon",
+  sourceAmount: 100000,
+});
+
+// Send BTC to the on-chain HTLC address
+console.log(`Send BTC to: ${result.response.btc_htlc_address}`);
+console.log(`Swap ID: ${result.response.id}`);
+```
+
+### Monitor Swap Status
+
+```typescript
+// Get current swap status
+const swap = await client.getSwap("swap-uuid");
+console.log(`Status: ${swap.status}`);
+
+// Status flow: pending -> clientfunded -> serverfunded -> clientredeemed -> serverredeemed
+```
+
+### Claim EVM Tokens
+
+Once the server has funded the EVM HTLC (`serverfunded` status), claim your tokens:
+
+```typescript
+const claimResult = await client.claimEvmSwap("swap-uuid");
+console.log(`Claim tx: ${claimResult.tx_hash}`);
+```
+
+### Refund (if swap times out)
+
+```typescript
+// For on-chain BTC swaps
+const refundResult = await client.refundSwap("swap-uuid", {
+  destinationAddress: "bc1q...",  // Your Bitcoin address
+  feeRateSatPerVb: 5,
+});
+
+// For Arkade swaps
+const refundResult = await client.refundSwap("swap-uuid", {
+  destinationAddress: "ark1...",  // Your Arkade address
+});
 ```
 
 ### Storage
@@ -156,13 +242,17 @@ src/
 
 ### Auto-generated API Types
 
-The TypeScript types in `src/generated/api.ts` are **auto-generated** from the OpenAPI specification. Do not edit this file manually.
+The TypeScript types in `src/generated/api.ts` are **auto-generated** from the OpenAPI specification. Do not edit this
+file manually.
 
 #### How it works
 
-1. The Lendaswap backend generates an OpenAPI 3.0 specification (`openapi.json`) using [utoipa](https://github.com/juhaku/utoipa)
-2. We use [openapi-typescript](https://github.com/openapi-ts/openapi-typescript) to generate TypeScript types from the spec
-3. The [openapi-fetch](https://github.com/openapi-ts/openapi-typescript/tree/main/packages/openapi-fetch) library provides a type-safe HTTP client
+1. The Lendaswap backend generates an OpenAPI 3.0 specification (`openapi.json`)
+   using [utoipa](https://github.com/juhaku/utoipa)
+2. We use [openapi-typescript](https://github.com/openapi-ts/openapi-typescript) to generate TypeScript types from the
+   spec
+3. The [openapi-fetch](https://github.com/openapi-ts/openapi-typescript/tree/main/packages/openapi-fetch) library
+   provides a type-safe HTTP client
 
 #### Regenerating the API client
 

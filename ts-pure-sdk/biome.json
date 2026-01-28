@@ -20,8 +20,10 @@
     "rules": {
       "recommended": true,
       "correctness": {
+        "noChildrenProp": "off",
         "noUnusedVariables": "error",
-        "noUnusedImports": "error"
+        "noUnusedImports": "error",
+        "noUnusedLabels": "error"
       }
     }
   },

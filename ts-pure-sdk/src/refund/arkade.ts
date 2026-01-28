@@ -277,18 +277,9 @@ export async function buildArkadeRefund(
 
   // Parse destination address to get the output script
   // The destination should be an Arkade address that we can decode
-  // For simplicity, we'll use the raw pkScript if it looks like a hex script,
-  // otherwise try to decode as an Ark address
-  let destPkScript: Uint8Array;
-  try {
-    // Try decoding as Ark address
-    const { ArkAddress } = await import("@arkade-os/sdk");
-    const destAddr = ArkAddress.decode(destinationAddress);
-    destPkScript = destAddr.pkScript;
-  } catch {
-    // If it fails, assume it's already a hex-encoded pk script
-    destPkScript = hex.decode(destinationAddress);
-  }
+  const { ArkAddress } = await import("@arkade-os/sdk");
+  const destAddr = ArkAddress.decode(destinationAddress);
+  const destPkScript = destAddr.pkScript;
 
   // Build outputs
   const outputs = [
@@ -298,8 +289,9 @@ export async function buildArkadeRefund(
     },
   ];
 
+  const destinationAddressPPkScript = hex.encode(destPkScript);
   console.log(
-    `Refunding ${totalAmount} to ${destPkScript} (${destinationAddress})`,
+    `Refunding ${totalAmount} to ${destinationAddress} with script ${destinationAddressPPkScript}`,
   );
 
   // Build the offchain transaction
@@ -315,19 +307,12 @@ export async function buildArkadeRefund(
   // Sign the ark transaction
   const signedArkTx = await signer.sign(arkTx);
 
-  // Sign checkpoint transactions
-  // const signedCheckpoints = await Promise.all(
-  //   checkpoints.map((cp) => signer.sign(cp)),
-  // );
-
   // Submit the transaction to the Arkade server
   const signedArkTxBase64 = base64.encode(signedArkTx.toPSBT());
-  console.log(`Submitting tx`);
   const { arkTxid, signedCheckpointTxs } = await arkProvider.submitTx(
     signedArkTxBase64,
     checkpoints.map((cp) => base64.encode(cp.toPSBT())),
   );
-  console.log(`Submitting tx done`);
 
   const finalCheckpoints = await Promise.all(
     signedCheckpointTxs.map(async (c) => {
@@ -340,7 +325,7 @@ export async function buildArkadeRefund(
 
   // Finalize the transaction
   await arkProvider.finalizeTx(arkTxid, finalCheckpoints);
-  console.log(`Finalized tx submitted`);
+  console.log(`Finalized tx submitted`, arkTxid);
 
   return {
     txId: arkTxid,

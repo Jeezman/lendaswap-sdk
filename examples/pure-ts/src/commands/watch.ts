@@ -2,7 +2,7 @@
  * Watch a swap's status by polling the backend.
  */
 
-import type { Client, GetSwapResponse } from "@lendasat/lendaswap-sdk-pure";
+import type {Client, GetSwapResponse} from "@lendasat/lendaswap-sdk-pure";
 
 const POLL_INTERVAL_MS = 5000; // 5 seconds
 
