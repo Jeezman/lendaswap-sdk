@@ -26,7 +26,10 @@ import {
   type EvmToLightningSwapResult,
 } from "./create/index.js";
 import { broadcastTransaction, findOutputByAddress } from "./esplora.js";
-import { encodeApproveCallData } from "./evm/index.js";
+import {
+  encodeApproveCallData,
+  encodeRefundSwapCallData,
+} from "./evm/index.js";
 import {
   buildArkadeClaim,
   type ClaimResult,
@@ -589,6 +592,32 @@ export class Client {
     return data;
   }
 
+  /**
+   * Gets a swap from local storage without making a server request.
+   *
+   * Use this when you need swap data but don't need the latest status
+   * from the server. The stored swap includes the preimage, keys, and
+   * the last known swap response.
+   *
+   * @param id - The UUID of the swap.
+   * @returns The stored swap data, or null if not found.
+   *
+   * @example
+   * ```ts
+   * const stored = await client.getStoredSwap(swapId);
+   * if (stored) {
+   *   console.log("Target:", stored.response.target_token);
+   *   console.log("Status:", stored.response.status);
+   * }
+   * ```
+   */
+  async getStoredSwap(id: string): Promise<StoredSwap | null> {
+    if (!this.#swapStorage) {
+      return null;
+    }
+    return this.#swapStorage.get(id);
+  }
+
   // =========================================================================
   // Redeem
   // =========================================================================
@@ -596,29 +625,82 @@ export class Client {
   /**
    * Claims a swap by revealing the preimage.
    *
-   * The claim method depends on the target chain:
+   * Reads swap data and preimage from local storage. The claim method
+   * depends on the target chain:
    * - **Polygon/Arbitrum**: Uses Gelato Relay for gasless execution
-   * - **Ethereum**: Returns an error (manual claim required)
+   * - **Ethereum**: Returns call data for manual claiming
+   * - **Arkade**: Claims via Arkade protocol
    *
    * @param id - The UUID of the swap.
-   * @param secret - The preimage/secret (32-byte hex string, with or without 0x prefix).
    * @returns A ClaimResult with the outcome.
    *
    * @example
    * ```ts
-   * const result = await client.claim(swapId, storedSwap.preimage);
+   * const result = await client.claim(swapId);
    * if (result.success) {
-   *   console.log("Claim TX:", result.txHash);
-   *   console.log("Gelato Task:", result.taskId);
+   *   if (result.chain === "arkade") {
+   *     console.log("Arkade TX:", result.txHash);
+   *   } else {
+   *     console.log("Claim TX:", result.txHash);
+   *   }
    * } else {
    *   console.error("Claim failed:", result.message);
    * }
    * ```
    */
-  async claim(id: string, secret: string): Promise<ClaimResult> {
+  async claim(id: string): Promise<ClaimResult> {
+    // Check swap storage is configured
+    if (!this.#swapStorage) {
+      return {
+        success: false,
+        message:
+          "Swap storage is not configured. Cannot retrieve swap data needed for claim.",
+      };
+    }
+
+    // Get stored swap data (contains preimage, keys, and swap response)
+    const storedSwap = await this.#swapStorage.get(id);
+    if (!storedSwap) {
+      return {
+        success: false,
+        message: `Swap ${id} not found in local storage. Cannot claim without stored data.`,
+      };
+    }
+
+    const swap = storedSwap.response;
+    const secret = storedSwap.preimage;
+
+    // Check if target is Arkade
+    if (swap.target_token === "btc_arkade") {
+      // Get destination address from swap data
+      const evmSwap = swap as EvmToBtcSwapResponse & {
+        direction: "evm_to_btc";
+      };
+      const destinationAddress = evmSwap.user_address_arkade;
+
+      if (!destinationAddress) {
+        return {
+          success: false,
+          message:
+            "No Arkade destination address found in swap. Use claimArkade() with explicit destinationAddress.",
+        };
+      }
+
+      const arkadeResult = await this.claimArkade(id, { destinationAddress });
+
+      // Convert to ClaimResult format
+      return {
+        success: arkadeResult.success,
+        message: arkadeResult.message,
+        chain: "arkade",
+        txHash: arkadeResult.txId,
+      };
+    }
+
+    // For EVM chains, use the existing claim logic
     return redeemClaim(id, secret, {
       apiClient: this.#apiClient,
-      getSwap: (swapId) => this.getSwap(swapId),
+      getSwap: () => Promise.resolve(swap),
     });
   }
 
@@ -671,8 +753,16 @@ export class Client {
       };
     }
 
-    // Get swap status from server
-    const swap = await this.getSwap(id);
+    // Get stored swap data (contains preimage and secret key)
+    const storedSwap = await this.#swapStorage.get(id);
+    if (!storedSwap) {
+      return {
+        success: false,
+        message: `Swap ${id} not found in local storage. The preimage is required to claim.`,
+      };
+    }
+
+    const swap = storedSwap.response;
 
     // Ensure we have an EVM-to-BTC swap (which includes EVM-to-Arkade)
     if (swap.direction !== "evm_to_btc") {
@@ -687,15 +777,6 @@ export class Client {
       direction: "evm_to_btc";
     };
 
-    // Get stored swap data (contains preimage and secret key)
-    const storedSwap = await this.#swapStorage.get(id);
-    if (!storedSwap) {
-      return {
-        success: false,
-        message: `Swap ${id} not found in local storage. The preimage is required to claim.`,
-      };
-    }
-
     // Get user's x-only public key (32 bytes) from stored swap
     const fullPubKey = storedSwap.publicKey;
     const userPubKey =
@@ -705,12 +786,14 @@ export class Client {
       const result = await buildArkadeClaim({
         userSecretKey: storedSwap.secretKey,
         userPubKey,
-        // For claim: lendaswap is SENDER, user is RECEIVER
-        // sender_pk from API is the client's key for EVM-to-Arkade swaps
-        // receiver_pk from API is lendaswap's key
-        lendaswapPubKey: evmToArkadeSwap.sender_pk,
+        // For claim: lendaswap is SENDER in the VHTLC, user is RECEIVER
+        // In the API response:
+        //   sender_pk = client's public key
+        //   receiver_pk = lendaswap's public key
+        lendaswapPubKey: evmToArkadeSwap.receiver_pk,
         arkadeServerPubKey: evmToArkadeSwap.server_pk,
         preimage: storedSwap.preimage,
+        preimageHash: storedSwap.preimageHash,
         vhtlcAddress: evmToArkadeSwap.htlc_address_arkade,
         refundLocktime: evmToArkadeSwap.vhtlc_refund_locktime,
         unilateralClaimDelay: evmToArkadeSwap.unilateral_claim_delay,
@@ -1412,6 +1495,59 @@ export class Client {
         to: evmSwap.htlc_address_evm,
         data: evmSwap.create_swap_tx,
       },
+    };
+  }
+
+  /**
+   * Gets call data for refunding an EVM HTLC.
+   *
+   * For EVM-to-Arkade/Lightning swaps, if the swap times out (server doesn't
+   * complete it), users can refund their tokens by calling refundSwap on
+   * the HTLC contract.
+   *
+   * @param swapId - The UUID of the swap.
+   * @returns The refund call data.
+   *
+   * @example
+   * ```ts
+   * // Get refund call data
+   * const refund = await client.getEvmRefundCallData(swapId);
+   *
+   * // Submit the refund transaction
+   * await wallet.sendTransaction({
+   *   to: refund.to,
+   *   data: refund.data,
+   * });
+   * ```
+   */
+  async getEvmRefundCallData(swapId: string): Promise<{
+    to: string;
+    data: string;
+    timelockExpired: boolean;
+    timelockExpiry: number;
+  }> {
+    const swap = await this.getSwap(swapId);
+
+    if (swap.direction !== "evm_to_btc") {
+      throw new Error(
+        `Expected evm_to_btc swap, got ${swap.direction}. This method is for EVM-to-Arkade/Lightning swaps.`,
+      );
+    }
+
+    const evmSwap = swap as EvmToBtcSwapResponse;
+    const htlcAddress = evmSwap.htlc_address_evm;
+    const timelock = evmSwap.evm_refund_locktime;
+
+    const now = Math.floor(Date.now() / 1000);
+    const timelockExpired = now >= timelock;
+
+    const refundData = encodeRefundSwapCallData(htlcAddress, swapId);
+
+    return {
+      to: refundData.to,
+      data: refundData.data,
+      timelockExpired,
+      timelockExpiry: timelock,
     };
   }
 }

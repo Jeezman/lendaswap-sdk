@@ -13,6 +13,7 @@ import {
   type ArkProvider,
   type ArkTxInput,
   buildOffchainTx,
+  ConditionWitness,
   CSVMultisigTapscript,
   type IndexerProvider,
   type NetworkName,
@@ -20,6 +21,7 @@ import {
   RestArkProvider,
   RestIndexerProvider,
   SingleKey,
+  setArkPsbtField,
   Transaction,
   VHTLC,
 } from "@arkade-os/sdk";
@@ -47,6 +49,8 @@ export interface ArkadeClaimParams {
   arkadeServerPubKey: string;
   /** Preimage (32-byte hex) - reveals the secret to claim */
   preimage: string;
+  /** Preimage Hash */
+  preimageHash: string;
   /** VHTLC address to claim from */
   vhtlcAddress: string;
   /** Refund locktime (unix timestamp) */
@@ -157,6 +161,7 @@ export async function buildArkadeClaim(
     lendaswapPubKey,
     arkadeServerPubKey,
     preimage,
+    preimageHash,
     vhtlcAddress,
     refundLocktime,
     unilateralClaimDelay,
@@ -186,6 +191,15 @@ export async function buildArkadeClaim(
   // Compute preimage hash: SHA256 -> RIPEMD160 (HASH160)
   const sha256Hash = sha256(preimageBytes);
   const preimageHashBytes = ripemd160(sha256Hash);
+
+  const preimageHashBytesString = hex.encode(preimageHashBytes);
+  if (
+    preimageHashBytesString !== hex.encode(ripemd160(hex.decode(preimageHash)))
+  ) {
+    throw new Error(
+      `Preimage hash are not equal. '${hex.encode(ripemd160(hex.decode(preimageHash)))}' vs ${preimageHashBytesString}'`,
+    );
+  }
 
   // Determine Arkade server URL
   const networkName = getNetworkName(network);
@@ -299,8 +313,15 @@ export async function buildArkadeClaim(
 
   // Create signer from user's secret key
   const signer = SingleKey.fromHex(userSecretKey);
+  const computedPk = await signer.xOnlyPublicKey();
+  if (hex.encode(userPkBytes) !== hex.encode(computedPk)) {
+    throw new Error(
+      `Signing with wrong key? ${hex.encode(userPkBytes)} vs ${hex.encode(computedPk)}`,
+    );
+  }
 
   // Sign the ark transaction
+  setArkPsbtField(arkTx, 0, ConditionWitness, [preimageBytes]);
   const signedArkTx = await signer.sign(arkTx);
 
   // Submit the transaction to the Arkade server
@@ -314,7 +335,8 @@ export async function buildArkadeClaim(
   const finalCheckpoints = await Promise.all(
     signedCheckpointTxs.map(async (c) => {
       const tx = Transaction.fromPSBT(base64.decode(c));
-      const signedCheckpoint = await signer.sign(tx);
+      setArkPsbtField(tx, 0, ConditionWitness, [preimageBytes]);
+      const signedCheckpoint = await signer.sign(tx, [0]);
       return base64.encode(signedCheckpoint.toPSBT());
     }),
   );

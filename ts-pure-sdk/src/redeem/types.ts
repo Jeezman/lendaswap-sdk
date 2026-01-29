@@ -4,8 +4,8 @@
 
 import type { ApiClient, GetSwapResponse } from "../api/client.js";
 
-/** Supported EVM chains for claiming */
-export type ClaimChain = "polygon" | "arbitrum" | "ethereum";
+/** Supported chains for claiming */
+export type ClaimChain = "polygon" | "arbitrum" | "ethereum" | "arkade";
 
 /** Data needed for manual Ethereum claims */
 export interface EthereumClaimData {
@@ -19,6 +19,26 @@ export interface EthereumClaimData {
   secret: string;
   /** Human-readable function signature */
   functionSignature: string;
+}
+
+/** Data needed for Arkade VHTLC claims */
+export interface ArkadeClaimData {
+  /** Lendaswap's public key (SENDER in the VHTLC) */
+  lendaswapPubKey: string;
+  /** Arkade server's public key */
+  arkadeServerPubKey: string;
+  /** VHTLC address to claim from */
+  vhtlcAddress: string;
+  /** Refund locktime (unix timestamp) */
+  refundLocktime: number;
+  /** Unilateral claim delay in seconds */
+  unilateralClaimDelay: number;
+  /** Unilateral refund delay in seconds */
+  unilateralRefundDelay: number;
+  /** Unilateral refund without receiver delay in seconds */
+  unilateralRefundWithoutReceiverDelay: number;
+  /** Bitcoin network */
+  network: string;
 }
 
 /** Result of a claim operation */
@@ -35,6 +55,8 @@ export interface ClaimResult {
   txHash?: string;
   /** Data for manual Ethereum claims */
   ethereumClaimData?: EthereumClaimData;
+  /** Data for Arkade VHTLC claims */
+  arkadeClaimData?: ArkadeClaimData;
 }
 
 /**
@@ -59,5 +81,6 @@ export function getChainFromTokenId(tokenId: string): ClaimChain | undefined {
   if (tokenId.endsWith("_pol")) return "polygon";
   if (tokenId.endsWith("_arb")) return "arbitrum";
   if (tokenId.endsWith("_eth")) return "ethereum";
+  if (tokenId === "btc_arkade") return "arkade";
   return undefined;
 }

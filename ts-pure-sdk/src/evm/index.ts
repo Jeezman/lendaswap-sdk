@@ -11,5 +11,7 @@ export {
   type CreateSwapParams,
   encodeApproveCallData,
   encodeCreateSwapCallData,
+  encodeRefundSwapCallData,
+  type RefundSwapCallData,
   uuidToBytes32,
 } from "./htlc.js";

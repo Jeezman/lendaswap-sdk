@@ -5,7 +5,7 @@
  * For Ethereum swaps: Returns call data for manual execution.
  */
 
-import type { Client, SwapStorage } from "@lendasat/lendaswap-sdk-pure";
+import type {Client, SwapStorage} from "@lendasat/lendaswap-sdk-pure";
 
 export async function redeemSwap(
   client: Client,
@@ -24,47 +24,21 @@ export async function redeemSwap(
   console.log("");
 
   // Get the swap status from the server
-  const swap = await client.getSwap(swapId);
+  const storedSwap = await client.getStoredSwap(swapId);
+  if (!storedSwap) {
+    throw Error("Swap not found");
+  }
+  const swap = storedSwap?.response;
 
   console.log(`Current status: ${swap.status}`);
 
-  if (swap.status !== "serverfunded") {
-    console.error("");
-    console.error(`Cannot redeem swap in status: ${swap.status}`);
-    console.error("Swap must be in 'serverfunded' status to redeem.");
-    console.error("");
-    console.error("Use 'npm run watch -- <id>' to monitor the swap status.");
-    process.exit(1);
-  }
-
-  // Get the stored swap data (contains preimage)
-  if (!swapStorage) {
-    console.error("No swap storage configured. Cannot retrieve preimage.");
-    console.error("Make sure swap storage is configured in the client.");
-    process.exit(1);
-  }
-
-  const storedSwap = await swapStorage.get(swapId);
-  if (!storedSwap) {
-    console.error(`Swap ${swapId} not found in local storage.`);
-    console.error("The preimage is required to redeem the swap.");
-    console.error("");
-    console.error("If you have the mnemonic, you can try recovering the swap parameters.");
-    process.exit(1);
-  }
-
+  // Claim the swap (reads preimage and keys from storage)
   console.log("");
-  console.log("Found stored swap data:");
-  console.log(`  Key Index: ${storedSwap.keyIndex}`);
-  console.log(`  Preimage:  ${storedSwap.preimage.slice(0, 16)}...`);
-  console.log("");
-
-  // Claim the swap
   console.log("Attempting to claim swap...");
   console.log("");
 
   try {
-    const result = await client.claim(swapId, storedSwap.preimage);
+    const result = await client.claim(swapId);
 
     if (!result.success) {
       console.error("=".repeat(60));
@@ -76,7 +50,7 @@ export async function redeemSwap(
     }
 
     console.log("=".repeat(60));
-    console.log("CLAIM " + (result.ethereumClaimData ? "DATA GENERATED" : "SUBMITTED SUCCESSFULLY!"));
+    console.log("CLAIM " + (result.ethereumClaimData ? "DATA GENERATED" : "SUCCESSFUL!"));
     console.log("=".repeat(60));
     console.log("");
 
@@ -100,6 +74,17 @@ export async function redeemSwap(
       console.log("Use this call data with your Ethereum wallet to claim the swap.");
       console.log("Example using cast:");
       console.log(`  cast send ${result.ethereumClaimData.contractAddress} ${result.ethereumClaimData.callData} --private-key <YOUR_KEY>`);
+    } else if (result.chain === "arkade") {
+      // Arkade swap - claimed via Arkade protocol
+      console.log(`  Chain:        arkade`);
+      console.log(`  TX ID:        ${result.txHash}`);
+      console.log("");
+      console.log(`  Message:      ${result.message}`);
+      console.log("");
+      console.log("=".repeat(60));
+      console.log("");
+      console.log("Your BTC has been claimed on Arkade.");
+
     } else {
       // Polygon/Arbitrum - gasless claim via Gelato
       console.log(`  Chain:        ${result.chain}`);
@@ -113,9 +98,6 @@ export async function redeemSwap(
       console.log("The transaction has been submitted to the network.");
       console.log("Use 'npm run watch -- " + swapId + "' to monitor until completion.");
 
-      // Update stored swap with latest status
-      const updatedSwap = await client.getSwap(swapId);
-      await swapStorage.update(swapId, updatedSwap);
     }
 
   } catch (error) {

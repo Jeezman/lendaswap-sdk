@@ -36,12 +36,17 @@ import { showInfo } from "./commands/info.js";
 import { watchSwap } from "./commands/watch.js";
 import { redeemSwap } from "./commands/redeem.js";
 import { refundSwap } from "./commands/refund.js";
+import { evmFundSwap } from "./commands/evm-fund.js";
+import { evmRefundSwap } from "./commands/evm-refund.js";
+import { evmClaimSwap } from "./commands/evm-claim.js";
+import { showEvmBalances } from "./commands/evm-balances.js";
 
 // Configuration from environment variables
 export const CONFIG = {
   apiUrl:
     process.env.LENDASWAP_API_URL || "https://apilendaswap.lendasat.com/",
   mnemonic: process.env.MNEMONIC,
+  evmMnemonic: process.env.EVM_MNEMONIC, // Separate mnemonic for EVM wallet
   apiKey: process.env.LENDASWAP_API_KEY,
   dbPath: process.env.LENDASWAP_DB_PATH || path.join(os.homedir(), ".lendaswap", "data.db"),
   esploraUrl: process.env.ESPLORA_URL, // Optional, defaults by network
@@ -94,9 +99,13 @@ Commands:
   pairs                              List available trading pairs
   quote <from> <to> <amount>         Get a quote for a swap
   swap <from> <to> <amount> <addr>   Create a new swap
+  evm-fund <id>                      Fund an EVM HTLC (EVM-to-Arkade/Lightning)
   watch <id>                         Watch a swap's status (polls backend)
   redeem <id>                        Redeem a swap (when serverfunded)
   refund <id> [addr] [fee]           Refund a swap (addr/fee for on-chain)
+  evm-refund <id>                    Refund an EVM HTLC (EVM-to-Arkade/Lightning)
+  evm-claim <id>                     Claim EVM tokens (BTC-to-Ethereum only)
+  evm-balances                       Show EVM wallet balances (all chains)
   swaps                              List locally stored swaps
   info                               Show wallet info
   help                               Show this help message
@@ -125,7 +134,8 @@ Other Examples:
 
 Environment Variables:
   LENDASWAP_API_URL   API URL (default: https://apilendaswap.lendasat.com/)
-  MNEMONIC            Wallet mnemonic (optional, generates new if not set)
+  MNEMONIC            Wallet mnemonic for BTC operations (optional, generates new if not set)
+  EVM_MNEMONIC        Wallet mnemonic for EVM operations (required for fund command)
   LENDASWAP_API_KEY   API key for authentication (optional)
   LENDASWAP_DB_PATH   SQLite database path (default: ~/.lendaswap/data.db)
   ESPLORA_URL         Esplora API URL for broadcasting (default: mempool.space)
@@ -158,6 +168,9 @@ async function main(): Promise<void> {
     case "swap":
       await createSwap(client, args[1], args[2], args[3], args[4]);
       break;
+    case "evm-fund":
+      await evmFundSwap(client, swapStorage, args[1], CONFIG.evmMnemonic);
+      break;
     case "watch":
       await watchSwap(client, args[1]);
       break;
@@ -166,6 +179,15 @@ async function main(): Promise<void> {
       break;
     case "refund":
       await refundSwap(client, swapStorage, args[1], args[2], args[3], args[4]);
+      break;
+    case "evm-refund":
+      await evmRefundSwap(client, args[1], CONFIG.evmMnemonic);
+      break;
+    case "evm-claim":
+      await evmClaimSwap(client, args[1], CONFIG.evmMnemonic);
+      break;
+    case "evm-balances":
+      await showEvmBalances(CONFIG.evmMnemonic);
       break;
     case "swaps":
       await listSwaps(swapStorage);

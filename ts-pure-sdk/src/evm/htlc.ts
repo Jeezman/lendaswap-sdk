@@ -53,11 +53,25 @@ export interface ApproveCallData {
   functionSignature: string;
 }
 
+/**
+ * Result of encoding refundSwap call data.
+ */
+export interface RefundSwapCallData {
+  /** The HTLC contract address to call */
+  to: string;
+  /** The encoded call data */
+  data: string;
+  /** Human-readable function signature */
+  functionSignature: string;
+}
+
 // Function selectors (first 4 bytes of keccak256 hash of function signature)
 // createSwap(bytes32,address,address,address,uint256,bytes32,uint256,uint24,uint256)
 const CREATE_SWAP_SELECTOR = "0x9a4efe51";
 // approve(address,uint256)
 const APPROVE_SELECTOR = "0x095ea7b3";
+// refundSwap(bytes32)
+const REFUND_SWAP_SELECTOR = "0x1f7d0007";
 
 /**
  * Converts a UUID string to a bytes32 hex string (right-padded with zeros).
@@ -203,6 +217,34 @@ export function encodeCreateSwapCallData(
     data,
     functionSignature:
       "createSwap(bytes32,address,address,address,uint256,bytes32,uint256,uint24,uint256)",
+  };
+}
+
+/**
+ * Encodes the call data for refundSwap function on the HTLC contract.
+ *
+ * @param htlcAddress - The HTLC contract address
+ * @param swapId - The swap ID (UUID or bytes32 hex)
+ * @returns The encoded refundSwap call data
+ *
+ * @example
+ * ```ts
+ * const refundData = encodeRefundSwapCallData(htlcAddress, swapId);
+ * // Use with viem:
+ * await walletClient.sendTransaction({ to: refundData.to, data: refundData.data });
+ * ```
+ */
+export function encodeRefundSwapCallData(
+  htlcAddress: string,
+  swapId: string,
+): RefundSwapCallData {
+  const swapIdEncoded = uuidToBytes32(swapId);
+  const data = `${REFUND_SWAP_SELECTOR}${swapIdEncoded}`;
+
+  return {
+    to: htlcAddress,
+    data,
+    functionSignature: "refundSwap(bytes32)",
   };
 }
 
