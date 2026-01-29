@@ -17,9 +17,12 @@ import {
   createArkadeToEvmSwap,
   createBitcoinToEvmSwap,
   createEvmToArkadeSwap,
+  createEvmToLightningSwap,
   createLightningToEvmSwap,
   type EvmToArkadeSwapOptions,
   type EvmToArkadeSwapResult,
+  type EvmToLightningSwapOptions,
+  type EvmToLightningSwapResult,
 } from "./create/index.js";
 import { broadcastTransaction, findOutputByAddress } from "./esplora.js";
 import { type ClaimResult, claim as redeemClaim } from "./redeem/index.js";
@@ -46,6 +49,8 @@ export type {
   EvmChain,
   EvmToArkadeSwapOptions,
   EvmToArkadeSwapResult,
+  EvmToLightningSwapOptions,
+  EvmToLightningSwapResult,
 } from "./create/index.js";
 export type { BitcoinToEvmSwapResponse } from "./create/types.js";
 
@@ -1150,5 +1155,33 @@ export class Client {
     options: EvmToArkadeSwapOptions,
   ): Promise<EvmToArkadeSwapResult> {
     return createEvmToArkadeSwap(options, this.#getCreateContext());
+  }
+
+  /**
+   * Creates a new EVM to Lightning swap.
+   *
+   * This allows users to swap ERC-20 tokens (USDC, USDT, etc.) from EVM chains
+   * to pay a Lightning invoice.
+   *
+   * @param options - The swap options including bolt11 invoice.
+   * @returns The swap response and parameters for storage.
+   * @throws Error if the swap creation fails.
+   *
+   * @example
+   * ```ts
+   * const result = await client.createEvmToLightningSwap({
+   *   sourceChain: "polygon",
+   *   sourceToken: "usdc_pol",
+   *   bolt11Invoice: "lnbc...", // Lightning invoice to pay
+   *   userAddress: "0x1234...", // EVM wallet address
+   * });
+   * console.log("Approve token:", result.response.source_token_address);
+   * console.log("HTLC contract:", result.response.htlc_address_evm);
+   * ```
+   */
+  async createEvmToLightningSwap(
+    options: EvmToLightningSwapOptions,
+  ): Promise<EvmToLightningSwapResult> {
+    return createEvmToLightningSwap(options, this.#getCreateContext());
   }
 }

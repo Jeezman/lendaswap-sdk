@@ -93,6 +93,28 @@ export interface EvmToArkadeSwapResult {
   swapParams: SwapParams;
 }
 
+/** Options for creating an EVM to Lightning swap */
+export interface EvmToLightningSwapOptions {
+  /** Source EVM chain */
+  sourceChain: EvmChain;
+  /** Source token ID (e.g., "usdc_pol", "usdt_arb", "usdc_eth") */
+  sourceToken: string;
+  /** Lightning BOLT11 invoice to pay */
+  bolt11Invoice: string;
+  /** User's EVM wallet address (for checking allowance and building transactions) */
+  userAddress: string;
+  /** Optional referral code for fee exemption */
+  referralCode?: string;
+}
+
+/** Result of creating an EVM to Lightning swap */
+export interface EvmToLightningSwapResult {
+  /** The swap response from the API */
+  response: EvmToBtcSwapResponse;
+  /** The swap parameters used (for storage/recovery) */
+  swapParams: SwapParams;
+}
+
 /**
  * Context passed to swap creation functions.
  * Contains the dependencies needed from the client.

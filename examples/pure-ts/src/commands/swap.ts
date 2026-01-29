@@ -5,7 +5,7 @@
 
 import { type Client, type EvmChain } from "@lendasat/lendaswap-sdk-pure";
 
-type SwapType = "lightning" | "arkade" | "bitcoin" | "evm-to-arkade";
+type SwapType = "lightning" | "arkade" | "bitcoin" | "evm-to-arkade" | "evm-to-lightning";
 
 export async function createSwap(
   client: Client,
@@ -26,6 +26,10 @@ export async function createSwap(
     console.error("  tsx src/index.ts swap usdc_pol btc_arkade 100 ark1YourAddress 0xYourEvmAddress");
     console.error("  tsx src/index.ts swap usdc_arb btc_arkade 100 ark1YourAddress 0xYourEvmAddress");
     console.error("  tsx src/index.ts swap usdc_eth btc_arkade 100 ark1YourAddress 0xYourEvmAddress");
+    console.error("");
+    console.error("EVM to Lightning Examples:");
+    console.error("  tsx src/index.ts swap usdc_pol btc_lightning lnbc... 0xYourEvmAddress");
+    console.error("  tsx src/index.ts swap usdc_arb btc_lightning lnbc... 0xYourEvmAddress");
     process.exit(1);
   }
 
@@ -48,12 +52,24 @@ export async function createSwap(
     console.error("Supported EVM to Arkade:");
     console.error("  Source: usdc_pol, usdc_arb, usdc_eth (or any *_pol, *_arb, *_eth)");
     console.error("  Target: btc_arkade");
+    console.error("");
+    console.error("Supported EVM to Lightning:");
+    console.error("  Source: usdc_pol, usdc_arb, usdc_eth (or any *_pol, *_arb, *_eth)");
+    console.error("  Target: btc_lightning");
     process.exit(1);
   }
 
   console.log(`Creating swap: ${from} -> ${to}`);
-  console.log(`  Amount: ${amountNum}${swapType === "evm-to-arkade" ? "" : " sats"}`);
-  console.log(`  ${swapType === "evm-to-arkade" ? "Arkade Address" : "Target Address"}: ${address}`);
+  if (swapType === "evm-to-lightning") {
+    console.log(`  Invoice: ${amount.slice(0, 30)}...`);
+    console.log(`  EVM Address: ${address}`);
+  } else if (swapType === "evm-to-arkade") {
+    console.log(`  Amount: ${amountNum}`);
+    console.log(`  Arkade Address: ${address}`);
+  } else {
+    console.log(`  Amount: ${amountNum} sats`);
+    console.log(`  Target Address: ${address}`);
+  }
   console.log(`  Swap Type: ${swapType}`);
   console.log("");
 
@@ -115,6 +131,48 @@ export async function createSwap(
         ``,
         `2. Fund the HTLC (call createSwap or similar on the contract)`,
         `   HTLC Address: ${result.response.htlc_address_evm}`,
+      ].join("\n");
+
+    } else if (swapType === "evm-to-lightning") {
+      // EVM to Lightning swap
+      // For this swap type:
+      // - `amount` is actually the bolt11 invoice
+      // - `address` is the user's EVM wallet address
+      const bolt11Invoice = amount; // amount param contains the invoice
+      const evmUserAddress = address; // address param contains the EVM address
+
+      const sourceChain = parseSourceChain(from);
+      if (!sourceChain) {
+        console.error(`Unsupported source token: ${from}`);
+        process.exit(1);
+      }
+
+      console.log(`  Source Chain: ${sourceChain}`);
+      console.log("");
+
+      const result = await client.createEvmToLightningSwap({
+        sourceChain,
+        sourceToken: from,
+        bolt11Invoice,
+        userAddress: evmUserAddress,
+      });
+
+      swapId = result.response.id;
+      status = result.response.status;
+      keyIndex = result.swapParams.keyIndex;
+      sourceAmount = result.response.source_amount;
+      targetAmount = result.response.target_amount;
+      sourceToken = result.response.source_token;
+      targetToken = result.response.target_token;
+      paymentInfo = [
+        `1. Approve token spend:`,
+        `   Token contract: ${result.response.source_token_address}`,
+        `   HTLC contract:  ${result.response.htlc_address_evm}`,
+        ``,
+        `2. Fund the HTLC (call createSwap or similar on the contract)`,
+        `   HTLC Address: ${result.response.htlc_address_evm}`,
+        ``,
+        `Once funded, the server will pay the Lightning invoice.`,
       ].join("\n");
 
     } else if (swapType === "lightning") {
@@ -250,6 +308,9 @@ function parseSwapType(from: string, to: string): SwapType | null {
 
   // EVM to Arkade
   if (to === "btc_arkade" && isEvmToken(from)) return "evm-to-arkade";
+
+  // EVM to Lightning
+  if (to === "btc_lightning" && isEvmToken(from)) return "evm-to-lightning";
 
   return null;
 }

@@ -44,6 +44,8 @@ export type {
   EvmChain,
   EvmToArkadeSwapOptions,
   EvmToArkadeSwapResult,
+  EvmToLightningSwapOptions,
+  EvmToLightningSwapResult,
   OnchainRefundOptions,
   RefundResult,
 } from "./client.js";
