@@ -45,7 +45,7 @@ export type {
 export type { BitcoinToEvmSwapResponse } from "./create/types.js";
 
 // Re-export types from redeem module
-export type { ClaimResult } from "./redeem/index.js";
+export type { ClaimResult, EthereumClaimData } from "./redeem/index.js";
 
 /** Result of attempting a refund */
 export interface RefundResult {

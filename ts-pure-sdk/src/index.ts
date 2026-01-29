@@ -40,6 +40,7 @@ export type {
   BtcToEvmSwapResult,
   ClaimResult,
   ClientConfig,
+  EthereumClaimData,
   EvmChain,
   OnchainRefundOptions,
   RefundResult,
