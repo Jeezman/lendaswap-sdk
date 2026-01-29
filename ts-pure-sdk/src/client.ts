@@ -3,6 +3,7 @@ import {
   type AssetPair,
   type BtcToEvmSwapResponse,
   createApiClient,
+  type EvmToBtcSwapResponse,
   type GetSwapResponse,
   type OnchainToEvmSwapResponse,
   type QuoteResponse,
@@ -25,7 +26,11 @@ import {
   type EvmToLightningSwapResult,
 } from "./create/index.js";
 import { broadcastTransaction, findOutputByAddress } from "./esplora.js";
-import { type ClaimResult, claim as redeemClaim } from "./redeem/index.js";
+import {
+  buildArkadeClaim,
+  type ClaimResult,
+  claim as redeemClaim,
+} from "./redeem/index.js";
 import {
   type BitcoinNetwork,
   buildArkadeRefund,
@@ -92,6 +97,14 @@ export interface OnchainRefundOptions {
 /** Options for Arkade (off-chain) refund */
 export interface ArkadeRefundOptions {
   /** Destination Arkade address to receive refunded BTC */
+  destinationAddress: string;
+  /** Arkade server URL (optional, uses default based on network) */
+  arkadeServerUrl?: string;
+}
+
+/** Options for Arkade (off-chain) claim */
+export interface ArkadeClaimOptions {
+  /** Destination Arkade address to receive claimed BTC */
   destinationAddress: string;
   /** Arkade server URL (optional, uses default based on network) */
   arkadeServerUrl?: string;
@@ -588,6 +601,121 @@ export class Client {
       apiClient: this.#apiClient,
       getSwap: (swapId) => this.getSwap(swapId),
     });
+  }
+
+  /**
+   * Claims an Arkade (off-chain) VHTLC swap by revealing the preimage.
+   *
+   * This is used for EVM-to-Arkade swaps where the user claims BTC
+   * on Arkade after the server has funded the VHTLC.
+   *
+   * @param id - The UUID of the swap.
+   * @param options - Claim options including destination address.
+   * @returns The claim result with transaction ID and amount.
+   *
+   * @example
+   * ```ts
+   * const result = await client.claimArkade(swapId, {
+   *   destinationAddress: "ark1q...", // Where to receive BTC
+   * });
+   * if (result.success) {
+   *   console.log("Claim TX:", result.txId);
+   *   console.log("Amount:", result.claimAmount);
+   * }
+   * ```
+   */
+  async claimArkade(
+    id: string,
+    options: ArkadeClaimOptions,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    txId?: string;
+    claimAmount?: bigint;
+  }> {
+    // Validate options
+    if (!options?.destinationAddress) {
+      return {
+        success: false,
+        message:
+          "Destination address is required for Arkade claims. " +
+          'Provide it via the options parameter: { destinationAddress: "ark1..." }',
+      };
+    }
+
+    // Check swap storage is configured
+    if (!this.#swapStorage) {
+      return {
+        success: false,
+        message:
+          "Swap storage is not configured. Cannot retrieve the preimage needed for claim.",
+      };
+    }
+
+    // Get swap status from server
+    const swap = await this.getSwap(id);
+
+    // Ensure we have an EVM-to-BTC swap (which includes EVM-to-Arkade)
+    if (swap.direction !== "evm_to_btc") {
+      return {
+        success: false,
+        message: `Expected evm_to_btc swap, got ${swap.direction}. claimArkade is for EVM-to-Arkade swaps.`,
+      };
+    }
+
+    // Type assertion - we've verified direction is evm_to_btc
+    const evmToArkadeSwap = swap as EvmToBtcSwapResponse & {
+      direction: "evm_to_btc";
+    };
+
+    // Get stored swap data (contains preimage and secret key)
+    const storedSwap = await this.#swapStorage.get(id);
+    if (!storedSwap) {
+      return {
+        success: false,
+        message: `Swap ${id} not found in local storage. The preimage is required to claim.`,
+      };
+    }
+
+    // Get user's x-only public key (32 bytes) from stored swap
+    const fullPubKey = storedSwap.publicKey;
+    const userPubKey =
+      fullPubKey.length === 66 ? fullPubKey.slice(2) : fullPubKey;
+
+    try {
+      const result = await buildArkadeClaim({
+        userSecretKey: storedSwap.secretKey,
+        userPubKey,
+        // For claim: lendaswap is SENDER, user is RECEIVER
+        // sender_pk from API is the client's key for EVM-to-Arkade swaps
+        // receiver_pk from API is lendaswap's key
+        lendaswapPubKey: evmToArkadeSwap.sender_pk,
+        arkadeServerPubKey: evmToArkadeSwap.server_pk,
+        preimage: storedSwap.preimage,
+        vhtlcAddress: evmToArkadeSwap.htlc_address_arkade,
+        refundLocktime: evmToArkadeSwap.vhtlc_refund_locktime,
+        unilateralClaimDelay: evmToArkadeSwap.unilateral_claim_delay,
+        unilateralRefundDelay: evmToArkadeSwap.unilateral_refund_delay,
+        unilateralRefundWithoutReceiverDelay:
+          evmToArkadeSwap.unilateral_refund_without_receiver_delay,
+        destinationAddress: options.destinationAddress,
+        network: evmToArkadeSwap.network,
+        arkadeServerUrl: options.arkadeServerUrl,
+      });
+
+      return {
+        success: true,
+        message: "Arkade claim executed successfully!",
+        txId: result.txId,
+        claimAmount: result.claimAmount,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        message: `Failed to execute Arkade claim: ${message}`,
+      };
+    }
   }
 
   // =========================================================================

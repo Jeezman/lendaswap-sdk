@@ -33,6 +33,7 @@ export type {
 // API client
 export { createApiClient } from "./api/client.js";
 export type {
+  ArkadeClaimOptions,
   BitcoinToEvmSwapOptions,
   BitcoinToEvmSwapResponse,
   BitcoinToEvmSwapResult,
@@ -51,6 +52,12 @@ export type {
 } from "./client.js";
 // Main client
 export { Client, ClientBuilder } from "./client.js";
+// Redeem module (Arkade claim)
+export {
+  type ArkadeClaimParams,
+  type ArkadeClaimResult,
+  buildArkadeClaim,
+} from "./redeem/index.js";
 // Refund module
 export {
   type BitcoinNetwork,

@@ -4,6 +4,7 @@
  * Provides redeem/claim logic for completing swaps:
  * - Gelato relay for gasless EVM claims (Polygon, Arbitrum)
  * - Manual claiming with call data for Ethereum
+ * - Arkade VHTLC claiming for EVM-to-Arkade swaps
  */
 
 import { buildEthereumClaimData } from "./ethereum.js";
@@ -14,6 +15,12 @@ import {
   type RedeemContext,
 } from "./types.js";
 
+// Re-export Arkade claim
+export {
+  type ArkadeClaimParams,
+  type ArkadeClaimResult,
+  buildArkadeClaim,
+} from "./arkade.js";
 // Re-export utilities from ethereum module
 export { encodeClaimSwapCallData, uuidToBytes32 } from "./ethereum.js";
 // Re-export types
