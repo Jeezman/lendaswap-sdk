@@ -5,8 +5,26 @@
  * wants to recover their tokens from the HTLC contract.
  */
 
+import * as readline from "node:readline";
 import type { Client } from "@lendasat/lendaswap-sdk-pure";
 import { createEvmWallet, getChainFromToken } from "../evm/wallet.js";
+
+/**
+ * Prompts the user for confirmation.
+ */
+async function confirm(message: string): Promise<boolean> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  return new Promise((resolve) => {
+    rl.question(`${message} (y/N): `, (answer) => {
+      rl.close();
+      resolve(answer.toLowerCase() === "y");
+    });
+  });
+}
 
 export async function evmRefundSwap(
   client: Client,
@@ -35,8 +53,14 @@ export async function evmRefundSwap(
   console.log(`Refunding swap: ${swapId}`);
   console.log("");
 
-  // Get swap details
-  const swap = await client.getSwap(swapId);
+  // Get swap details from local storage
+  const storedSwap = await client.getStoredSwap(swapId);
+  if (!storedSwap) {
+    console.error(`Swap ${swapId} not found in local storage.`);
+    process.exit(1);
+  }
+
+  const swap = storedSwap.response;
 
   if (swap.direction !== "evm_to_btc") {
     console.error(`This command is for EVM-to-BTC swaps, got: ${swap.direction}`);
@@ -78,6 +102,13 @@ export async function evmRefundSwap(
   const evmWallet = createEvmWallet(evmMnemonic, chainName);
   console.log(`EVM Wallet Address: ${evmWallet.address}`);
   console.log("");
+
+  // Confirm before sending
+  const confirmRefund = await confirm("Send refund transaction?");
+  if (!confirmRefund) {
+    console.log("Cancelled.");
+    return;
+  }
 
   try {
     console.log("Submitting refund transaction...");

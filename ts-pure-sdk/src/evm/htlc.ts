@@ -71,7 +71,7 @@ const CREATE_SWAP_SELECTOR = "0x9a4efe51";
 // approve(address,uint256)
 const APPROVE_SELECTOR = "0x095ea7b3";
 // refundSwap(bytes32)
-const REFUND_SWAP_SELECTOR = "0x1f7d0007";
+const REFUND_SWAP_SELECTOR = "0xfe2510ee";
 
 /**
  * Converts a UUID string to a bytes32 hex string (right-padded with zeros).

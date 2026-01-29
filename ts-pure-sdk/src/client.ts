@@ -1526,7 +1526,12 @@ export class Client {
     timelockExpired: boolean;
     timelockExpiry: number;
   }> {
-    const swap = await this.getSwap(swapId);
+    // Try to get from storage first
+    const storedSwap = this.#swapStorage
+      ? await this.#swapStorage.get(swapId)
+      : null;
+
+    const swap = storedSwap?.response ?? (await this.getSwap(swapId));
 
     if (swap.direction !== "evm_to_btc") {
       throw new Error(
