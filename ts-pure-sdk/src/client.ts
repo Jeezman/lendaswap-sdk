@@ -26,6 +26,7 @@ import {
   type EvmToLightningSwapResult,
 } from "./create/index.js";
 import { broadcastTransaction, findOutputByAddress } from "./esplora.js";
+import { encodeApproveCallData } from "./evm/index.js";
 import {
   buildArkadeClaim,
   type ClaimResult,
@@ -108,6 +109,24 @@ export interface ArkadeClaimOptions {
   destinationAddress: string;
   /** Arkade server URL (optional, uses default based on network) */
   arkadeServerUrl?: string;
+}
+
+/** Result of getting EVM funding call data */
+export interface EvmFundingCallData {
+  /** Call data for approving token spend (ERC20 approve) */
+  approve: {
+    /** Token contract address to call */
+    to: string;
+    /** Encoded approve(spender, amount) call data */
+    data: string;
+  };
+  /** Call data for creating the swap (from server) */
+  createSwap: {
+    /** HTLC contract address to call */
+    to: string;
+    /** Encoded createSwap call data (from server) */
+    data: string;
+  };
 }
 
 const DEFAULT_BASE_URL = "https://apilendaswap.lendasat.com/";
@@ -1311,5 +1330,88 @@ export class Client {
     options: EvmToLightningSwapOptions,
   ): Promise<EvmToLightningSwapResult> {
     return createEvmToLightningSwap(options, this.#getCreateContext());
+  }
+
+  // =========================================================================
+  // EVM HTLC Funding Helpers
+  // =========================================================================
+
+  /**
+   * Gets the call data needed to fund an EVM-to-Arkade/Lightning swap.
+   *
+   * Returns both:
+   * 1. `approve` - ERC20 approve call data (computed locally)
+   * 2. `createSwap` - HTLC createSwap call data (from server)
+   *
+   * @param swapId - The UUID of the swap.
+   * @param tokenDecimals - Decimals of the source token (e.g., 6 for USDC).
+   * @param approveMax - If true, approves max uint256. If false, approves exact amount. Default: true.
+   * @returns The approve and createSwap call data.
+   *
+   * @example
+   * ```ts
+   * const swap = await client.createEvmToArkadeSwap({...});
+   *
+   * // Get funding call data
+   * const funding = await client.getEvmFundingCallData(swap.response.id, 6);
+   *
+   * // Step 1: Approve token spend
+   * await wallet.sendTransaction({
+   *   to: funding.approve.to,
+   *   data: funding.approve.data,
+   * });
+   *
+   * // Step 2: Create the swap
+   * await wallet.sendTransaction({
+   *   to: funding.createSwap.to,
+   *   data: funding.createSwap.data,
+   * });
+   * ```
+   */
+  async getEvmFundingCallData(
+    swapId: string,
+    tokenDecimals: number,
+    approveMax = true,
+  ): Promise<EvmFundingCallData> {
+    const swap = await this.getSwap(swapId);
+
+    if (swap.direction !== "evm_to_btc") {
+      throw new Error(
+        `Expected evm_to_btc swap, got ${swap.direction}. This method is for EVM-to-Arkade/Lightning swaps.`,
+      );
+    }
+
+    const evmSwap = swap as EvmToBtcSwapResponse & { direction: "evm_to_btc" };
+
+    if (!evmSwap.create_swap_tx) {
+      throw new Error("Server did not return create_swap_tx call data");
+    }
+
+    // Calculate approve amount
+    const exactAmount = BigInt(
+      Math.floor(evmSwap.source_amount * 10 ** tokenDecimals),
+    );
+    const maxUint256 = BigInt(
+      "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    );
+    const approveAmount = approveMax ? maxUint256 : exactAmount;
+
+    // Build approve call data locally
+    const approve = encodeApproveCallData(
+      evmSwap.source_token_address,
+      evmSwap.htlc_address_evm,
+      approveAmount,
+    );
+
+    return {
+      approve: {
+        to: approve.to,
+        data: approve.data,
+      },
+      createSwap: {
+        to: evmSwap.htlc_address_evm,
+        data: evmSwap.create_swap_tx,
+      },
+    };
   }
 }

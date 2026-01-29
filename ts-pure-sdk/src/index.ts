@@ -43,6 +43,7 @@ export type {
   ClientConfig,
   EthereumClaimData,
   EvmChain,
+  EvmFundingCallData,
   EvmToArkadeSwapOptions,
   EvmToArkadeSwapResult,
   EvmToLightningSwapOptions,
@@ -52,6 +53,15 @@ export type {
 } from "./client.js";
 // Main client
 export { Client, ClientBuilder } from "./client.js";
+// EVM HTLC utilities
+export {
+  type ApproveCallData,
+  buildEvmHtlcCallData,
+  type CreateSwapCallData,
+  type CreateSwapParams,
+  encodeApproveCallData,
+  encodeCreateSwapCallData,
+} from "./evm/index.js";
 // Redeem module (Arkade claim)
 export {
   type ArkadeClaimParams,
