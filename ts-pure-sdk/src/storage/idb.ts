@@ -98,7 +98,7 @@ export class IdbWalletStorage implements WalletStorage {
 
   async incrementKeyIndex(): Promise<number> {
     // Use a transaction to ensure atomicity
-    return await this.#db.transaction("rw", this.#db.wallet, async () => {
+    return this.#db.transaction("rw", this.#db.wallet, async () => {
       const record = await this.#db.wallet.get(KEY_INDEX_KEY);
       const current = (record?.value as number) ?? 0;
       await this.#db.wallet.put({ key: KEY_INDEX_KEY, value: current + 1 });
