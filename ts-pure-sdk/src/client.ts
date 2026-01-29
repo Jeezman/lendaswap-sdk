@@ -2,7 +2,6 @@ import {
   type ApiClient,
   type AssetPair,
   type BtcToEvmSwapResponse,
-  type ClaimGelatoResponse,
   createApiClient,
   type GetSwapResponse,
   type OnchainToEvmSwapResponse,
@@ -20,7 +19,7 @@ import {
   createLightningToEvmSwap,
 } from "./create/index.js";
 import { broadcastTransaction, findOutputByAddress } from "./esplora.js";
-import { claimGelato as redeemClaimGelato } from "./redeem/index.js";
+import { type ClaimResult, claim as redeemClaim } from "./redeem/index.js";
 import {
   type BitcoinNetwork,
   buildArkadeRefund,
@@ -44,6 +43,9 @@ export type {
   EvmChain,
 } from "./create/index.js";
 export type { BitcoinToEvmSwapResponse } from "./create/types.js";
+
+// Re-export types from redeem module
+export type { ClaimResult } from "./redeem/index.js";
 
 /** Result of attempting a refund */
 export interface RefundResult {
@@ -550,25 +552,32 @@ export class Client {
   // =========================================================================
 
   /**
-   * Claims a swap using Gelato Relay (gasless execution).
+   * Claims a swap by revealing the preimage.
    *
-   * This reveals the preimage to claim the EVM HTLC. The server will
-   * submit the transaction via Gelato for gasless execution.
+   * The claim method depends on the target chain:
+   * - **Polygon/Arbitrum**: Uses Gelato Relay for gasless execution
+   * - **Ethereum**: Returns an error (manual claim required)
    *
    * @param id - The UUID of the swap.
    * @param secret - The preimage/secret (32-byte hex string, with or without 0x prefix).
-   * @returns A promise that resolves to the claim response with task ID and tx hash.
-   * @throws Error if the swap is not in the correct state or claim fails.
+   * @returns A ClaimResult with the outcome.
    *
    * @example
    * ```ts
-   * const result = await client.claimGelato(swapId, storedSwap.preimage);
-   * console.log("Claim TX:", result.tx_hash);
-   * console.log("Gelato Task:", result.task_id);
+   * const result = await client.claim(swapId, storedSwap.preimage);
+   * if (result.success) {
+   *   console.log("Claim TX:", result.txHash);
+   *   console.log("Gelato Task:", result.taskId);
+   * } else {
+   *   console.error("Claim failed:", result.message);
+   * }
    * ```
    */
-  async claimGelato(id: string, secret: string): Promise<ClaimGelatoResponse> {
-    return redeemClaimGelato(id, secret, { apiClient: this.#apiClient });
+  async claim(id: string, secret: string): Promise<ClaimResult> {
+    return redeemClaim(id, secret, {
+      apiClient: this.#apiClient,
+      getSwap: (swapId) => this.getSwap(swapId),
+    });
   }
 
   // =========================================================================

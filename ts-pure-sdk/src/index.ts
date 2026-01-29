@@ -38,6 +38,7 @@ export type {
   BitcoinToEvmSwapResult,
   BtcToEvmSwapOptions,
   BtcToEvmSwapResult,
+  ClaimResult,
   ClientConfig,
   EvmChain,
   OnchainRefundOptions,
