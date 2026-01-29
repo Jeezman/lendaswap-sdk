@@ -42,6 +42,8 @@ export type {
   ClientConfig,
   EthereumClaimData,
   EvmChain,
+  EvmToArkadeSwapOptions,
+  EvmToArkadeSwapResult,
   OnchainRefundOptions,
   RefundResult,
 } from "./client.js";

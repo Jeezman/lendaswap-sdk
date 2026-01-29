@@ -5,6 +5,7 @@
 import type {
   ApiClient,
   BtcToEvmSwapResponse,
+  EvmToBtcSwapResponse,
   GetSwapResponse,
   OnchainToEvmSwapResponse,
 } from "../api/client.js";
@@ -64,6 +65,30 @@ export type BitcoinToEvmSwapResponse =
 export interface BitcoinToEvmSwapResult {
   /** The swap response from the API */
   response: BitcoinToEvmSwapResponse;
+  /** The swap parameters used (for storage/recovery) */
+  swapParams: SwapParams;
+}
+
+/** Options for creating an EVM to Arkade swap */
+export interface EvmToArkadeSwapOptions {
+  /** Source EVM chain */
+  sourceChain: EvmChain;
+  /** Source token ID (e.g., "usdc_pol", "usdt_arb", "usdc_eth") */
+  sourceToken: string;
+  /** Amount of source token to send */
+  sourceAmount: number;
+  /** Target Arkade address to receive BTC */
+  targetAddress: string;
+  /** User's EVM wallet address (for checking allowance and building transactions) */
+  userAddress: string;
+  /** Optional referral code for fee exemption */
+  referralCode?: string;
+}
+
+/** Result of creating an EVM to Arkade swap */
+export interface EvmToArkadeSwapResult {
+  /** The swap response from the API */
+  response: EvmToBtcSwapResponse;
   /** The swap parameters used (for storage/recovery) */
   swapParams: SwapParams;
 }

@@ -41,6 +41,14 @@ export type BitcoinToEthereumSwapRequest =
 export type BitcoinToArbitrumSwapRequest =
   components["schemas"]["BitcoinToArbitrumSwapRequest"];
 
+// Request types for evm_to_arkade
+export type PolygonToArkadeSwapRequest =
+  components["schemas"]["PolygonToArkadeSwapRequest"];
+export type ArbitrumToArkadeSwapRequest =
+  components["schemas"]["ArbitrumToArkadeSwapRequest"];
+export type EthereumToArkadeSwapRequest =
+  components["schemas"]["EthereumToArkadeSwapRequest"];
+
 export type ClaimGelatoRequest = components["schemas"]["ClaimGelatoRequest"];
 export type ClaimGelatoResponse = components["schemas"]["ClaimGelatoResponse"];
 

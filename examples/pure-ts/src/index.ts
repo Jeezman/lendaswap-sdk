@@ -8,12 +8,16 @@
  * Usage:
  *   tsx src/index.ts pairs                          - List available trading pairs
  *   tsx src/index.ts quote <from> <to> <amount>     - Get a quote
- *   tsx src/index.ts swap <from> <to> <amount> <address> - Create a swap
+ *   tsx src/index.ts swap <from> <to> <amount> <address> [evmAddr] - Create a swap
  *   tsx src/index.ts watch <id>                     - Watch swap status
  *   tsx src/index.ts redeem <id>                    - Redeem a swap
  *   tsx src/index.ts refund <id>                    - Refund a swap
  *   tsx src/index.ts swaps                          - List stored swaps
  *   tsx src/index.ts info                           - Show wallet info
+ *
+ * Swap Directions:
+ *   BTC to EVM:    btc_lightning/btc_arkade/btc_onchain -> usdc_pol/usdc_arb/usdc_eth
+ *   EVM to Arkade: usdc_pol/usdc_arb/usdc_eth -> btc_arkade (requires evmAddr)
  */
 
 // Load .env file before anything else
@@ -97,10 +101,18 @@ Commands:
   info                               Show wallet info
   help                               Show this help message
 
-Examples:
+Examples (BTC to EVM):
+  tsx src/index.ts swap btc_lightning usdc_pol 100000 0x1234...
+  tsx src/index.ts swap btc_arkade usdc_pol 100000 0x1234...
+  tsx src/index.ts swap btc_onchain usdc_pol 100000 0x1234...
+
+Examples (EVM to Arkade):
+  tsx src/index.ts swap usdc_pol btc_arkade 100 ark1... 0x1234...
+  tsx src/index.ts swap usdc_arb btc_arkade 100 ark1... 0x1234...
+
+Other Examples:
   tsx src/index.ts pairs
   tsx src/index.ts quote btc_lightning usdc_pol 100000
-  tsx src/index.ts swap btc_lightning usdc_pol 100000 0x1234...
   tsx src/index.ts watch 12345678-1234-1234-1234-123456789abc
   tsx src/index.ts redeem 12345678-1234-1234-1234-123456789abc
   tsx src/index.ts refund 12345678-... bc1q... 5

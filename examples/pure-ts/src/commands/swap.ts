@@ -5,7 +5,7 @@
 
 import { type Client, type EvmChain } from "@lendasat/lendaswap-sdk-pure";
 
-type SwapType = "lightning" | "arkade" | "bitcoin";
+type SwapType = "lightning" | "arkade" | "bitcoin" | "evm-to-arkade";
 
 export async function createSwap(
   client: Client,
@@ -17,36 +17,44 @@ export async function createSwap(
   if (!from || !to || !amount || !address) {
     console.error("Usage: tsx src/index.ts swap <from> <to> <amount> <address>");
     console.error("");
-    console.error("Examples:");
+    console.error("BTC to EVM Examples:");
     console.error("  tsx src/index.ts swap btc_lightning usdc_pol 100000 0xYourAddress");
     console.error("  tsx src/index.ts swap btc_arkade usdc_pol 100000 0xYourAddress");
     console.error("  tsx src/index.ts swap btc_onchain usdc_pol 100000 0xYourAddress");
+    console.error("");
+    console.error("EVM to Arkade Examples:");
+    console.error("  tsx src/index.ts swap usdc_pol btc_arkade 100 ark1YourAddress 0xYourEvmAddress");
+    console.error("  tsx src/index.ts swap usdc_arb btc_arkade 100 ark1YourAddress 0xYourEvmAddress");
+    console.error("  tsx src/index.ts swap usdc_eth btc_arkade 100 ark1YourAddress 0xYourEvmAddress");
     process.exit(1);
   }
 
-  const amountNum = parseInt(amount, 10);
+  const amountNum = parseFloat(amount);
   if (isNaN(amountNum)) {
-    console.error("Error: amount must be a number (in satoshis)");
+    console.error("Error: amount must be a number");
     process.exit(1);
   }
 
   // Parse the swap direction
-  const swapType = parseSwapType(from);
-  const targetChain = parseTargetChain(to);
+  const swapType = parseSwapType(from, to);
 
-  if (!swapType || !targetChain) {
+  if (!swapType) {
     console.error(`Unsupported swap direction: ${from} -> ${to}`);
     console.error("");
-    console.error("Supported source tokens: btc_lightning, btc_arkade, btc_onchain");
-    console.error("Supported target tokens: usdc_pol, usdc_arb, usdc_eth, usdt_pol, usdt_arb, usdt_eth");
+    console.error("Supported BTC to EVM:");
+    console.error("  Source: btc_lightning, btc_arkade, btc_onchain");
+    console.error("  Target: usdc_pol, usdc_arb, usdc_eth, usdt_pol, usdt_arb, usdt_eth");
+    console.error("");
+    console.error("Supported EVM to Arkade:");
+    console.error("  Source: usdc_pol, usdc_arb, usdc_eth (or any *_pol, *_arb, *_eth)");
+    console.error("  Target: btc_arkade");
     process.exit(1);
   }
 
   console.log(`Creating swap: ${from} -> ${to}`);
-  console.log(`  Amount: ${amountNum} sats`);
-  console.log(`  Target Address: ${address}`);
+  console.log(`  Amount: ${amountNum}${swapType === "evm-to-arkade" ? "" : " sats"}`);
+  console.log(`  ${swapType === "evm-to-arkade" ? "Arkade Address" : "Target Address"}: ${address}`);
   console.log(`  Swap Type: ${swapType}`);
-  console.log(`  Target Chain: ${targetChain}`);
   console.log("");
 
   try {
@@ -61,12 +69,66 @@ export async function createSwap(
 
     // Use the appropriate helper method based on swap type
     // The Client automatically stores the swap if swap storage is configured
-    if (swapType === "lightning") {
+    if (swapType === "evm-to-arkade") {
+      // EVM to Arkade swap
+      // For this swap type, `address` is the Arkade address
+      // We need a 5th arg for the EVM user address
+      const evmUserAddress = process.argv[7]; // 5th positional arg after 'swap'
+
+      if (!evmUserAddress) {
+        console.error("Error: EVM to Arkade swaps require your EVM wallet address as the 5th argument");
+        console.error("");
+        console.error("Usage: tsx src/index.ts swap <sourceToken> btc_arkade <amount> <arkadeAddress> <evmAddress>");
+        console.error("Example: tsx src/index.ts swap usdc_pol btc_arkade 100 ark1... 0x1234...");
+        process.exit(1);
+      }
+
+      const sourceChain = parseSourceChain(from);
+      if (!sourceChain) {
+        console.error(`Unsupported source token: ${from}`);
+        process.exit(1);
+      }
+
+      console.log(`  Source Chain: ${sourceChain}`);
+      console.log(`  EVM User Address: ${evmUserAddress}`);
+      console.log("");
+
+      const result = await client.createEvmToArkadeSwap({
+        sourceChain,
+        sourceToken: from,
+        sourceAmount: amountNum,
+        targetAddress: address, // Arkade address
+        userAddress: evmUserAddress, // EVM wallet address
+      });
+
+      swapId = result.response.id;
+      status = result.response.status;
+      keyIndex = result.swapParams.keyIndex;
+      sourceAmount = result.response.source_amount;
+      targetAmount = result.response.target_amount;
+      sourceToken = result.response.source_token;
+      targetToken = result.response.target_token;
+      paymentInfo = [
+        `1. Approve token spend:`,
+        `   Token contract: ${result.response.source_token_address}`,
+        `   HTLC contract:  ${result.response.htlc_address_evm}`,
+        ``,
+        `2. Fund the HTLC (call createSwap or similar on the contract)`,
+        `   HTLC Address: ${result.response.htlc_address_evm}`,
+      ].join("\n");
+
+    } else if (swapType === "lightning") {
+      const targetChain = parseTargetChain(to);
+      if (!targetChain) {
+        console.error(`Unsupported target token: ${to}`);
+        process.exit(1);
+      }
+
       const result = await client.createLightningToEvmSwap({
         targetAddress: address,
         targetToken: to,
         targetChain,
-        sourceAmount: amountNum,
+        sourceAmount: Math.floor(amountNum),
       });
 
       swapId = result.response.id;
@@ -79,11 +141,17 @@ export async function createSwap(
       paymentInfo = `Pay this Lightning Invoice:\n  ${result.response.ln_invoice}`;
 
     } else if (swapType === "arkade") {
+      const targetChain = parseTargetChain(to);
+      if (!targetChain) {
+        console.error(`Unsupported target token: ${to}`);
+        process.exit(1);
+      }
+
       const result = await client.createArkadeToEvmSwap({
         targetAddress: address,
         targetToken: to,
         targetChain,
-        sourceAmount: amountNum,
+        sourceAmount: Math.floor(amountNum),
       });
 
       swapId = result.response.id;
@@ -97,11 +165,17 @@ export async function createSwap(
 
     } else {
       // bitcoin on-chain
+      const targetChain = parseTargetChain(to);
+      if (!targetChain) {
+        console.error(`Unsupported target token: ${to}`);
+        process.exit(1);
+      }
+
       const result = await client.createBitcoinToEvmSwap({
         targetAddress: address,
         targetToken: to,
         targetChain,
-        sourceAmount: amountNum,
+        sourceAmount: Math.floor(amountNum),
       });
 
       swapId = result.response.id;
@@ -138,7 +212,7 @@ export async function createSwap(
     console.log(`  Key Index:     ${keyIndex}`);
     console.log("");
     console.log(`  Source Token:  ${sourceToken}`);
-    console.log(`  Source Amount: ${sourceAmount.toLocaleString()} sats`);
+    console.log(`  Source Amount: ${sourceAmount}`);
     console.log(`  Target Token:  ${targetToken}`);
     console.log(`  Target Amount: ${targetAmount}`);
     console.log("");
@@ -166,13 +240,25 @@ export async function createSwap(
 }
 
 /**
- * Parse the source token to determine swap type.
+ * Parse the source and target tokens to determine swap type.
  */
-function parseSwapType(from: string): SwapType | null {
+function parseSwapType(from: string, to: string): SwapType | null {
+  // BTC to EVM
   if (from === "btc_lightning") return "lightning";
   if (from === "btc_arkade") return "arkade";
   if (from === "btc_onchain" || from === "bitcoin") return "bitcoin";
+
+  // EVM to Arkade
+  if (to === "btc_arkade" && isEvmToken(from)) return "evm-to-arkade";
+
   return null;
+}
+
+/**
+ * Check if a token is an EVM token.
+ */
+function isEvmToken(token: string): boolean {
+  return token.endsWith("_pol") || token.endsWith("_arb") || token.endsWith("_eth");
 }
 
 /**
@@ -182,5 +268,15 @@ function parseTargetChain(to: string): EvmChain | null {
   if (to.endsWith("_pol")) return "polygon";
   if (to.endsWith("_arb")) return "arbitrum";
   if (to.endsWith("_eth")) return "ethereum";
+  return null;
+}
+
+/**
+ * Parse the source token to determine EVM chain (for EVM to Arkade swaps).
+ */
+function parseSourceChain(from: string): EvmChain | null {
+  if (from.endsWith("_pol")) return "polygon";
+  if (from.endsWith("_arb")) return "arbitrum";
+  if (from.endsWith("_eth")) return "ethereum";
   return null;
 }
