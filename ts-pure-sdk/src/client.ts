@@ -648,6 +648,20 @@ export class Client {
     return this.#swapStorage.getAll();
   }
 
+  async deleteSwap(id: string): Promise<void> {
+    if (!this.#swapStorage) {
+      return;
+    }
+    await this.#swapStorage.delete(id);
+  }
+
+  async clearSwapStorage(): Promise<void> {
+    if (!this.#swapStorage) {
+      return;
+    }
+    await this.#swapStorage.clear();
+  }
+
   // =========================================================================
   // Redeem
   // =========================================================================
