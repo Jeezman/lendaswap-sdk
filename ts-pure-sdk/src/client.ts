@@ -633,6 +633,18 @@ export class Client {
     return this.#swapStorage.get(id);
   }
 
+  /**
+   * Gets all stored swaps from local storage.
+   *
+   * @returns Array of all stored swap data, or empty array if no storage is configured.
+   */
+  async listAllSwaps(): Promise<StoredSwap[]> {
+    if (!this.#swapStorage) {
+      return [];
+    }
+    return this.#swapStorage.getAll();
+  }
+
   // =========================================================================
   // Redeem
   // =========================================================================
