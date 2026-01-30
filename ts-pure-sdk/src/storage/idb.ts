@@ -12,6 +12,11 @@ import type { StoredSwap, SwapStorage, WalletStorage } from "./index.js";
 const DB_NAME = "lendaswap-v3";
 const DB_VERSION = 1;
 
+// Legacy (v2) database constants for migration
+const V2_DB_NAME = "lendaswap-v2";
+const V2_WALLET_STORE = "wallet";
+const V2_WALLET_KEY = "default";
+
 // Wallet record type for the database
 interface WalletRecord {
   key: string;
@@ -73,14 +78,42 @@ const KEY_INDEX_KEY = "keyIndex";
  */
 export class IdbWalletStorage implements WalletStorage {
   readonly #db: LendaswapDatabase;
+  #migratedFromLegacy = false;
 
   constructor() {
     this.#db = getDatabase();
   }
 
+  /**
+   * Whether a legacy (v2) wallet was migrated during this session.
+   *
+   * When true, the caller should invoke `client.recoverSwaps()` to
+   * restore swap history from the server.
+   */
+  get migratedFromLegacy(): boolean {
+    return this.#migratedFromLegacy;
+  }
+
   async getMnemonic(): Promise<string | null> {
     const record = await this.#db.wallet.get(MNEMONIC_KEY);
-    return (record?.value as string) ?? null;
+    if (record?.value) {
+      return record.value as string;
+    }
+
+    // No mnemonic in v3 — try migrating from v2 (legacy WASM SDK)
+    const v2Wallet = await readV2Wallet();
+    if (!v2Wallet?.mnemonic) {
+      return null;
+    }
+
+    // Persist to v3 so this migration only happens once
+    await this.setMnemonic(v2Wallet.mnemonic);
+    if (v2Wallet.keyIndex > 0) {
+      await this.setKeyIndex(v2Wallet.keyIndex);
+    }
+    this.#migratedFromLegacy = true;
+
+    return v2Wallet.mnemonic;
   }
 
   async setMnemonic(mnemonic: string): Promise<void> {
@@ -169,6 +202,84 @@ export class IdbSwapStorage implements SwapStorage {
   async clear(): Promise<void> {
     await this.#db.swaps.clear();
   }
+}
+
+// ---------------------------------------------------------------------------
+// Legacy v2 wallet migration
+// ---------------------------------------------------------------------------
+
+interface V2WalletData {
+  mnemonic: string | null;
+  keyIndex: number;
+}
+
+/**
+ * Read wallet data from the legacy v2 (WASM SDK) IndexedDB database.
+ *
+ * The v2 database ("lendaswap-v2") stores wallet data as a single object
+ * under key "default" in the "wallet" object store, with fields:
+ * - `mnemonic`: string
+ * - `key_index`: number
+ *
+ * Returns null if the v2 database doesn't exist or has no wallet data.
+ */
+function readV2Wallet(): Promise<V2WalletData | null> {
+  return new Promise((resolve) => {
+    if (typeof indexedDB === "undefined") {
+      resolve(null);
+      return;
+    }
+
+    const request = indexedDB.open(V2_DB_NAME);
+
+    // If onupgradeneeded fires, the database didn't exist — abort to
+    // prevent creating an empty v2 database.
+    request.onupgradeneeded = () => {
+      request.transaction?.abort();
+    };
+
+    request.onerror = () => {
+      resolve(null);
+    };
+
+    request.onsuccess = () => {
+      const db = request.result;
+
+      if (!db.objectStoreNames.contains(V2_WALLET_STORE)) {
+        db.close();
+        resolve(null);
+        return;
+      }
+
+      try {
+        const tx = db.transaction(V2_WALLET_STORE, "readonly");
+        const store = tx.objectStore(V2_WALLET_STORE);
+        const getReq = store.get(V2_WALLET_KEY);
+
+        getReq.onsuccess = () => {
+          db.close();
+          const result = getReq.result;
+          if (!result) {
+            resolve(null);
+            return;
+          }
+          resolve({
+            mnemonic: result.mnemonic ?? null,
+            keyIndex:
+              typeof result.key_index === "number" ? result.key_index : 0,
+          });
+        };
+
+        getReq.onerror = () => {
+          db.close();
+          resolve(null);
+        };
+      } catch {
+        db.close();
+        resolve(null);
+      }
+    };
+  });
 }
 
 /**

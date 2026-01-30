@@ -676,7 +676,9 @@ export class Client {
    * @returns The recovered swaps stored locally.
    */
   async recoverSwaps(): Promise<StoredSwap[]> {
+    console.log(`Recovering ...`);
     const xpub = this.getUserIdXpub();
+    console.log(`Recovering ${xpub}`);
 
     const { data, error } = await this.#apiClient.POST("/swap/recover", {
       body: { xpub },
@@ -689,6 +691,7 @@ export class Client {
     }
 
     const storedSwaps: StoredSwap[] = [];
+    console.log(`Recovered data ${JSON.stringify(data)}`);
 
     for (const recoveredSwap of data.swaps) {
       const { index, ...response } = recoveredSwap;
