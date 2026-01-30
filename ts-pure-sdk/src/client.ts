@@ -331,7 +331,7 @@ export class ClientBuilder {
 export class Client {
   readonly #apiClient: ApiClient;
   readonly #config: ClientConfig;
-  readonly #signer: Signer;
+  #signer: Signer;
   readonly #signerStorage?: WalletStorage;
   readonly #swapStorage?: SwapStorage;
 
@@ -394,6 +394,21 @@ export class Client {
    */
   getMnemonic(): string {
     return this.#signer.mnemonic;
+  }
+
+  /**
+   * Loads a mnemonic phrase, replacing the current signer.
+   *
+   * The new mnemonic is persisted to storage if storage is configured.
+   *
+   * @param mnemonic - The BIP39 mnemonic phrase to load.
+   * @throws Error if the mnemonic is invalid.
+   */
+  async loadMnemonic(mnemonic: string): Promise<void> {
+    this.#signer = Signer.fromMnemonic(mnemonic);
+    if (this.#signerStorage) {
+      await this.#signerStorage.setMnemonic(mnemonic);
+    }
   }
 
   /**
