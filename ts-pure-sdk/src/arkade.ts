@@ -33,6 +33,8 @@ export interface GetVhtlcAmountsParams {
   vhtlcAddress: string;
   /** The Bitcoin network (e.g. "bitcoin", "signet") */
   network: string;
+  /** Optional Arkade server URL override. Falls back to network-based defaults. */
+  arkadeServerUrl?: string;
 }
 
 /**
@@ -45,14 +47,14 @@ export interface GetVhtlcAmountsParams {
 export async function getVhtlcAmounts(
   params: GetVhtlcAmountsParams,
 ): Promise<VhtlcAmounts> {
-  const { vhtlcAddress, network } = params;
+  const { vhtlcAddress, network, arkadeServerUrl } = params;
 
   // Decode the Arkade address to get the pkScript for indexer queries
   const decoded = ArkAddress.decode(vhtlcAddress);
   const pkScript = hex.encode(decoded.pkScript);
 
-  // Determine Arkade server URL from network
-  const serverUrl = DEFAULT_ARKADE_URLS[network];
+  // Determine Arkade server URL: explicit override > network default
+  const serverUrl = arkadeServerUrl ?? DEFAULT_ARKADE_URLS[network];
   if (!serverUrl) {
     throw new Error(`Unknown network for Arkade: ${network}`);
   }

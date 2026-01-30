@@ -152,6 +152,8 @@ export interface ClientConfig {
   apiKey?: string;
   /** Optional Esplora API URL for broadcasting Bitcoin transactions. */
   esploraUrl?: string;
+  /** Optional Arkade server URL (e.g. "https://arkade.computer"). Falls back to network-based defaults. */
+  arkadeServerUrl?: string;
 }
 
 /**
@@ -180,6 +182,7 @@ export class ClientBuilder {
   #baseUrl: string = DEFAULT_BASE_URL;
   #apiKey?: string;
   #esploraUrl?: string;
+  #arkadeServerUrl?: string;
   #signerStorage?: WalletStorage;
   #swapStorage?: SwapStorage;
   #mnemonic?: string;
@@ -217,6 +220,21 @@ export class ClientBuilder {
    */
   withEsploraUrl(esploraUrl: string): this {
     this.#esploraUrl = esploraUrl;
+    return this;
+  }
+
+  /**
+   * Sets the Arkade server URL for VHTLC operations (claim, refund, amounts).
+   *
+   * If not set, defaults are used based on the network:
+   * - bitcoin: https://arkade.computer
+   * - signet: wa
+   *
+   * @param arkadeServerUrl - The Arkade server base URL.
+   * @returns The builder instance for chaining.
+   */
+  withArkadeServerUrl(arkadeServerUrl: string): this {
+    this.#arkadeServerUrl = arkadeServerUrl;
     return this;
   }
 
@@ -300,6 +318,7 @@ export class ClientBuilder {
         baseUrl: this.#baseUrl,
         apiKey: this.#apiKey,
         esploraUrl: this.#esploraUrl,
+        arkadeServerUrl: this.#arkadeServerUrl,
       },
       signer,
       this.#signerStorage,
@@ -748,6 +767,7 @@ export class Client {
     return getVhtlcAmounts({
       vhtlcAddress,
       network: swap.network,
+      arkadeServerUrl: this.#config.arkadeServerUrl,
     });
   }
 
@@ -935,7 +955,8 @@ export class Client {
           evmToArkadeSwap.unilateral_refund_without_receiver_delay,
         destinationAddress: options.destinationAddress,
         network: evmToArkadeSwap.network,
-        arkadeServerUrl: options.arkadeServerUrl,
+        arkadeServerUrl:
+          options.arkadeServerUrl ?? this.#config.arkadeServerUrl,
       });
 
       return {
@@ -1341,7 +1362,8 @@ export class Client {
           arkadeSwap.unilateral_refund_without_receiver_delay,
         destinationAddress: options.destinationAddress,
         network: arkadeSwap.network,
-        arkadeServerUrl: options.arkadeServerUrl,
+        arkadeServerUrl:
+          options.arkadeServerUrl ?? this.#config.arkadeServerUrl,
       });
 
       return {
