@@ -63,6 +63,9 @@ release-wasm:
 build-sdk: build-wasm
     cd ts-sdk && pnpm install && pnpm run build:ts
 
+build-sdk-pure:
+    cd ts-pure-sdk && pnpm install && pnpm run build
+
 build-release: release-wasm
     cd ts-sdk && pnpm install && pnpm run build:release
 

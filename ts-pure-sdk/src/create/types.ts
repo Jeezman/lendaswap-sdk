@@ -8,18 +8,19 @@ import type {
   EvmToBtcSwapResponse,
   GetSwapResponse,
   OnchainToEvmSwapResponse,
+  TokenId,
 } from "../api/client.js";
-import type { SwapParams } from "../signer/index.js";
+import type { SwapParams } from "../signer";
 
 /** Supported EVM chains for swaps */
-export type EvmChain = "polygon" | "arbitrum" | "ethereum";
+export type EvmChain = "polygon" | "arbitrum" | "ethereum" | string;
 
 /** Options for creating an Arkade or Lightning to EVM swap */
 export interface BtcToEvmSwapOptions {
   /** Target EVM address to receive tokens */
   targetAddress: string;
   /** Target token ID (e.g., "usdc_pol", "usdt_arb") */
-  targetToken: string;
+  targetToken: TokenId;
   /** Target EVM chain */
   targetChain: EvmChain;
   /** Amount in satoshis to send (optional if targetAmount is set) */
@@ -35,7 +36,7 @@ export interface BitcoinToEvmSwapOptions {
   /** Target EVM address to receive tokens */
   targetAddress: string;
   /** Target token ID (e.g., "usdc_pol", "usdt_arb") */
-  targetToken: string;
+  targetToken: TokenId;
   /** Target EVM chain */
   targetChain: EvmChain;
   /** Amount in satoshis to send */
