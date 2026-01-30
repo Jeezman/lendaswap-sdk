@@ -106,6 +106,9 @@ export interface ArkadeRefundOptions {
   arkadeServerUrl?: string;
 }
 
+/** General refund options — the method picks the right variant based on swap type */
+export type RefundOptions = OnchainRefundOptions | ArkadeRefundOptions;
+
 /** Options for Arkade (off-chain) claim */
 export interface ArkadeClaimOptions {
   /** Destination Arkade address to receive claimed BTC */
@@ -879,10 +882,7 @@ export class Client {
    * }
    * ```
    */
-  async refundSwap(
-    id: string,
-    options?: OnchainRefundOptions,
-  ): Promise<RefundResult> {
+  async refundSwap(id: string, options?: RefundOptions): Promise<RefundResult> {
     // Get the swap to determine its type
     const swap = await this.getSwap(id);
 

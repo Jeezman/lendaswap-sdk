@@ -49,6 +49,7 @@ export type {
   EvmToLightningSwapOptions,
   EvmToLightningSwapResult,
   OnchainRefundOptions,
+  RefundOptions,
   RefundResult,
 } from "./client.js";
 // Main client
