@@ -11,24 +11,39 @@ npm install @lendasat/lendaswap-sdk-pure
 
 ## Supported Swaps
 
-This SDK currently supports the following swap directions:
+This SDK supports the following swap directions:
 
-| Source       | Target                | Status    |
-| ------------ | --------------------- | --------- |
-| Lightning    | Polygon (USDC, USDT)  | Supported |
-| Lightning    | Arbitrum (USDC, USDT) | Supported |
-| Arkade       | Polygon (USDC, USDT)  | Supported |
-| Arkade       | Arbitrum (USDC, USDT) | Supported |
-| On-chain BTC | Polygon (USDC, USDT)  | Supported |
-| On-chain BTC | Arbitrum (USDC, USDT) | Supported |
+### BTC to EVM
+
+| Source       | Target                      | Status    |
+| ------------ | --------------------------- | --------- |
+| Lightning    | Polygon (USDC, USDT)        | Supported |
+| Lightning    | Arbitrum (USDC, USDT)       | Supported |
+| Lightning    | Ethereum (USDC, USDT, WBTC) | Supported |
+| Arkade       | Polygon (USDC, USDT)        | Supported |
+| Arkade       | Arbitrum (USDC, USDT)       | Supported |
+| Arkade       | Ethereum (USDC, USDT, WBTC) | Supported |
+| On-chain BTC | Polygon (USDC, USDT)        | Supported |
+| On-chain BTC | Arbitrum (USDC, USDT)       | Supported |
+| On-chain BTC | Ethereum (USDC, USDT, WBTC) | Supported |
+
+### EVM to BTC
+
+| Source                      | Target    | Status    |
+| --------------------------- | --------- | --------- |
+| Polygon (USDC, USDT)        | Arkade    | Supported |
+| Polygon (USDC, USDT)        | Lightning | Supported |
+| Arbitrum (USDC, USDT)       | Arkade    | Supported |
+| Arbitrum (USDC, USDT)       | Lightning | Supported |
+| Ethereum (USDC, USDT, WBTC) | Arkade    | Supported |
+| Ethereum (USDC, USDT, WBTC) | Lightning | Supported |
 
 **Refund support:**
 
 - Lightning swaps: Auto-expire, no refund needed
 - Arkade swaps: Off-chain refund via Arkade protocol
 - On-chain BTC swaps: On-chain refund transaction after timelock
-
-> More swap directions (e.g., EVM to BTC) will be added in future versions.
+- EVM swaps: On-chain refund after timelock expires
 
 ## Usage
 
@@ -110,6 +125,38 @@ const result = await client.createBitcoinToEvmSwap({
 
 // Send BTC to the on-chain HTLC address
 console.log(`Send BTC to: ${result.response.btc_htlc_address}`);
+console.log(`Swap ID: ${result.response.id}`);
+```
+
+#### EVM to Arkade
+
+```typescript
+const result = await client.createEvmToArkadeSwap({
+  sourceToken: "usdc_pol",       // or "usdc_arb", "usdc_eth", "usdt_*", "wbtc_eth"
+  sourceChain: "polygon",        // or "arbitrum", "ethereum"
+  sourceAmount: 100000000n,      // Amount in token's smallest unit (e.g., 6 decimals for USDC)
+  targetAddress: "ark1...",      // Your Arkade address
+  evmAddress: "0x...",           // Your EVM address (for funding the HTLC)
+});
+
+// Fund the EVM HTLC (approve + createSwap)
+console.log(`HTLC Address: ${result.response.htlc_address}`);
+console.log(`Swap ID: ${result.response.id}`);
+```
+
+#### EVM to Lightning
+
+```typescript
+const result = await client.createEvmToLightningSwap({
+  sourceToken: "usdc_pol",
+  sourceChain: "polygon",
+  sourceAmount: 100000000n,
+  targetAddress: "lnbc...",       // Lightning invoice
+  evmAddress: "0x...",
+});
+
+// Fund the EVM HTLC
+console.log(`HTLC Address: ${result.response.htlc_address}`);
 console.log(`Swap ID: ${result.response.id}`);
 ```
 
