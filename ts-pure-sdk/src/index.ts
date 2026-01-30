@@ -54,6 +54,12 @@ export type {
 } from "./client.js";
 // Main client
 export { Client, ClientBuilder } from "./client.js";
+// Arkade VHTLC query utilities
+export {
+  getVhtlcAmounts,
+  type GetVhtlcAmountsParams,
+  type VhtlcAmounts,
+} from "./arkade.js";
 // EVM HTLC utilities
 export {
   type ApproveCallData,

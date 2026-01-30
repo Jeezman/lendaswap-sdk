@@ -35,6 +35,7 @@ import {
   type ClaimResult,
   claim as redeemClaim,
 } from "./redeem/index.js";
+import { getVhtlcAmounts, type VhtlcAmounts } from "./arkade.js";
 import {
   type BitcoinNetwork,
   buildArkadeRefund,
@@ -660,6 +661,44 @@ export class Client {
       return;
     }
     await this.#swapStorage.clear();
+  }
+
+  /**
+   * Gets VHTLC amounts for an Arkade swap.
+   *
+   * Queries the Arkade indexer for spendable, spent, and recoverable balances
+   * at the VHTLC address associated with a swap. Works for:
+   * - BTC → EVM swaps where the source asset is Arkade
+   * - EVM → BTC swaps where the target asset is Arkade
+   *
+   * Reads swap data from local storage (does not contact the server).
+   *
+   * @param id - The UUID of the swap.
+   * @returns The VHTLC amounts in satoshis.
+   */
+  async amountsForSwap(id: string): Promise<VhtlcAmounts> {
+    const stored = await this.getStoredSwap(id);
+    if (!stored) {
+      throw new Error(`Swap not found in local storage: ${id}`);
+    }
+
+    const swap = stored.response;
+
+    if (swap.direction !== "btc_to_evm" && swap.direction !== "evm_to_btc") {
+      throw new Error(
+        `amountsForSwap only applies to btc_to_evm or evm_to_btc swaps, got ${swap.direction}`,
+      );
+    }
+
+    const vhtlcAddress = swap.htlc_address_arkade;
+    if (!vhtlcAddress) {
+      throw new Error("Swap does not have an Arkade VHTLC address");
+    }
+
+    return getVhtlcAmounts({
+      vhtlcAddress,
+      network: swap.network,
+    });
   }
 
   // =========================================================================
