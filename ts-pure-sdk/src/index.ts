@@ -122,3 +122,4 @@ export {
   type NetworkName,
   networkName,
 } from "./tokens.js";
+export { getUsdPrices } from "./usd-price";
