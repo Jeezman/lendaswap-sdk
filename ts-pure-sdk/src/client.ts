@@ -1,6 +1,7 @@
 import {
   type ApiClient,
   type AssetPair,
+  type BtcToArkadeSwapResponse,
   type BtcToEvmSwapResponse,
   createApiClient,
   type EvmToBtcSwapResponse,
@@ -11,12 +12,15 @@ import {
 } from "./api/client.js";
 import { getVhtlcAmounts, type VhtlcAmounts } from "./arkade.js";
 import {
+  type BitcoinToArkadeSwapOptions,
+  type BitcoinToArkadeSwapResult,
   type BitcoinToEvmSwapOptions,
   type BitcoinToEvmSwapResult,
   type BtcToEvmSwapOptions,
   type BtcToEvmSwapResult,
   type CreateSwapContext,
   createArkadeToEvmSwap,
+  createBitcoinToArkadeSwap,
   createBitcoinToEvmSwap,
   createEvmToArkadeSwap,
   createEvmToLightningSwap,
@@ -48,10 +52,12 @@ import {
   SWAP_STORAGE_VERSION,
   type SwapStorage,
   type WalletStorage,
-} from "./storage/index.js";
+} from "./storage";
 
 // Re-export types from create module for backwards compatibility
 export type {
+  BitcoinToArkadeSwapOptions,
+  BitcoinToArkadeSwapResult,
   BitcoinToEvmSwapOptions,
   BitcoinToEvmSwapResult,
   BtcToEvmSwapOptions,
@@ -753,13 +759,24 @@ export class Client {
 
     const swap = stored.response;
 
-    if (swap.direction !== "btc_to_evm" && swap.direction !== "evm_to_btc") {
+    if (
+      swap.direction !== "btc_to_evm" &&
+      swap.direction !== "evm_to_btc" &&
+      swap.direction !== "btc_to_arkade"
+    ) {
       throw new Error(
-        `amountsForSwap only applies to btc_to_evm or evm_to_btc swaps, got ${swap.direction}`,
+        `amountsForSwap only applies to btc_to_evm, evm_to_btc, or btc_to_arkade swaps, got ${swap.direction}`,
       );
     }
 
-    const vhtlcAddress = swap.htlc_address_arkade;
+    // Get VHTLC address based on swap direction
+    let vhtlcAddress: string | undefined;
+    if (swap.direction === "btc_to_arkade") {
+      vhtlcAddress = (swap as BtcToArkadeSwapResponse).arkade_vhtlc_address;
+    } else {
+      vhtlcAddress = (swap as BtcToEvmSwapResponse | EvmToBtcSwapResponse)
+        .htlc_address_arkade;
+    }
     if (!vhtlcAddress) {
       throw new Error("Swap does not have an Arkade VHTLC address");
     }
@@ -825,11 +842,20 @@ export class Client {
 
     // Check if target is Arkade
     if (swap.target_token === "btc_arkade") {
-      // Get destination address from swap data
-      const evmSwap = swap as EvmToBtcSwapResponse & {
-        direction: "evm_to_btc";
-      };
-      const destinationAddress = evmSwap.user_address_arkade;
+      // Determine destination address based on swap direction
+      let destinationAddress: string | undefined;
+
+      if (swap.direction === "btc_to_arkade") {
+        const btcToArkadeSwap = swap as BtcToArkadeSwapResponse & {
+          direction: "btc_to_arkade";
+        };
+        destinationAddress = btcToArkadeSwap.target_arkade_address;
+      } else if (swap.direction === "evm_to_btc") {
+        const evmSwap = swap as EvmToBtcSwapResponse & {
+          direction: "evm_to_btc";
+        };
+        destinationAddress = evmSwap.user_address_arkade ?? undefined;
+      }
 
       if (!destinationAddress) {
         return {
@@ -917,44 +943,76 @@ export class Client {
 
     const swap = storedSwap.response;
 
-    // Ensure we have an EVM-to-BTC swap (which includes EVM-to-Arkade)
-    if (swap.direction !== "evm_to_btc") {
+    // Ensure we have an Arkade-target swap
+    if (swap.direction !== "evm_to_btc" && swap.direction !== "btc_to_arkade") {
       return {
         success: false,
-        message: `Expected evm_to_btc swap, got ${swap.direction}. claimArkade is for EVM-to-Arkade swaps.`,
+        message: `Expected evm_to_btc or btc_to_arkade swap, got ${swap.direction}. claimArkade is for swaps targeting Arkade.`,
       };
     }
-
-    // Type assertion - we've verified direction is evm_to_btc
-    const evmToArkadeSwap = swap as EvmToBtcSwapResponse & {
-      direction: "evm_to_btc";
-    };
 
     // Get user's x-only public key (32 bytes) from stored swap
     const fullPubKey = storedSwap.publicKey;
     const userPubKey =
       fullPubKey.length === 66 ? fullPubKey.slice(2) : fullPubKey;
 
+    // Build claim parameters based on swap direction
+    let lendaswapPubKey: string;
+    let arkadeServerPubKey: string;
+    let vhtlcAddress: string;
+    let refundLocktime: number;
+    let unilateralClaimDelay: number;
+    let unilateralRefundDelay: number;
+    let unilateralRefundWithoutReceiverDelay: number;
+    let network: string;
+
+    if (swap.direction === "btc_to_arkade") {
+      const btcToArkadeSwap = swap as BtcToArkadeSwapResponse & {
+        direction: "btc_to_arkade";
+      };
+      lendaswapPubKey = btcToArkadeSwap.server_vhtlc_pk;
+      arkadeServerPubKey = btcToArkadeSwap.arkade_server_pk;
+      vhtlcAddress = btcToArkadeSwap.arkade_vhtlc_address;
+      refundLocktime = btcToArkadeSwap.vhtlc_refund_locktime;
+      unilateralClaimDelay = btcToArkadeSwap.unilateral_claim_delay;
+      unilateralRefundDelay = btcToArkadeSwap.unilateral_refund_delay;
+      unilateralRefundWithoutReceiverDelay =
+        btcToArkadeSwap.unilateral_refund_without_receiver_delay;
+      network = btcToArkadeSwap.network;
+    } else {
+      const evmToArkadeSwap = swap as EvmToBtcSwapResponse & {
+        direction: "evm_to_btc";
+      };
+      // For claim: lendaswap is SENDER in the VHTLC, user is RECEIVER
+      // In the API response:
+      //   sender_pk = client's public key
+      //   receiver_pk = lendaswap's public key
+      lendaswapPubKey = evmToArkadeSwap.receiver_pk;
+      arkadeServerPubKey = evmToArkadeSwap.server_pk;
+      vhtlcAddress = evmToArkadeSwap.htlc_address_arkade;
+      refundLocktime = evmToArkadeSwap.vhtlc_refund_locktime;
+      unilateralClaimDelay = evmToArkadeSwap.unilateral_claim_delay;
+      unilateralRefundDelay = evmToArkadeSwap.unilateral_refund_delay;
+      unilateralRefundWithoutReceiverDelay =
+        evmToArkadeSwap.unilateral_refund_without_receiver_delay;
+      network = evmToArkadeSwap.network;
+    }
+
     try {
       const result = await buildArkadeClaim({
         userSecretKey: storedSwap.secretKey,
         userPubKey,
-        // For claim: lendaswap is SENDER in the VHTLC, user is RECEIVER
-        // In the API response:
-        //   sender_pk = client's public key
-        //   receiver_pk = lendaswap's public key
-        lendaswapPubKey: evmToArkadeSwap.receiver_pk,
-        arkadeServerPubKey: evmToArkadeSwap.server_pk,
+        lendaswapPubKey,
+        arkadeServerPubKey,
         preimage: storedSwap.preimage,
         preimageHash: storedSwap.preimageHash,
-        vhtlcAddress: evmToArkadeSwap.htlc_address_arkade,
-        refundLocktime: evmToArkadeSwap.vhtlc_refund_locktime,
-        unilateralClaimDelay: evmToArkadeSwap.unilateral_claim_delay,
-        unilateralRefundDelay: evmToArkadeSwap.unilateral_refund_delay,
-        unilateralRefundWithoutReceiverDelay:
-          evmToArkadeSwap.unilateral_refund_without_receiver_delay,
+        vhtlcAddress,
+        refundLocktime,
+        unilateralClaimDelay,
+        unilateralRefundDelay,
+        unilateralRefundWithoutReceiverDelay,
         destinationAddress: options.destinationAddress,
-        network: evmToArkadeSwap.network,
+        network,
         arkadeServerUrl:
           options.arkadeServerUrl ?? this.#config.arkadeServerUrl,
       });
@@ -1008,7 +1066,11 @@ export class Client {
    */
   async refundSwap(id: string, options?: RefundOptions): Promise<RefundResult> {
     // Get the swap to determine its type
-    const swap = await this.getSwap(id);
+    const storedSwap = await this.getStoredSwap(id);
+    if (!storedSwap) {
+      throw Error("Swap not found");
+    }
+    const swap = storedSwap.response;
 
     // Determine the source token to identify swap type
     const sourceToken = swap.source_token;
@@ -1077,38 +1139,55 @@ export class Client {
       };
     }
 
-    // Ensure we have an on-chain swap response
-    if (swap.direction !== "onchain_to_evm") {
+    // Ensure we have an on-chain funded swap
+    if (
+      swap.direction !== "onchain_to_evm" &&
+      swap.direction !== "btc_to_arkade"
+    ) {
       return {
         success: false,
-        message: `Expected onchain_to_evm swap, got ${swap.direction}`,
+        message: `Expected onchain_to_evm or btc_to_arkade swap, got ${swap.direction}`,
       };
     }
 
-    // Type assertion - we've verified direction is onchain_to_evm
-    const onchainSwap = swap as OnchainToEvmSwapResponse & {
-      direction: "onchain_to_evm";
-    };
+    // Extract on-chain HTLC fields based on direction
+    // Both directions have the same on-chain HTLC but fields are named differently
+    let btcHtlcAddress: string;
+    let btcRefundLocktime: number;
+    let hashLock: string;
+    let serverPubKeyFull: string;
+    let networkStr: string;
 
-    // Check if funding transaction exists
-    if (!onchainSwap.btc_fund_txid) {
-      return {
-        success: false,
-        message:
-          "No funding transaction found. The swap was not funded, so there is nothing to refund.",
+    if (swap.direction === "btc_to_arkade") {
+      const arkadeSwap = swap as BtcToArkadeSwapResponse & {
+        direction: "btc_to_arkade";
       };
+      btcHtlcAddress = arkadeSwap.btc_htlc_address;
+      btcRefundLocktime = arkadeSwap.btc_refund_locktime;
+      hashLock = arkadeSwap.hash_lock;
+      serverPubKeyFull = arkadeSwap.server_vhtlc_pk;
+      networkStr = arkadeSwap.network;
+    } else {
+      const onchainSwap = swap as OnchainToEvmSwapResponse & {
+        direction: "onchain_to_evm";
+      };
+      btcHtlcAddress = onchainSwap.btc_htlc_address;
+      btcRefundLocktime = onchainSwap.btc_refund_locktime;
+      hashLock = onchainSwap.btc_hash_lock;
+      serverPubKeyFull = onchainSwap.btc_server_pk;
+      networkStr = onchainSwap.network;
     }
 
     // Check refund locktime
     const now = Math.floor(Date.now() / 1000);
-    if (now < onchainSwap.btc_refund_locktime) {
-      const remainingSeconds = onchainSwap.btc_refund_locktime - now;
+    if (now < btcRefundLocktime) {
+      const remainingSeconds = btcRefundLocktime - now;
       const remainingMinutes = Math.ceil(remainingSeconds / 60);
       return {
         success: false,
         message:
           `Refund is not yet available. The locktime expires in ${remainingMinutes} minutes ` +
-          `(at ${new Date(onchainSwap.btc_refund_locktime * 1000).toISOString()}).`,
+          `(at ${new Date(btcRefundLocktime * 1000).toISOString()}).`,
       };
     }
 
@@ -1119,11 +1198,11 @@ export class Client {
       signet: "signet",
       regtest: "regtest",
     };
-    const network = networkMap[onchainSwap.network];
+    const network = networkMap[networkStr];
     if (!network) {
       return {
         success: false,
-        message: `Unknown Bitcoin network: ${onchainSwap.network}`,
+        message: `Unknown Bitcoin network: ${networkStr}`,
       };
     }
 
@@ -1134,14 +1213,19 @@ export class Client {
     const userPubKey =
       fullPubKey.length === 66 ? fullPubKey.slice(2) : fullPubKey;
 
+    // Strip compressed key prefix if present (33-byte → 32-byte x-only)
+    const serverXOnlyPubKey =
+      serverPubKeyFull.length === 66
+        ? serverPubKeyFull.slice(2)
+        : serverPubKeyFull;
+
     // Verify that our computed HTLC address matches the server's address
-    const serverHtlcAddress = onchainSwap.btc_htlc_address;
     const addressMatches = verifyHtlcAddress(
-      serverHtlcAddress,
-      onchainSwap.btc_hash_lock,
-      onchainSwap.btc_server_pk,
+      btcHtlcAddress,
+      hashLock,
+      serverXOnlyPubKey,
       userPubKey,
-      onchainSwap.btc_refund_locktime,
+      btcRefundLocktime,
       network,
     );
 
@@ -1149,10 +1233,11 @@ export class Client {
       return {
         success: false,
         message:
-          `HTLC address mismatch. The computed address does not match the server's address (${serverHtlcAddress}). ` +
+          `HTLC address mismatch. The computed address does not match the server's address (${btcHtlcAddress}). ` +
           `This could indicate different script construction. ` +
-          `Parameters: hashLock=${onchainSwap.btc_hash_lock}, serverPk=${onchainSwap.btc_server_pk}, ` +
-          `userPk=${userPubKey}, locktime=${onchainSwap.btc_refund_locktime}, network=${network}`,
+          `Parameters: \nhashLock='${hashLock}', \nserverPk='${serverPubKeyFull}', ` +
+          `\nuserPk='${userPubKey}', \nlocktime='${btcRefundLocktime}',` +
+          `\nnetwork='${network}'`,
       };
     }
 
@@ -1165,32 +1250,28 @@ export class Client {
       };
     }
 
-    const htlcOutput = await findOutputByAddress(
-      esploraUrl,
-      onchainSwap.btc_fund_txid,
-      serverHtlcAddress,
-    );
+    const htlcOutput = await findOutputByAddress(esploraUrl, btcHtlcAddress);
 
     if (!htlcOutput) {
       return {
         success: false,
         message:
-          `Could not find HTLC output in funding transaction ${onchainSwap.btc_fund_txid}. ` +
-          `Expected address: ${serverHtlcAddress}`,
+          `Could not find UTXO at HTLC address ${btcHtlcAddress}. ` +
+          `The address may not have been funded yet.`,
       };
     }
 
     try {
       // Build the refund transaction
       const result = buildOnchainRefundTransaction({
-        fundingTxId: onchainSwap.btc_fund_txid,
+        fundingTxId: htlcOutput.txid,
         fundingVout: htlcOutput.vout,
         htlcAmount: htlcOutput.amount,
-        hashLock: onchainSwap.btc_hash_lock,
-        serverPubKey: onchainSwap.btc_server_pk,
+        hashLock,
+        serverPubKey: serverXOnlyPubKey,
         userPubKey,
         userSecretKey: storedSwap.secretKey,
-        refundLocktime: onchainSwap.btc_refund_locktime,
+        refundLocktime: btcRefundLocktime,
         destinationAddress: options.destinationAddress,
         feeRateSatPerVb: options.feeRateSatPerVb ?? 2,
         network,
@@ -1208,7 +1289,7 @@ export class Client {
           fee: result.fee,
           broadcast: false,
           htlcAddress: result.htlcAddress,
-          serverHtlcAddress,
+          serverHtlcAddress: btcHtlcAddress,
         };
       }
 
@@ -1227,7 +1308,7 @@ export class Client {
           fee: result.fee,
           broadcast: false,
           htlcAddress: result.htlcAddress,
-          serverHtlcAddress,
+          serverHtlcAddress: btcHtlcAddress,
         };
       }
 
@@ -1242,7 +1323,7 @@ export class Client {
           fee: result.fee,
           broadcast: true,
           htlcAddress: result.htlcAddress,
-          serverHtlcAddress,
+          serverHtlcAddress: btcHtlcAddress,
         };
       } catch (broadcastError) {
         const broadcastMessage =
@@ -1260,7 +1341,7 @@ export class Client {
           fee: result.fee,
           broadcast: false,
           htlcAddress: result.htlcAddress,
-          serverHtlcAddress,
+          serverHtlcAddress: btcHtlcAddress,
         };
       }
     } catch (error) {
@@ -1502,6 +1583,38 @@ export class Client {
     options: BitcoinToEvmSwapOptions,
   ): Promise<BitcoinToEvmSwapResult> {
     return createBitcoinToEvmSwap(options, this.#getCreateContext());
+  }
+
+  // =========================================================================
+  // Swap Creation - Bitcoin (on-chain) to Arkade
+  // =========================================================================
+
+  /**
+   * Creates a new Bitcoin (on-chain) to Arkade swap.
+   *
+   * The user sends on-chain BTC to a Taproot HTLC address and receives
+   * Arkade VTXOs after the server funds the Arkade VHTLC.
+   *
+   * Automatically derives swap parameters and increments the key index.
+   *
+   * @param options - The swap options.
+   * @returns The swap response and parameters for storage.
+   * @throws Error if the swap creation fails.
+   *
+   * @example
+   * ```ts
+   * const result = await client.createBitcoinToArkadeSwap({
+   *   satsReceive: 100000, // 100k sats to receive on Arkade
+   *   targetAddress: "ark1q...", // Arkade address
+   * });
+   * console.log("Send BTC to:", result.response.btc_htlc_address);
+   * console.log("Amount to send:", result.response.source_amount, "sats");
+   * ```
+   */
+  async createBitcoinToArkadeSwap(
+    options: BitcoinToArkadeSwapOptions,
+  ): Promise<BitcoinToArkadeSwapResult> {
+    return createBitcoinToArkadeSwap(options, this.#getCreateContext());
   }
 
   // =========================================================================

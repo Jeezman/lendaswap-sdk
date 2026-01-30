@@ -5,7 +5,7 @@
 
 import { type Client, type EvmChain } from "@lendasat/lendaswap-sdk-pure";
 
-type SwapType = "lightning" | "arkade" | "bitcoin" | "evm-to-arkade" | "evm-to-lightning";
+type SwapType = "lightning" | "arkade" | "bitcoin" | "bitcoin-to-arkade" | "evm-to-arkade" | "evm-to-lightning";
 
 export async function createSwap(
   client: Client,
@@ -21,6 +21,9 @@ export async function createSwap(
     console.error("  tsx src/index.ts swap btc_lightning usdc_pol 100000 0xYourAddress");
     console.error("  tsx src/index.ts swap btc_arkade usdc_pol 100000 0xYourAddress");
     console.error("  tsx src/index.ts swap btc_onchain usdc_pol 100000 0xYourAddress");
+    console.error("");
+    console.error("BTC On-chain to Arkade Examples:");
+    console.error("  tsx src/index.ts swap btc_onchain btc_arkade 100000 ark1YourAddress");
     console.error("");
     console.error("EVM to Arkade Examples:");
     console.error("  tsx src/index.ts swap usdc_pol btc_arkade 100 ark1YourAddress 0xYourEvmAddress");
@@ -49,6 +52,10 @@ export async function createSwap(
     console.error("  Source: btc_lightning, btc_arkade, btc_onchain");
     console.error("  Target: usdc_pol, usdc_arb, usdc_eth, usdt_pol, usdt_arb, usdt_eth");
     console.error("");
+    console.error("Supported BTC on-chain to Arkade:");
+    console.error("  Source: btc_onchain");
+    console.error("  Target: btc_arkade");
+    console.error("");
     console.error("Supported EVM to Arkade:");
     console.error("  Source: usdc_pol, usdc_arb, usdc_eth (or any *_pol, *_arb, *_eth)");
     console.error("  Target: btc_arkade");
@@ -65,6 +72,9 @@ export async function createSwap(
     console.log(`  EVM Address: ${address}`);
   } else if (swapType === "evm-to-arkade") {
     console.log(`  Amount: ${amountNum}`);
+    console.log(`  Arkade Address: ${address}`);
+  } else if (swapType === "bitcoin-to-arkade") {
+    console.log(`  Sats to Receive: ${amountNum}`);
     console.log(`  Arkade Address: ${address}`);
   } else {
     console.log(`  Amount: ${amountNum} sats`);
@@ -173,6 +183,27 @@ export async function createSwap(
         `   HTLC Address: ${result.response.htlc_address_evm}`,
         ``,
         `Once funded, the server will pay the Lightning invoice.`,
+      ].join("\n");
+
+    } else if (swapType === "bitcoin-to-arkade") {
+      const result = await client.createBitcoinToArkadeSwap({
+        satsReceive: Math.floor(amountNum),
+        targetAddress: address,
+      });
+
+      swapId = result.response.id;
+      status = result.response.status;
+      keyIndex = result.swapParams.keyIndex;
+      sourceAmount = result.response.source_amount;
+      targetAmount = result.response.target_amount;
+      sourceToken = result.response.source_token;
+      targetToken = result.response.target_token;
+      paymentInfo = [
+        `Send BTC to this on-chain address:`,
+        `  ${result.response.btc_htlc_address}`,
+        ``,
+        `Amount to send: ${result.response.source_amount} sats`,
+        `You will receive: ${result.response.target_amount} sats on Arkade`,
       ].join("\n");
 
     } else if (swapType === "lightning") {
@@ -301,6 +332,9 @@ export async function createSwap(
  * Parse the source and target tokens to determine swap type.
  */
 function parseSwapType(from: string, to: string): SwapType | null {
+  // BTC on-chain to Arkade
+  if ((from === "btc_onchain" || from === "bitcoin") && to === "btc_arkade") return "bitcoin-to-arkade";
+
   // BTC to EVM
   if (from === "btc_lightning") return "lightning";
   if (from === "btc_arkade") return "arkade";

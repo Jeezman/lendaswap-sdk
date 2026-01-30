@@ -16,8 +16,9 @@
  *   tsx src/index.ts info                           - Show wallet info
  *
  * Swap Directions:
- *   BTC to EVM:    btc_lightning/btc_arkade/btc_onchain -> usdc_pol/usdc_arb/usdc_eth
- *   EVM to Arkade: usdc_pol/usdc_arb/usdc_eth -> btc_arkade (requires evmAddr)
+ *   BTC to EVM:        btc_lightning/btc_arkade/btc_onchain -> usdc_pol/usdc_arb/usdc_eth
+ *   BTC to Arkade:     btc_onchain -> btc_arkade
+ *   EVM to Arkade:     usdc_pol/usdc_arb/usdc_eth -> btc_arkade (requires evmAddr)
  */
 
 // Load .env file before anything else
@@ -114,6 +115,9 @@ Examples (BTC to EVM):
   tsx src/index.ts swap btc_lightning usdc_pol 100000 0x1234...
   tsx src/index.ts swap btc_arkade usdc_pol 100000 0x1234...
   tsx src/index.ts swap btc_onchain usdc_pol 100000 0x1234...
+
+Examples (BTC on-chain to Arkade):
+  tsx src/index.ts swap btc_onchain btc_arkade 100000 ark1...
 
 Examples (EVM to Arkade):
   tsx src/index.ts swap usdc_pol btc_arkade 100 ark1... 0x1234...

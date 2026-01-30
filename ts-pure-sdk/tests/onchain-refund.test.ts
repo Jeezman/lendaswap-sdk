@@ -57,6 +57,20 @@ describe("On-chain refund", () => {
 
   describe("verifyHtlcAddress", () => {
     it("should return true for matching HTLC parameters", () => {
+      // Verify the HTLC address matches
+      const isValid = verifyHtlcAddress(
+        "tb1p6enqnu9nqj52wzy6tl8qqtjfsxae2un66gwwp0hjydayydez7xsqz8ycd8",
+        "9befb12985069ca625bce37f13af8acbb66e46bb",
+        "6c932b95705b07c4236a1abfabe283399774449914f6c4d7faeb30fd7f3c6b0e",
+        "d149150a0c344bae35cfe0cd237e50bd41ec56fe7c2a2f5f8509911ec8c5a0e2",
+        1769752815,
+        "signet",
+      );
+
+      expect(isValid).toBe(true);
+    });
+
+    it("should return true for matching HTLC parameters", () => {
       // Build a transaction to get the HTLC address
       const result = buildOnchainRefundTransaction({
         fundingTxId,

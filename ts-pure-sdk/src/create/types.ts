@@ -4,6 +4,7 @@
 
 import type {
   ApiClient,
+  BtcToArkadeSwapResponse,
   BtcToEvmSwapResponse,
   EvmToBtcSwapResponse,
   GetSwapResponse,
@@ -66,6 +67,24 @@ export type BitcoinToEvmSwapResponse =
 export interface BitcoinToEvmSwapResult {
   /** The swap response from the API */
   response: BitcoinToEvmSwapResponse;
+  /** The swap parameters used (for storage/recovery) */
+  swapParams: SwapParams;
+}
+
+/** Options for creating a Bitcoin (on-chain) to Arkade swap */
+export interface BitcoinToArkadeSwapOptions {
+  /** Amount in satoshis to receive on Arkade */
+  satsReceive: number;
+  /** Target Arkade address to receive VTXOs */
+  targetAddress: string;
+  /** Optional referral code for fee exemption */
+  referralCode?: string;
+}
+
+/** Result of creating a Bitcoin (on-chain) to Arkade swap */
+export interface BitcoinToArkadeSwapResult {
+  /** The swap response from the API */
+  response: BtcToArkadeSwapResponse;
   /** The swap parameters used (for storage/recovery) */
   swapParams: SwapParams;
 }

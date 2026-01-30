@@ -2,53 +2,55 @@
  * Esplora API utilities for Bitcoin transaction lookups.
  */
 
-/** Esplora transaction output */
-export interface EsploraTxOutput {
-  scriptpubkey: string;
-  scriptpubkey_address?: string;
-  scriptpubkey_type: string;
-  value: number;
-}
-
-/** Esplora transaction response */
-export interface EsploraTx {
+/** Esplora UTXO response */
+export interface EsploraUtxo {
   txid: string;
-  vout: EsploraTxOutput[];
+  vout: number;
+  status: {
+    confirmed: boolean;
+    block_height?: number;
+    block_hash?: string;
+    block_time?: number;
+  };
+  value: number;
 }
 
 /** Result of finding an HTLC output */
 export interface HtlcOutputResult {
+  txid: string;
   vout: number;
   amount: bigint;
 }
 
 /**
- * Finds an output in a transaction that matches the given address.
+ * Finds a UTXO at the given address.
+ *
+ * Queries the Esplora `/address/:address/utxo` endpoint to find
+ * unspent outputs. Returns the first UTXO found.
  *
  * @param esploraUrl - The Esplora API base URL
- * @param txid - The transaction ID to look up
- * @param address - The address to find
- * @returns The vout index and amount, or null if not found
+ * @param address - The address to look up UTXOs for
+ * @returns The txid, vout, and amount of the first UTXO, or null if none found
  */
 export async function findOutputByAddress(
   esploraUrl: string,
-  txid: string,
   address: string,
 ): Promise<HtlcOutputResult | null> {
-  const response = await fetch(`${esploraUrl}/tx/${txid}`);
+  const response = await fetch(`${esploraUrl}/address/${address}/utxo`);
   if (!response.ok) {
-    throw new Error(`Failed to fetch transaction: ${response.status}`);
+    throw new Error(
+      `Failed to fetch UTXOs for address ${address}: ${response.status}`,
+    );
   }
 
-  const tx = (await response.json()) as EsploraTx;
+  const utxos = (await response.json()) as EsploraUtxo[];
 
-  for (let i = 0; i < tx.vout.length; i++) {
-    if (tx.vout[i].scriptpubkey_address === address) {
-      return { vout: i, amount: BigInt(tx.vout[i].value) };
-    }
+  if (utxos.length === 0) {
+    return null;
   }
 
-  return null;
+  const utxo = utxos[0];
+  return { txid: utxo.txid, vout: utxo.vout, amount: BigInt(utxo.value) };
 }
 
 /**

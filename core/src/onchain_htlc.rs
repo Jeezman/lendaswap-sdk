@@ -272,7 +272,49 @@ mod tests {
         let address = address.to_string();
         assert_eq!(
             "bcrt1p9y8e33fmv06c9wr4rpcfkccpsankaqcu2kjkzlekjfv6lsmfhaqqplksqr",
-            &dbg!(address)
+            address
+        );
+    }
+
+    #[test]
+    fn onchain_htlc_btc_to_arkade() {
+        // Server x-only pubkey (strip 03 prefix from compressed key)
+        let server_pk = XOnlyPublicKey::from_slice(
+            &hex::decode(concat!(
+                "6c932b95705b07c4236a1abfabe283399774449914f6c4d7",
+                "faeb30fd7f3c6b0e",
+            ))
+            .unwrap(),
+        )
+        .unwrap();
+
+        // User x-only pubkey
+        let user_pk = XOnlyPublicKey::from_slice(
+            &hex::decode(concat!(
+                "d149150a0c344bae35cfe0cd237e50bd41ec56fe7c2a2f5f",
+                "8509911ec8c5a0e2",
+            ))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let locktime = 1769752815u32;
+        // HASH160 hash lock (20 bytes)
+        let hash_lock: [u8; 20] = hex::decode("9befb12985069ca625bce37f13af8acbb66e46bb")
+            .unwrap()
+            .try_into()
+            .unwrap();
+
+        let htlc = build_htlc_scripts(&hash_lock, &server_pk, &user_pk, locktime);
+
+        assert!(!htlc.hashlock_script.is_empty());
+        assert!(!htlc.timelock_script.is_empty());
+
+        let address = htlc_to_taproot_address(&htlc, Network::Signet);
+        let address = address.to_string();
+        assert_eq!(
+            "tb1p6enqnu9nqj52wzy6tl8qqtjfsxae2un66gwwp0hjydayydez7xsqz8ycd8",
+            address
         );
     }
 

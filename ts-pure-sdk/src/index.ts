@@ -40,6 +40,8 @@ export {
 } from "./arkade.js";
 export type {
   ArkadeClaimOptions,
+  BitcoinToArkadeSwapOptions,
+  BitcoinToArkadeSwapResult,
   BitcoinToEvmSwapOptions,
   BitcoinToEvmSwapResponse,
   BitcoinToEvmSwapResult,
