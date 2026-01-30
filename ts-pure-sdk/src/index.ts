@@ -32,6 +32,12 @@ export type {
 } from "./api/client.js";
 // API client
 export { createApiClient } from "./api/client.js";
+// Arkade VHTLC query utilities
+export {
+  type GetVhtlcAmountsParams,
+  getVhtlcAmounts,
+  type VhtlcAmounts,
+} from "./arkade.js";
 export type {
   ArkadeClaimOptions,
   BitcoinToEvmSwapOptions,
@@ -54,12 +60,6 @@ export type {
 } from "./client.js";
 // Main client
 export { Client, ClientBuilder } from "./client.js";
-// Arkade VHTLC query utilities
-export {
-  getVhtlcAmounts,
-  type GetVhtlcAmountsParams,
-  type VhtlcAmounts,
-} from "./arkade.js";
 // EVM HTLC utilities
 export {
   type ApproveCallData,

@@ -9,6 +9,7 @@ import {
   type QuoteResponse,
   type TokenInfo,
 } from "./api/client.js";
+import { getVhtlcAmounts, type VhtlcAmounts } from "./arkade.js";
 import {
   type BitcoinToEvmSwapOptions,
   type BitcoinToEvmSwapResult,
@@ -35,7 +36,6 @@ import {
   type ClaimResult,
   claim as redeemClaim,
 } from "./redeem/index.js";
-import { getVhtlcAmounts, type VhtlcAmounts } from "./arkade.js";
 import {
   type BitcoinNetwork,
   buildArkadeRefund,
@@ -661,6 +661,53 @@ export class Client {
       return;
     }
     await this.#swapStorage.clear();
+  }
+
+  /**
+   * Recovers all swaps associated with the current wallet from the server.
+   *
+   * Sends the user's xpub to the server, which returns all swaps belonging
+   * to that wallet. For each recovered swap, re-derives the keys using the
+   * swap's derivation index and stores it locally.
+   *
+   * After recovery, the key index is set to `highest_index + 1` so that
+   * new swaps don't reuse derivation indices.
+   *
+   * @returns The recovered swaps stored locally.
+   */
+  async recoverSwaps(): Promise<StoredSwap[]> {
+    const xpub = this.getUserIdXpub();
+
+    const { data, error } = await this.#apiClient.POST("/swap/recover", {
+      body: { xpub },
+    });
+    if (error) {
+      throw new Error(`Failed to recover swaps: ${JSON.stringify(error)}`);
+    }
+    if (!data) {
+      throw new Error("No recovery data returned");
+    }
+
+    const storedSwaps: StoredSwap[] = [];
+
+    for (const recoveredSwap of data.swaps) {
+      const { index, ...response } = recoveredSwap;
+      const swapParams = this.deriveSwapParamsAtIndex(index);
+
+      await this.#storeSwap(response.id, swapParams, response);
+
+      const stored = await this.getStoredSwap(response.id);
+      if (stored) {
+        storedSwaps.push(stored);
+      }
+    }
+
+    // Update key index so new swaps don't reuse indices
+    if (data.highest_index >= 0) {
+      await this.setKeyIndex(data.highest_index + 1);
+    }
+
+    return storedSwaps;
   }
 
   /**
