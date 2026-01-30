@@ -1482,8 +1482,17 @@ export interface components {
       | "clientinvalidfunded"
       | "clientfundedtoolate"
       | "clientredeemedandclientrefunded";
-    /** @description Token identifier (e.g., 'btc_arkade', 'usdc_pol', 'usdt_eth') */
-    TokenId: string;
+    /** @description Token identifier. Known values: btc_lightning, btc_arkade, btc_onchain, wbtc_eth, wbtc_pol, wbtc_arb. Other tokens (e.g., usdc_pol, usdt_eth) are also valid. */
+    TokenId:
+      | (
+          | "btc_lightning"
+          | "btc_arkade"
+          | "btc_onchain"
+          | "wbtc_eth"
+          | "wbtc_pol"
+          | "wbtc_arb"
+        )
+      | string;
     TokenInfo: {
       chain: components["schemas"]["Chain"];
       /** Format: int32 */
