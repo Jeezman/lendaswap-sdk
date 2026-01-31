@@ -16,7 +16,17 @@
     "evm-claim": "tsx src/index.ts evm-claim",
     "evm-balances": "tsx src/index.ts evm-balances",
     "swaps": "tsx src/index.ts swaps",
-    "info": "tsx src/index.ts info"
+    "info": "tsx src/index.ts info",
+    "docs:setup": "tsx src/websitedocs/setup.ts",
+    "docs:quotes": "tsx src/websitedocs/quotes.ts",
+    "docs:create-btc-to-evm": "tsx src/websitedocs/create-btc-to-evm.ts",
+    "docs:create-evm-to-btc": "tsx src/websitedocs/create-evm-to-btc.ts",
+    "docs:create-onchain-to-arkade": "tsx src/websitedocs/create-onchain-to-arkade.ts",
+    "docs:monitor-swaps": "tsx src/websitedocs/monitor-swaps.ts",
+    "docs:claim": "tsx src/websitedocs/claim.ts",
+    "docs:refund": "tsx src/websitedocs/refund.ts",
+    "docs:error-handling": "tsx src/websitedocs/error-handling.ts",
+    "docs:recovery": "tsx src/websitedocs/recovery.ts"
   },
   "dependencies": {
     "@lendasat/lendaswap-sdk-pure": "file:../../ts-pure-sdk",
