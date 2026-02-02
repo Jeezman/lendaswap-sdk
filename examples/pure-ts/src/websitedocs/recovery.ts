@@ -12,9 +12,11 @@ async function main(): Promise<void> {
   const { client, close } = await createExampleClient();
 
   try {
+    // #region recover-swaps
     // Recover all swaps from the server
     const recovered = await client.recoverSwaps();
     console.log(`Recovered ${recovered.length} swaps`);
+    // #endregion recover-swaps
 
     // ── Process Recovered Swaps (State Machine) ──────────────
     // From: recovery/recover-swaps-from-seed.mdx + state-machine.mdx
@@ -23,6 +25,7 @@ async function main(): Promise<void> {
     console.log("Process Recovered Swaps");
     console.log("=".repeat(60));
 
+    // #region process-recovered
     const swaps = await client.listAllSwaps();
 
     for (const stored of swaps) {
@@ -30,8 +33,7 @@ async function main(): Promise<void> {
       switch (swap.status) {
         case "serverfunded":
           console.log(`Swap ${stored.swapId}: Ready to claim!`);
-          // Uncomment to actually claim:
-          // await client.claim(stored.swapId);
+          await client.claim(stored.swapId);
           break;
         case "clientfundedserverrefunded":
           console.log(`Swap ${stored.swapId}: Needs refund`);
@@ -43,6 +45,7 @@ async function main(): Promise<void> {
           console.log(`Swap ${stored.swapId}: ${swap.status}`);
       }
     }
+    // #endregion process-recovered
 
     if (swaps.length === 0) {
       console.log("  No swaps found. Set MNEMONIC in .env to recover from an existing wallet.");

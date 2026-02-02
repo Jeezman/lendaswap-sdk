@@ -18,6 +18,7 @@ async function main(): Promise<void> {
     console.log("VHTLC Refund (Arkade)");
     console.log("=".repeat(60));
 
+    // #region refund-vhtlc
     const vhtlcResult = await client.refundSwap(swapId, {
       destinationAddress: "ark1q...", // Your Arkade address
     });
@@ -28,6 +29,7 @@ async function main(): Promise<void> {
     } else {
       console.error(vhtlcResult.message);
     }
+    // #endregion refund-vhtlc
 
     // ── VHTLC Refund with Status Check ───────────────────────
     // From: handle-failures/refund-vhtlc.mdx "Complete Refund Flow"
@@ -36,6 +38,7 @@ async function main(): Promise<void> {
     console.log("VHTLC Refund with Status Check");
     console.log("-".repeat(60));
 
+    // #region refund-vhtlc-flow
     const swap = await client.getSwap(swapId);
     console.log("Status:", swap.status);
 
@@ -45,6 +48,7 @@ async function main(): Promise<void> {
       });
       console.log("Refund:", result.success ? "Success" : result.message);
     }
+    // #endregion refund-vhtlc-flow
 
     // ── EVM HTLC Refund ──────────────────────────────────────
     // From: handle-failures/refund-evm-htlc.mdx
@@ -53,11 +57,14 @@ async function main(): Promise<void> {
     console.log("EVM HTLC Refund");
     console.log("=".repeat(60));
 
+    // #region check-evm-htlc
     const refund = await client.getEvmRefundCallData(swapId);
 
     console.log("Timelock expired:", refund.timelockExpired);
     console.log("Expiry:", new Date(refund.timelockExpiry * 1000).toISOString());
+    // #endregion check-evm-htlc
 
+    // #region refund-evm-htlc
     if (!refund.timelockExpired) {
       const expiresIn = refund.timelockExpiry - Math.floor(Date.now() / 1000);
       console.log(`Timelock expires in ${Math.ceil(expiresIn / 60)} minutes`);
@@ -79,6 +86,7 @@ async function main(): Promise<void> {
       console.log("  To:", refund.to);
       console.log("  Data:", refund.data);
     }
+    // #endregion refund-evm-htlc
 
     // ── On-chain BTC HTLC Refund ─────────────────────────────
     // From: handle-failures/refund-onchain-htlc.mdx
@@ -87,6 +95,7 @@ async function main(): Promise<void> {
     console.log("On-chain BTC HTLC Refund");
     console.log("=".repeat(60));
 
+    // #region refund-onchain
     const onchainResult = await client.refundSwap(swapId, {
       destinationAddress: "bc1q...", // Your BTC address
       feeRateSatPerVb: 5,
@@ -100,6 +109,7 @@ async function main(): Promise<void> {
     } else {
       console.error("Refund failed:", onchainResult.message);
     }
+    // #endregion refund-onchain
 
     // ── Locktime Conditions ──────────────────────────────────
     // From: handle-failures/refund-locktime-conditions.mdx
@@ -108,18 +118,20 @@ async function main(): Promise<void> {
     console.log("Locktime Conditions");
     console.log("-".repeat(60));
 
+    // #region check-locktime
     const lockSwap = await client.getSwap(swapId);
     console.log("Status:", lockSwap.status);
 
-    // Attempt refund -- the SDK checks locktime automatically
+    // Attempt refund — the SDK checks locktime automatically
     const lockResult = await client.refundSwap(swapId, {
-      destinationAddress: "bc1q...",
+      destinationAddress: "bc1q...", // or "ark1q..." for Arkade swaps
     });
 
     if (!lockResult.success) {
       // If locktime hasn't expired, message tells you when it does
       console.log(lockResult.message);
     }
+    // #endregion check-locktime
   } finally {
     close();
   }

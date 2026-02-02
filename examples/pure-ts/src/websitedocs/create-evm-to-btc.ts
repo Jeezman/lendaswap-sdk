@@ -11,6 +11,7 @@ async function main(): Promise<void> {
     console.log("EVM -> Arkade");
     console.log("=".repeat(60));
 
+    // #region evm-to-arkade
     const arkadeResult = await client.createEvmToArkadeSwap({
       sourceChain: "polygon",
       sourceToken: "usdc_pol",
@@ -22,6 +23,7 @@ async function main(): Promise<void> {
     console.log("Approve token:", arkadeResult.response.source_token_address);
     console.log("HTLC contract:", arkadeResult.response.htlc_address_evm);
     console.log("Swap ID:", arkadeResult.response.id);
+    // #endregion evm-to-arkade
 
     // ── EVM -> Lightning ─────────────────────────────────────
     // From: create-swaps/evm-to-btc.mdx
@@ -30,6 +32,7 @@ async function main(): Promise<void> {
     console.log("EVM -> Lightning");
     console.log("=".repeat(60));
 
+    // #region evm-to-lightning
     const lnResult = await client.createEvmToLightningSwap({
       sourceChain: "polygon",
       sourceToken: "usdc_pol",
@@ -39,6 +42,7 @@ async function main(): Promise<void> {
 
     console.log("HTLC contract:", lnResult.response.htlc_address_evm);
     console.log("Swap ID:", lnResult.response.id);
+    // #endregion evm-to-lightning
 
     // ── Fund EVM HTLC (viem) ─────────────────────────────────
     // From: create-swaps/evm-to-btc.mdx "Deposit Stablecoins"
@@ -63,6 +67,7 @@ async function main(): Promise<void> {
         const evmWallet = createEvmWallet(CONFIG.evmMnemonic, chainName);
         console.log("EVM Wallet:", evmWallet.address);
 
+        // #region fund-evm-htlc
         // Get funding call data from the SDK
         const funding = await client.getEvmFundingCallData(
           swapId,
@@ -70,32 +75,29 @@ async function main(): Promise<void> {
         );
 
         // Step 1: Approve token spend
-        console.log("Sending approve transaction...");
         const approveTxHash = await evmWallet.walletClient.sendTransaction({
           to: funding.approve.to as `0x${string}`,
           data: funding.approve.data as `0x${string}`,
           chain: evmWallet.chain,
           account: evmWallet.account,
         });
-        console.log("Approve TX:", approveTxHash);
 
         await evmWallet.publicClient.waitForTransactionReceipt({
           hash: approveTxHash,
         });
 
         // Step 2: Fund the HTLC
-        console.log("Sending createSwap transaction...");
         const fundTxHash = await evmWallet.walletClient.sendTransaction({
           to: funding.createSwap.to as `0x${string}`,
           data: funding.createSwap.data as `0x${string}`,
           chain: evmWallet.chain,
           account: evmWallet.account,
         });
-        console.log("CreateSwap TX:", fundTxHash);
 
         await evmWallet.publicClient.waitForTransactionReceipt({
           hash: fundTxHash,
         });
+        // #endregion fund-evm-htlc
 
         console.log("HTLC funded successfully!");
       }

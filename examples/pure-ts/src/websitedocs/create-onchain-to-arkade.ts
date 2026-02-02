@@ -10,6 +10,7 @@ async function main(): Promise<void> {
     console.log("On-chain BTC -> Arkade");
     console.log("=".repeat(60));
 
+    // #region create-swap
     const result = await client.createBitcoinToArkadeSwap({
       satsReceive: 100000, // 100k sats to receive on Arkade
       targetAddress: "ark1q...", // Your Arkade address
@@ -18,6 +19,7 @@ async function main(): Promise<void> {
     console.log("Send BTC to:", result.response.btc_htlc_address);
     console.log("Amount:", result.response.source_amount, "sats");
     console.log("Swap ID:", result.response.id);
+    // #endregion create-swap
 
     // ── Complete Flow ────────────────────────────────────────
     // From: create-swaps/onchain-to-arkade.mdx "Complete Flow"
@@ -26,6 +28,7 @@ async function main(): Promise<void> {
     console.log("Complete Flow");
     console.log("=".repeat(60));
 
+    // #region complete-flow
     console.log("Send", result.response.source_amount, "sats to:", result.response.btc_htlc_address);
 
     // Poll for status
@@ -43,6 +46,7 @@ async function main(): Promise<void> {
       });
       console.log("Claimed:", claim.success);
     }
+    // #endregion complete-flow
 
     // ── Monitor Swap Status ──────────────────────────────────
     // From: create-swaps/onchain-to-arkade.mdx "Monitor Swap Status"
@@ -51,10 +55,12 @@ async function main(): Promise<void> {
     console.log("Final Status");
     console.log("-".repeat(60));
 
+    // #region monitor-swap
     const finalSwap = await client.getSwap(result.response.id);
     console.log("Status:", finalSwap.status);
     console.log("Source amount:", finalSwap.source_amount, "sats");
     console.log("Target amount:", finalSwap.target_amount, "sats");
+    // #endregion monitor-swap
   } finally {
     close();
   }

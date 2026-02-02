@@ -10,6 +10,7 @@ async function main(): Promise<void> {
     console.log("Error Handling");
     console.log("=".repeat(60));
 
+    // #region error-handling
     try {
       const result = await client.createLightningToEvmSwap({
         targetAddress: "0x...",
@@ -17,12 +18,12 @@ async function main(): Promise<void> {
         targetChain: "polygon",
         sourceAmount: 100000,
       });
-      console.log("Swap created:", result.response.id);
     } catch (error) {
-      console.error("Swap failed:", error instanceof Error ? error.message : String(error));
+      console.error("Swap failed:", error.message);
       // Error messages include machine-readable codes like:
       // "insufficient_balance", "amount_too_low", "rate_limit_exceeded"
     }
+    // #endregion error-handling
 
     // ── Quote Error Handling ─────────────────────────────────
     console.log("");

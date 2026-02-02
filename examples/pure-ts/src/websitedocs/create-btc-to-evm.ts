@@ -10,6 +10,7 @@ async function main(): Promise<void> {
     console.log("Lightning -> EVM (by target amount)");
     console.log("=".repeat(60));
 
+    // #region lightning-to-evm-by-target
     const resultByTarget = await client.createLightningToEvmSwap({
       targetAddress: "0xYourPolygonAddress",
       targetToken: "usdc_pol",
@@ -19,6 +20,7 @@ async function main(): Promise<void> {
 
     console.log("Pay invoice:", resultByTarget.response.ln_invoice);
     console.log("Swap ID:", resultByTarget.response.id);
+    // #endregion lightning-to-evm-by-target
 
     // ── Lightning -> EVM (by sourceAmount) ───────────────────
     // From: create-swaps/btc-to-evm.mdx "By Source Amount"
@@ -27,6 +29,7 @@ async function main(): Promise<void> {
     console.log("Lightning -> EVM (by source amount)");
     console.log("=".repeat(60));
 
+    // #region lightning-to-evm-by-source
     const resultBySource = await client.createLightningToEvmSwap({
       targetAddress: "0xYourPolygonAddress",
       targetToken: "usdc_pol",
@@ -36,6 +39,7 @@ async function main(): Promise<void> {
 
     console.log("Pay invoice:", resultBySource.response.ln_invoice);
     console.log("You will receive:", resultBySource.response.target_amount, "USDC");
+    // #endregion lightning-to-evm-by-source
 
     // ── Arkade -> EVM ────────────────────────────────────────
     // From: create-swaps/btc-to-evm.mdx "Arkade -> EVM"
@@ -44,6 +48,7 @@ async function main(): Promise<void> {
     console.log("Arkade -> EVM");
     console.log("=".repeat(60));
 
+    // #region arkade-to-evm
     const arkadeResult = await client.createArkadeToEvmSwap({
       targetAddress: "0xYourPolygonAddress",
       targetToken: "usdc_pol",
@@ -53,6 +58,7 @@ async function main(): Promise<void> {
 
     console.log("Fund VHTLC:", arkadeResult.response.htlc_address_arkade);
     console.log("Swap ID:", arkadeResult.response.id);
+    // #endregion arkade-to-evm
 
     // ── Complete Flow: Lightning -> EVM ───────────────────────
     // From: create-swaps/btc-to-evm.mdx "Complete Flow"
@@ -61,6 +67,7 @@ async function main(): Promise<void> {
     console.log("Complete Flow: Lightning -> EVM");
     console.log("=".repeat(60));
 
+    // #region lightning-to-evm-complete-flow
     // 1. Create swap
     const result = await client.createLightningToEvmSwap({
       targetAddress: "0xYourPolygonAddress",
@@ -84,6 +91,7 @@ async function main(): Promise<void> {
       const claim = await client.claim(result.response.id);
       console.log("Claim result:", claim.success, claim.message);
     }
+    // #endregion lightning-to-evm-complete-flow
   } finally {
     close();
   }

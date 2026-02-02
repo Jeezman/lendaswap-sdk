@@ -13,11 +13,13 @@ async function main(): Promise<void> {
       console.log("Get Swap by ID");
       console.log("=".repeat(60));
 
+      // #region get-swap
       const swap = await client.getSwap(swapId);
 
       console.log("Status:", swap.status);
       console.log("Source:", swap.source_amount, swap.source_token);
       console.log("Target:", swap.target_amount, swap.target_token);
+      // #endregion get-swap
     }
 
     // ── Polling for Updates ──────────────────────────────────
@@ -28,6 +30,7 @@ async function main(): Promise<void> {
       console.log("Polling for Updates (max 30 seconds)");
       console.log("=".repeat(60));
 
+      // #region poll-swap
       const terminalStates = [
         "clientredeemed",
         "expired",
@@ -49,6 +52,7 @@ async function main(): Promise<void> {
 
         await new Promise((r) => setTimeout(r, 3000));
       }
+      // #endregion poll-swap
 
       if (!done) {
         console.log("Polling timed out after 30 seconds.");
@@ -62,11 +66,13 @@ async function main(): Promise<void> {
     console.log("List All Swaps");
     console.log("=".repeat(60));
 
+    // #region list-swaps
     const swaps = await client.listAllSwaps();
 
     for (const swap of swaps) {
-      console.log(`  ${swap.swapId}: ${swap.response.status}`);
+      console.log(`${swap.swapId}: ${swap.response.status}`);
     }
+    // #endregion list-swaps
 
     if (swaps.length === 0) {
       console.log("  No swaps found.");
@@ -79,11 +85,13 @@ async function main(): Promise<void> {
     console.log("Filter by Status");
     console.log("-".repeat(60));
 
+    // #region filter-swaps
     const pending = swaps.filter((s) => s.response.status === "pending");
     const funded = swaps.filter((s) => s.response.status === "serverfunded");
     const done2 = swaps.filter((s) => s.response.status === "clientredeemed");
 
-    console.log(`  Pending: ${pending.length}, Funded: ${funded.length}, Done: ${done2.length}`);
+    console.log(`Pending: ${pending.length}, Funded: ${funded.length}, Done: ${done2.length}`);
+    // #endregion filter-swaps
 
     // ── Delete Swaps ─────────────────────────────────────────
     // From: monitor-swap/list-swaps.mdx "Delete Swaps"
@@ -93,11 +101,13 @@ async function main(): Promise<void> {
     console.log("Delete Swaps (commented out for safety)");
     console.log("-".repeat(60));
 
+    // #region delete-swaps
     // Delete a single swap
     // await client.deleteSwap(swapId);
 
     // Clear all swap data
     // await client.clearSwapStorage();
+    // #endregion delete-swaps
 
     console.log("  Uncomment the delete lines in the source to use.");
   } finally {

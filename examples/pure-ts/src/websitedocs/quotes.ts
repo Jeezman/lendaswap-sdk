@@ -18,6 +18,7 @@ async function main(): Promise<void> {
     console.log("Get Quote");
     console.log("=".repeat(60));
 
+    // #region get-quote
     const quote = await client.getQuote("btc_lightning", "usdc_pol", 100000);
 
     console.log("Rate:", quote.exchange_rate);
@@ -25,6 +26,7 @@ async function main(): Promise<void> {
     console.log("Protocol fee:", quote.protocol_fee, "sats");
     console.log("Min:", quote.min_amount, "sats");
     console.log("Max:", quote.max_amount, "sats");
+    // #endregion get-quote
 
     // ── Real-Time Price Feed ─────────────────────────────────
     // From: quotes-rates/exchange-rate.mdx
@@ -33,6 +35,7 @@ async function main(): Promise<void> {
     console.log("Real-Time Price Feed (5 seconds)");
     console.log("=".repeat(60));
 
+    // #region price-feed
     const wsUrl = CONFIG.apiUrl.replace("https://", "wss://").replace("http://", "ws://");
     const priceFeed = new PriceFeedService(wsUrl);
 
@@ -51,6 +54,7 @@ async function main(): Promise<void> {
         resolve();
       }, 5000);
     });
+    // #endregion price-feed
 
     // ── Price Calculation ────────────────────────────────────
     // From: quotes-rates/exchange-rate.mdx
@@ -62,19 +66,21 @@ async function main(): Promise<void> {
     // Example using tier rates from a price feed update
     const priceTiers = { tier_1: 100000, tier_2: 99500, tier_3: 99000 };
 
+    // #region price-calculation
     // Get rate for amount tier
     const rate = selectTierRate(priceTiers, 100000);
     const networkFee = 0.0001; // in BTC
 
-    // Compute the exchange rate (handles inversion for BTC->EVM)
+    // Compute the exchange rate (handles inversion for BTC→EVM)
     const exchangeRate = computeExchangeRate(rate, true, true);
 
     // Calculate: "I want to send 100k sats, how much USDC?"
     const targetAmount = calculateTargetAmount(0.001, exchangeRate, networkFee, true, false);
-    console.log("Target amount (USDC) for 100k sats:", targetAmount);
 
     // Calculate: "I want to receive 50 USDC, how many sats?"
     const sourceAmount = calculateSourceAmount(50, exchangeRate, networkFee, true, false);
+    // #endregion price-calculation
+    console.log("Target amount (USDC) for 100k sats:", targetAmount);
     console.log("Source amount (sats) for 50 USDC:", sourceAmount);
 
     // ── Asset Pairs & Tokens ─────────────────────────────────
@@ -84,20 +90,18 @@ async function main(): Promise<void> {
     console.log("Asset Pairs");
     console.log("=".repeat(60));
 
+    // #region asset-pairs
     const pairs = await client.getAssetPairs();
-    for (const pair of pairs) {
-      console.log(`  ${pair.source.token_id} -> ${pair.target.token_id}`);
-    }
 
-    console.log("");
-    console.log("-".repeat(60));
-    console.log("Tokens");
-    console.log("-".repeat(60));
+    for (const pair of pairs) {
+      console.log(`${pair.source.token_id} → ${pair.target.token_id}`);
+    }
 
     const tokens = await client.getTokens();
     for (const token of tokens) {
-      console.log(`  ${token.token_id}: ${token.name} (${token.chain})`);
+      console.log(`${token.token_id}: ${token.name} (${token.chain})`);
     }
+    // #endregion asset-pairs
   } finally {
     close();
   }

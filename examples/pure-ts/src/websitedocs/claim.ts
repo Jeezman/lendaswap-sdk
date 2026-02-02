@@ -18,6 +18,7 @@ async function main(): Promise<void> {
     console.log("Claim via Gelato (gasless)");
     console.log("=".repeat(60));
 
+    // #region claim-gelato
     const claimResult = await client.claim(swapId);
 
     if (claimResult.success) {
@@ -25,6 +26,7 @@ async function main(): Promise<void> {
     } else {
       console.error("Claim failed:", claimResult.message);
     }
+    // #endregion claim-gelato
 
     // ── Manual EVM Claim (Ethereum) ──────────────────────────
     // From: complete-swap/claim-walletconnect.mdx
@@ -61,6 +63,7 @@ async function main(): Promise<void> {
     console.log("Arkade VHTLC Claim");
     console.log("=".repeat(60));
 
+    // #region claim-vhtlc
     const arkadeResult = await client.claimArkade(swapId, {
       destinationAddress: "ark1q...", // Your Arkade address
     });
@@ -71,6 +74,7 @@ async function main(): Promise<void> {
     } else {
       console.error("Claim failed:", arkadeResult.message);
     }
+    // #endregion claim-vhtlc
 
     // ── Check VHTLC Amounts ──────────────────────────────────
     // From: complete-swap/claim-vhtlc.mdx "Check VHTLC Amounts"
@@ -79,11 +83,13 @@ async function main(): Promise<void> {
     console.log("VHTLC Amounts");
     console.log("-".repeat(60));
 
+    // #region check-vhtlc-amounts
     const amounts = await client.amountsForSwap(swapId);
 
     console.log("Spendable:", amounts.spendable, "sats");
     console.log("Spent:", amounts.spent, "sats");
     console.log("Recoverable:", amounts.recoverable, "sats");
+    // #endregion check-vhtlc-amounts
   } finally {
     close();
   }
