@@ -41,8 +41,8 @@ async function main(): Promise<void> {
     console.log("=".repeat(60));
 
     // #region price-feed
-    // wss://apilendaswap.lendasat.com
     const wsUrl = CONFIG.apiUrl.replace("https://", "wss://").replace("http://", "ws://");
+    // ... wsUrl = "wss://apilendaswap.lendasat.com"
     const priceFeed = new PriceFeedService(wsUrl);
 
     await new Promise<void>((resolve) => {
