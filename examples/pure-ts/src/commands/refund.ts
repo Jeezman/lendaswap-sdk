@@ -122,6 +122,48 @@ export async function refundSwap(
   console.log("");
 
   try {
+    if (isArkadeSwap) {
+      // #region refund-vhtlc
+      const vhtlcResult = await client.refundSwap(swapId, {
+        destinationAddress: actualDestination ?? "",
+      });
+
+      if (vhtlcResult.success) {
+        console.log("Refunded:", vhtlcResult.txId);
+        // ... "ark1tx..."
+        console.log("Amount:", vhtlcResult.refundAmount, "sats");
+        // ... 100000 "sats"
+      } else {
+        console.error(vhtlcResult.message);
+      }
+      // #endregion refund-vhtlc
+
+      if (!vhtlcResult.success) {
+        process.exit(1);
+      }
+
+      // Update stored swap with latest status
+      if (swapStorage) {
+        const updatedSwap = await client.getSwap(swapId);
+        await swapStorage.update(swapId, updatedSwap);
+      }
+      return;
+    }
+
+    // #region refund-vhtlc-flow
+    const swapForRefund = await client.getSwap(swapId);
+    console.log("Status:", swapForRefund.status);
+    // ... "clientfundedserverrefunded"
+
+    if (swapForRefund.status === "clientfundedserverrefunded" || swapForRefund.status === "expired") {
+      const flowResult = await client.refundSwap(swapId, {
+        destinationAddress: actualDestination ?? "",
+      });
+      console.log("Refund:", flowResult.success ? "Success" : flowResult.message);
+      // ... "Success"
+    }
+    // #endregion refund-vhtlc-flow
+
     // Build options based on swap type
     const options = isOnchainSwap
       ? {
@@ -133,7 +175,22 @@ export async function refundSwap(
           destinationAddress: actualDestination ?? "",
         };
 
+    // #region refund-onchain
     const result = await client.refundSwap(swapId, options);
+
+    if (result.success) {
+      console.log("Refund TX:", result.txId);
+      // ... "abc123def456..."
+      console.log("Amount:", result.refundAmount, "sats");
+      // ... 99500 "sats"
+      console.log("Broadcast:", result.broadcast);
+      // ... true
+      console.log("Fee:", result.fee, "sats");
+      // ... 500 "sats"
+    } else {
+      console.error("Refund failed:", result.message);
+    }
+    // #endregion refund-onchain
 
     if (result.success) {
       console.log("=".repeat(60));
@@ -143,21 +200,6 @@ export async function refundSwap(
         console.log("REFUND TRANSACTION BUILT");
       }
       console.log("=".repeat(60));
-      console.log("");
-      console.log(`  ${result.message}`);
-      console.log("");
-      if (result.txId) {
-        console.log(`  Transaction ID: ${result.txId}`);
-      }
-      if (result.refundAmount !== undefined) {
-        console.log(`  Refund amount:  ${result.refundAmount} sats`);
-      }
-      if (result.fee !== undefined) {
-        console.log(`  Network fee:    ${result.fee} sats`);
-      }
-      if (result.broadcast !== undefined) {
-        console.log(`  Broadcast:      ${result.broadcast ? "Yes" : "No"}`);
-      }
       console.log("");
       if (result.txHex && !result.broadcast) {
         console.log("Raw Transaction (broadcast manually if needed):");
@@ -178,13 +220,22 @@ export async function refundSwap(
         await swapStorage.update(swapId, updatedSwap);
       }
     } else {
-      console.log("=".repeat(60));
-      console.log("REFUND NOT AVAILABLE");
-      console.log("=".repeat(60));
-      console.log("");
-      console.log(`  ${result.message}`);
-      console.log("");
-      console.log("=".repeat(60));
+      // #region check-locktime
+      const lockSwap = await client.getSwap(swapId);
+      console.log("Status:", lockSwap.status);
+      // ... "clientfundedserverrefunded"
+
+      // Attempt refund — the SDK checks locktime automatically
+      const lockResult = await client.refundSwap(swapId, {
+        destinationAddress: actualDestination ?? "",
+      });
+
+      if (!lockResult.success) {
+        // If locktime hasn't expired, message tells you when it does
+        console.log(lockResult.message);
+        // ... "Locktime expires in 45 minutes"
+      }
+      // #endregion check-locktime
       process.exit(1);
     }
   } catch (error) {

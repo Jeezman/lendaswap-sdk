@@ -41,6 +41,7 @@ import { evmFundSwap } from "./commands/evm-fund.js";
 import { evmRefundSwap } from "./commands/evm-refund.js";
 import { evmClaimSwap } from "./commands/evm-claim.js";
 import { showEvmBalances } from "./commands/evm-balances.js";
+import { recoverSwaps } from "./commands/recover.js";
 
 // Configuration from environment variables
 export const CONFIG = {
@@ -108,6 +109,7 @@ Commands:
   evm-claim <id>                     Claim EVM tokens (BTC-to-Ethereum only)
   evm-balances                       Show EVM wallet balances (all chains)
   swaps                              List locally stored swaps
+  recover                            Recover swaps from server
   info                               Show wallet info
   help                               Show this help message
 
@@ -195,6 +197,9 @@ async function main(): Promise<void> {
       break;
     case "swaps":
       await listSwaps(swapStorage);
+      break;
+    case "recover":
+      await recoverSwaps(client);
       break;
     case "info":
       await showInfo(client, CONFIG);

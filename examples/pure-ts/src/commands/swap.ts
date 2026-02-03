@@ -119,6 +119,7 @@ export async function createSwap(
       console.log(`  EVM User Address: ${evmUserAddress}`);
       console.log("");
 
+      // #region evm-to-arkade
       const result = await client.createEvmToArkadeSwap({
         sourceChain,
         sourceToken: from,
@@ -126,6 +127,14 @@ export async function createSwap(
         targetAddress: address, // Arkade address
         userAddress: evmUserAddress, // EVM wallet address
       });
+
+      console.log("Approve token:", result.response.source_token_address);
+      // ... "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
+      console.log("HTLC contract:", result.response.htlc_address_evm);
+      // ... "0x1234...abcd"
+      console.log("Swap ID:", result.response.id);
+      // ... "550e8400-e29b-41d4-a716-446655440000"
+      // #endregion evm-to-arkade
 
       swapId = result.response.id;
       status = result.response.status;
@@ -160,12 +169,19 @@ export async function createSwap(
       console.log(`  Source Chain: ${sourceChain}`);
       console.log("");
 
+      // #region evm-to-lightning
       const result = await client.createEvmToLightningSwap({
         sourceChain,
         sourceToken: from,
         bolt11Invoice,
         userAddress: evmUserAddress,
       });
+
+      console.log("HTLC contract:", result.response.htlc_address_evm);
+      // ... "0x1234...abcd"
+      console.log("Swap ID:", result.response.id);
+      // ... "550e8400-e29b-41d4-a716-446655440000"
+      // #endregion evm-to-lightning
 
       swapId = result.response.id;
       status = result.response.status;
@@ -186,10 +202,19 @@ export async function createSwap(
       ].join("\n");
 
     } else if (swapType === "bitcoin-to-arkade") {
+      // #region create-swap
       const result = await client.createBitcoinToArkadeSwap({
         satsReceive: Math.floor(amountNum),
         targetAddress: address,
       });
+
+      console.log("Send BTC to:", result.response.btc_htlc_address);
+      // ... "bc1q..."
+      console.log("Amount:", result.response.source_amount, "sats");
+      // ... 101500 "sats"
+      console.log("Swap ID:", result.response.id);
+      // ... "550e8400-e29b-41d4-a716-446655440000"
+      // #endregion create-swap
 
       swapId = result.response.id;
       status = result.response.status;
@@ -213,12 +238,19 @@ export async function createSwap(
         process.exit(1);
       }
 
+      // #region lightning-to-evm-by-source
       const result = await client.createLightningToEvmSwap({
         targetAddress: address,
         targetToken: to,
         targetChain,
         sourceAmount: Math.floor(amountNum),
       });
+
+      console.log("Pay invoice:", result.response.ln_invoice);
+      // ... "lnbc1m1p..."
+      console.log("You will receive:", result.response.target_amount, "USDC");
+      // ... 48.25 "USDC"
+      // #endregion lightning-to-evm-by-source
 
       swapId = result.response.id;
       status = result.response.status;
@@ -236,12 +268,19 @@ export async function createSwap(
         process.exit(1);
       }
 
+      // #region arkade-to-evm
       const result = await client.createArkadeToEvmSwap({
         targetAddress: address,
         targetToken: to,
         targetChain,
         sourceAmount: Math.floor(amountNum),
       });
+
+      console.log("Fund VHTLC:", result.response.htlc_address_arkade);
+      // ... "ark1q..."
+      console.log("Swap ID:", result.response.id);
+      // ... "550e8400-e29b-41d4-a716-446655440000"
+      // #endregion arkade-to-evm
 
       swapId = result.response.id;
       status = result.response.status;
@@ -321,12 +360,92 @@ export async function createSwap(
     console.log(`Once the swap is in 'serverfunded' status, redeem with:`);
     console.log(`  npm run redeem -- ${swapId}`);
 
-  } catch (error) {
+  // #region error-handling
+  } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`Error creating swap: ${message}`);
+    console.error("Swap failed:", message);
+    // ... "amount_too_low: Minimum amount is 10000 sats"
     process.exit(1);
   }
+  // #endregion error-handling
 }
+
+// #region lightning-to-evm-by-target
+// To create a swap by target amount (receive exactly N USDC):
+//
+// const resultByTarget = await client.createLightningToEvmSwap({
+//   targetAddress: "0xYourPolygonAddress",
+//   targetToken: "usdc_pol",
+//   targetChain: "polygon",
+//   targetAmount: 50, // Receive exactly 50 USDC
+// });
+//
+// console.log("Pay invoice:", resultByTarget.response.ln_invoice);
+// // ... "lnbc500u1p..."
+// console.log("Swap ID:", resultByTarget.response.id);
+// // ... "550e8400-e29b-41d4-a716-446655440000"
+// #endregion lightning-to-evm-by-target
+
+// #region lightning-to-evm-complete-flow
+// Complete flow: create swap, poll for status, then claim
+//
+// // 1. Create swap
+// const result = await client.createLightningToEvmSwap({
+//   targetAddress: "0xYourPolygonAddress",
+//   targetToken: "usdc_pol",
+//   targetChain: "polygon",
+//   sourceAmount: 100000,
+// });
+//
+// console.log("Pay invoice:", result.response.ln_invoice);
+// // ... "lnbc1m1p..."
+//
+// // 2. Poll for status
+// let swap = await client.getSwap(result.response.id);
+// while (swap.status !== "serverfunded" && swap.status !== "clientredeemed") {
+//   await new Promise((r) => setTimeout(r, 3000));
+//   swap = await client.getSwap(result.response.id);
+//   console.log("Status:", swap.status);
+//   // ... "clientfunded" → "serverfunded"
+// }
+//
+// // 3. Claim (gasless on Polygon)
+// if (swap.status === "serverfunded") {
+//   const claim = await client.claim(result.response.id);
+//   console.log("Claim result:", claim.success, claim.message);
+//   // ... true "Claim successful"
+// }
+// #endregion lightning-to-evm-complete-flow
+
+// #region complete-flow
+// Complete flow for on-chain BTC -> Arkade:
+//
+// const result = await client.createBitcoinToArkadeSwap({
+//   satsReceive: 100000,
+//   targetAddress: "ark1q...",
+// });
+//
+// console.log("Send", result.response.source_amount, "sats to:", result.response.btc_htlc_address);
+// // ... "Send 101500 sats to: bc1q..."
+//
+// // Poll for status
+// let swap = await client.getSwap(result.response.id);
+// while (swap.status !== "serverfunded" && swap.status !== "clientredeemed") {
+//   await new Promise((r) => setTimeout(r, 10000)); // 10s for onchain
+//   swap = await client.getSwap(result.response.id);
+//   console.log("Status:", swap.status);
+//   // ... "clientfunded" → "serverfunded"
+// }
+//
+// // Claim VTXOs
+// if (swap.status === "serverfunded") {
+//   const claim = await client.claimArkade(result.response.id, {
+//     destinationAddress: "ark1q...",
+//   });
+//   console.log("Claimed:", claim.success);
+//   // ... true
+// }
+// #endregion complete-flow
 
 /**
  * Parse the source and target tokens to determine swap type.

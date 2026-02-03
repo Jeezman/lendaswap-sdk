@@ -115,7 +115,8 @@ export async function evmFundSwap(
   console.log(`EVM Wallet Address: ${evmWallet.address}`);
   console.log("");
 
-  // Get funding call data from SDK
+  // #region fund-evm-htlc
+  // Get funding call data from the SDK
   const tokenDecimals = getTokenDecimals(swap.source_token);
   const funding = await client.getEvmFundingCallData(swapId, tokenDecimals);
 
@@ -219,6 +220,7 @@ export async function evmFundSwap(
     }
 
     console.log("  CreateSwap confirmed!");
+    // #endregion fund-evm-htlc
     console.log("");
 
     console.log("=".repeat(60));

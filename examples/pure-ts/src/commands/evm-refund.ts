@@ -79,22 +79,22 @@ export async function evmRefundSwap(
   console.log(`Status: ${swap.status}`);
   console.log("");
 
-  // Get refund call data
+  // #region check-evm-htlc
   const refund = await client.getEvmRefundCallData(swapId);
 
+  console.log("Timelock expired:", refund.timelockExpired);
+  // ... false
+  console.log("Expiry:", new Date(refund.timelockExpiry * 1000).toISOString());
+  // ... "2025-01-16T12:00:00.000Z"
+  // #endregion check-evm-htlc
+
   console.log(`HTLC Address: ${refund.to}`);
-  console.log(`Timelock Expiry: ${new Date(refund.timelockExpiry * 1000).toISOString()}`);
-  console.log(`Timelock Expired: ${refund.timelockExpired}`);
   console.log("");
 
+  // #region refund-evm-htlc
   if (!refund.timelockExpired) {
-    const remainingSeconds = refund.timelockExpiry - Math.floor(Date.now() / 1000);
-    const hours = Math.floor(remainingSeconds / 3600);
-    const minutes = Math.floor((remainingSeconds % 3600) / 60);
-    console.error("Error: Cannot refund yet - timelock has not expired.");
-    console.error(`Time remaining: ${hours}h ${minutes}m`);
-    console.error("");
-    console.error("You can only refund after the timelock expires.");
+    const expiresIn = refund.timelockExpiry - Math.floor(Date.now() / 1000);
+    console.log(`Timelock expires in ${Math.ceil(expiresIn / 60)} minutes`);
     process.exit(1);
   }
 
@@ -130,6 +130,7 @@ export async function evmRefundSwap(
     if (receipt.status !== "success") {
       throw new Error("Refund transaction failed");
     }
+    // #endregion refund-evm-htlc
 
     console.log("");
     console.log("=".repeat(60));
