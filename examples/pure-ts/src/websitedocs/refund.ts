@@ -25,7 +25,9 @@ async function main(): Promise<void> {
 
     if (vhtlcResult.success) {
       console.log("Refunded:", vhtlcResult.txId);
+      // ... "ark1tx..."
       console.log("Amount:", vhtlcResult.refundAmount, "sats");
+      // ... 100000 "sats"
     } else {
       console.error(vhtlcResult.message);
     }
@@ -41,12 +43,14 @@ async function main(): Promise<void> {
     // #region refund-vhtlc-flow
     const swap = await client.getSwap(swapId);
     console.log("Status:", swap.status);
+    // ... "clientfundedserverrefunded"
 
     if (swap.status === "clientfundedserverrefunded" || swap.status === "expired") {
       const result = await client.refundSwap(swapId, {
         destinationAddress: "ark1q...",
       });
       console.log("Refund:", result.success ? "Success" : result.message);
+      // ... "Success"
     }
     // #endregion refund-vhtlc-flow
 
@@ -61,7 +65,9 @@ async function main(): Promise<void> {
     const refund = await client.getEvmRefundCallData(swapId);
 
     console.log("Timelock expired:", refund.timelockExpired);
+    // ... false
     console.log("Expiry:", new Date(refund.timelockExpiry * 1000).toISOString());
+    // ... "2025-01-16T12:00:00.000Z"
     // #endregion check-evm-htlc
 
     // #region refund-evm-htlc
@@ -103,9 +109,13 @@ async function main(): Promise<void> {
 
     if (onchainResult.success) {
       console.log("Refund TX:", onchainResult.txId);
+      // ... "abc123def456..."
       console.log("Amount:", onchainResult.refundAmount, "sats");
+      // ... 99500 "sats"
       console.log("Broadcast:", onchainResult.broadcast);
+      // ... true
       console.log("Fee:", onchainResult.fee, "sats");
+      // ... 500 "sats"
     } else {
       console.error("Refund failed:", onchainResult.message);
     }
@@ -121,6 +131,7 @@ async function main(): Promise<void> {
     // #region check-locktime
     const lockSwap = await client.getSwap(swapId);
     console.log("Status:", lockSwap.status);
+    // ... "clientfundedserverrefunded"
 
     // Attempt refund — the SDK checks locktime automatically
     const lockResult = await client.refundSwap(swapId, {
@@ -130,6 +141,7 @@ async function main(): Promise<void> {
     if (!lockResult.success) {
       // If locktime hasn't expired, message tells you when it does
       console.log(lockResult.message);
+      // ... "Locktime expires in 45 minutes"
     }
     // #endregion check-locktime
   } finally {

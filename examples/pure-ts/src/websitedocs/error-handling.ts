@@ -20,8 +20,7 @@ async function main(): Promise<void> {
       });
     } catch (error) {
       console.error("Swap failed:", error.message);
-      // Error messages include machine-readable codes like:
-      // "insufficient_balance", "amount_too_low", "rate_limit_exceeded"
+      // ... "amount_too_low: Minimum amount is 10000 sats"
     }
     // #endregion error-handling
 

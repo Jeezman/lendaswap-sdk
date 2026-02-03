@@ -17,8 +17,11 @@ async function main(): Promise<void> {
       const swap = await client.getSwap(swapId);
 
       console.log("Status:", swap.status);
+      // ... "serverfunded"
       console.log("Source:", swap.source_amount, swap.source_token);
+      // ... 100000 "btc_lightning"
       console.log("Target:", swap.target_amount, swap.target_token);
+      // ... 48.25 "usdc_pol"
       // #endregion get-swap
     }
 
@@ -44,6 +47,7 @@ async function main(): Promise<void> {
       while (!done && Date.now() - startTime < 30000) {
         const swap = await client.getSwap(swapId, { updateStorage: true });
         console.log("Status:", swap.status);
+        // ... "clientfunded" → "serverfunded" → "clientredeemed"
 
         if (terminalStates.includes(swap.status)) {
           done = true;
@@ -71,6 +75,7 @@ async function main(): Promise<void> {
 
     for (const swap of swaps) {
       console.log(`${swap.swapId}: ${swap.response.status}`);
+      // ... "550e8400-...: serverfunded"
     }
     // #endregion list-swaps
 
@@ -91,6 +96,7 @@ async function main(): Promise<void> {
     const done2 = swaps.filter((s) => s.response.status === "clientredeemed");
 
     console.log(`Pending: ${pending.length}, Funded: ${funded.length}, Done: ${done2.length}`);
+    // ... "Pending: 1, Funded: 2, Done: 5"
     // #endregion filter-swaps
 
     // ── Delete Swaps ─────────────────────────────────────────

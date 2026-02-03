@@ -23,6 +23,7 @@ async function main(): Promise<void> {
 
     if (claimResult.success) {
       console.log("Claimed! TX:", claimResult.txHash);
+      // ... "0xabc123..."
     } else {
       console.error("Claim failed:", claimResult.message);
     }
@@ -70,7 +71,9 @@ async function main(): Promise<void> {
 
     if (arkadeResult.success) {
       console.log("Claimed! TX:", arkadeResult.txId);
+      // ... "ark1tx..."
       console.log("Amount:", arkadeResult.claimAmount, "sats");
+      // ... 100000 "sats"
     } else {
       console.error("Claim failed:", arkadeResult.message);
     }
@@ -87,8 +90,11 @@ async function main(): Promise<void> {
     const amounts = await client.amountsForSwap(swapId);
 
     console.log("Spendable:", amounts.spendable, "sats");
+    // ... 100000 "sats"
     console.log("Spent:", amounts.spent, "sats");
+    // ... 0 "sats"
     console.log("Recoverable:", amounts.recoverable, "sats");
+    // ... 0 "sats"
     // #endregion check-vhtlc-amounts
   } finally {
     close();

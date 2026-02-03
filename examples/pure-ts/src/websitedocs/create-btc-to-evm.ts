@@ -19,7 +19,9 @@ async function main(): Promise<void> {
     });
 
     console.log("Pay invoice:", resultByTarget.response.ln_invoice);
+    // ... "lnbc500u1p..."
     console.log("Swap ID:", resultByTarget.response.id);
+    // ... "550e8400-e29b-41d4-a716-446655440000"
     // #endregion lightning-to-evm-by-target
 
     // ── Lightning -> EVM (by sourceAmount) ───────────────────
@@ -38,7 +40,9 @@ async function main(): Promise<void> {
     });
 
     console.log("Pay invoice:", resultBySource.response.ln_invoice);
+    // ... "lnbc1m1p..."
     console.log("You will receive:", resultBySource.response.target_amount, "USDC");
+    // ... 48.25 "USDC"
     // #endregion lightning-to-evm-by-source
 
     // ── Arkade -> EVM ────────────────────────────────────────
@@ -57,7 +61,9 @@ async function main(): Promise<void> {
     });
 
     console.log("Fund VHTLC:", arkadeResult.response.htlc_address_arkade);
+    // ... "ark1q..."
     console.log("Swap ID:", arkadeResult.response.id);
+    // ... "550e8400-e29b-41d4-a716-446655440000"
     // #endregion arkade-to-evm
 
     // ── Complete Flow: Lightning -> EVM ───────────────────────
@@ -77,6 +83,7 @@ async function main(): Promise<void> {
     });
 
     console.log("Pay invoice:", result.response.ln_invoice);
+    // ... "lnbc1m1p..."
 
     // 2. Poll for status
     let swap = await client.getSwap(result.response.id);
@@ -84,12 +91,14 @@ async function main(): Promise<void> {
       await new Promise((r) => setTimeout(r, 3000));
       swap = await client.getSwap(result.response.id);
       console.log("Status:", swap.status);
+      // ... "clientfunded" → "serverfunded"
     }
 
     // 3. Claim (gasless on Polygon)
     if (swap.status === "serverfunded") {
       const claim = await client.claim(result.response.id);
       console.log("Claim result:", claim.success, claim.message);
+      // ... true "Claim successful"
     }
     // #endregion lightning-to-evm-complete-flow
   } finally {

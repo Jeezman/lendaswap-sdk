@@ -21,8 +21,11 @@ async function main(): Promise<void> {
     });
 
     console.log("Approve token:", arkadeResult.response.source_token_address);
+    // ... "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
     console.log("HTLC contract:", arkadeResult.response.htlc_address_evm);
+    // ... "0x1234...abcd"
     console.log("Swap ID:", arkadeResult.response.id);
+    // ... "550e8400-e29b-41d4-a716-446655440000"
     // #endregion evm-to-arkade
 
     // ── EVM -> Lightning ─────────────────────────────────────
@@ -41,7 +44,9 @@ async function main(): Promise<void> {
     });
 
     console.log("HTLC contract:", lnResult.response.htlc_address_evm);
+    // ... "0x1234...abcd"
     console.log("Swap ID:", lnResult.response.id);
+    // ... "550e8400-e29b-41d4-a716-446655440000"
     // #endregion evm-to-lightning
 
     // ── Fund EVM HTLC (viem) ─────────────────────────────────

@@ -16,6 +16,7 @@ async function main(): Promise<void> {
     // Recover all swaps from the server
     const recovered = await client.recoverSwaps();
     console.log(`Recovered ${recovered.length} swaps`);
+    // ... "Recovered 3 swaps"
     // #endregion recover-swaps
 
     // ── Process Recovered Swaps (State Machine) ──────────────
@@ -33,13 +34,16 @@ async function main(): Promise<void> {
       switch (swap.status) {
         case "serverfunded":
           console.log(`Swap ${stored.swapId}: Ready to claim!`);
+          // ... "Swap 550e8400-...: Ready to claim!"
           await client.claim(stored.swapId);
           break;
         case "clientfundedserverrefunded":
           console.log(`Swap ${stored.swapId}: Needs refund`);
+          // ... "Swap 661f9511-...: Needs refund"
           break;
         case "clientredeemed":
           console.log(`Swap ${stored.swapId}: Complete`);
+          // ... "Swap 772a0622-...: Complete"
           break;
         default:
           console.log(`Swap ${stored.swapId}: ${swap.status}`);

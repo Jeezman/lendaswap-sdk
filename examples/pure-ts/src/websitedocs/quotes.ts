@@ -22,10 +22,15 @@ async function main(): Promise<void> {
     const quote = await client.getQuote("btc_lightning", "usdc_pol", 100000);
 
     console.log("Rate:", quote.exchange_rate);
+    // ... 96250
     console.log("Network fee:", quote.network_fee, "sats");
+    // ... 150 "sats"
     console.log("Protocol fee:", quote.protocol_fee, "sats");
+    // ... 500 "sats"
     console.log("Min:", quote.min_amount, "sats");
+    // ... 10000 "sats"
     console.log("Max:", quote.max_amount, "sats");
+    // ... 10000000 "sats"
     // #endregion get-quote
 
     // ── Real-Time Price Feed ─────────────────────────────────
@@ -42,8 +47,10 @@ async function main(): Promise<void> {
     await new Promise<void>((resolve) => {
       const unsubscribe = priceFeed.subscribe((update: PriceUpdateMessage) => {
         console.log("Updated:", new Date(update.timestamp * 1000).toISOString());
+        // ... "2025-01-15T12:00:00.000Z"
         for (const pair of update.pairs) {
           console.log(`  ${pair.pair}: tier_1=${pair.tiers.tier_1}`);
+          // ... "btc_lightning_usdc_pol: tier_1=96250"
         }
       });
 
@@ -95,11 +102,13 @@ async function main(): Promise<void> {
 
     for (const pair of pairs) {
       console.log(`${pair.source.token_id} → ${pair.target.token_id}`);
+      // ... "btc_lightning → usdc_pol"
     }
 
     const tokens = await client.getTokens();
     for (const token of tokens) {
       console.log(`${token.token_id}: ${token.name} (${token.chain})`);
+      // ... "btc_lightning: Bitcoin Lightning (lightning)"
     }
     // #endregion asset-pairs
   } finally {

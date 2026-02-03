@@ -11,6 +11,7 @@ async function main(): Promise<void> {
   // #region generate-mnemonic
   const signer = Signer.generate();
   console.log("Mnemonic:", signer.mnemonic);
+  // ... "abandon ability able about above absent absorb abstract absurd abuse access accident"
   // #endregion generate-mnemonic
   console.log("");
 
@@ -35,10 +36,13 @@ async function main(): Promise<void> {
     // #region get-version
     const version = await client.getVersion();
     console.log("API version:", version.tag);
+    // ... "v0.5.0"
     console.log("Commit:", version.commit_hash);
+    // ... "a1b2c3d4e5f6"
 
     const health = await client.healthCheck();
-    console.log("API status:", health); // "ok"
+    console.log("API status:", health);
+    // ... "ok"
     // #endregion get-version
 
     // ── Get Xpub & Mnemonic ────────────────────────────────────
@@ -51,6 +55,7 @@ async function main(): Promise<void> {
     // #region get-xpub
     const xpub = client.getUserIdXpub();
     console.log("User ID xpub:", xpub);
+    // ... "xpub6CUGRUo..."
 
     // Retrieve stored mnemonic (for backup)
     const mnemonic = client.getMnemonic();
