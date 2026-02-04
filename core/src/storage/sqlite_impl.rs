@@ -9,9 +9,9 @@ use super::{
     VtxoSwapStorage, WalletStorage,
 };
 use crate::api::{
-    BtcToArkadeSwapResponse, BtcToEvmSwapResponse, EvmToBtcSwapResponse, GetSwapResponse,
-    OnchainToEvmSwapResponse, SwapCommonFields, SwapStatus, TokenId, VtxoSwapResponse,
-    VtxoSwapStatus,
+    ArkadeToEvmSwapResponse, BtcToArkadeSwapResponse, BtcToEvmSwapResponse, EvmToBtcSwapResponse,
+    GetSwapResponse, OnchainToEvmSwapResponse, SwapCommonFields, SwapStatus, TokenId,
+    VtxoSwapResponse, VtxoSwapStatus,
 };
 use crate::types::SwapParams;
 use sqlx::Row;
@@ -51,6 +51,7 @@ enum SwapType {
     EvmToBtc,
     BtcToArkade,
     OnchainToEvm,
+    ArkadeToEvm,
 }
 
 impl SwapType {
@@ -60,6 +61,7 @@ impl SwapType {
             SwapType::EvmToBtc => "EvmToBtc",
             SwapType::BtcToArkade => "BtcToArkade",
             SwapType::OnchainToEvm => "OnchainToEvm",
+            SwapType::ArkadeToEvm => "ArkadeToEvm",
         }
     }
 
@@ -69,6 +71,7 @@ impl SwapType {
             "EvmToBtc" => Some(SwapType::EvmToBtc),
             "BtcToArkade" => Some(SwapType::BtcToArkade),
             "OnchainToEvm" => Some(SwapType::OnchainToEvm),
+            "ArkadeToEvm" => Some(SwapType::ArkadeToEvm),
             _ => None,
         }
     }
@@ -424,6 +427,82 @@ impl SqliteStorage {
         .execute(&*self.pool)
         .await
         .map_err(|e| crate::Error::Storage(format!("Failed to store OnchainToEvm swap: {}", e)))?;
+
+        Ok(())
+    }
+
+    async fn store_arkade_to_evm(
+        &self,
+        swap_id: &str,
+        r: &ArkadeToEvmSwapResponse,
+        params: &SwapParams,
+    ) -> Result<(), crate::Error> {
+        let created_at = r
+            .created_at
+            .format(&time::format_description::well_known::Rfc3339)
+            .unwrap_or_default();
+
+        sqlx::query(
+            r#"
+            INSERT OR REPLACE INTO arkade_to_evm_swaps (
+                swap_id, status, fee_sats, hash_lock, source_token, target_token,
+                created_at, chain, evm_chain_id, target_token_address, target_token_symbol,
+                target_token_decimals, btc_expected_sats, evm_expected_sats, target_token_amount,
+                btc_vhtlc_address, btc_fund_txid, btc_claim_txid, evm_htlc_address,
+                evm_coordinator_address, client_evm_address, server_evm_address, evm_fund_txid,
+                evm_claim_txid, evm_refund_locktime, sender_pk, receiver_pk, arkade_server_pk,
+                vhtlc_refund_locktime, unilateral_claim_delay, unilateral_refund_delay,
+                unilateral_refund_without_receiver_delay, network,
+                secret_key, public_key, preimage, preimage_hash, user_id, key_index
+            ) VALUES (
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
+                ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33,
+                ?34, ?35, ?36, ?37, ?38, ?39
+            )
+            "#,
+        )
+        .bind(swap_id)
+        .bind(format!("{:?}", r.status))
+        .bind(r.fee_sats)
+        .bind(&r.hash_lock)
+        .bind(r.source_token.as_str())
+        .bind(r.target_token.as_str())
+        .bind(&created_at)
+        .bind(&r.chain)
+        .bind(r.evm_chain_id)
+        .bind(&r.target_token_address)
+        .bind(&r.target_token_symbol)
+        .bind(r.target_token_decimals)
+        .bind(r.btc_expected_sats)
+        .bind(r.evm_expected_sats)
+        .bind(r.target_token_amount)
+        .bind(&r.btc_vhtlc_address)
+        .bind(&r.btc_fund_txid)
+        .bind(&r.btc_claim_txid)
+        .bind(&r.evm_htlc_address)
+        .bind(&r.evm_coordinator_address)
+        .bind(&r.client_evm_address)
+        .bind(&r.server_evm_address)
+        .bind(&r.evm_fund_txid)
+        .bind(&r.evm_claim_txid)
+        .bind(r.evm_refund_locktime)
+        .bind(&r.sender_pk)
+        .bind(&r.receiver_pk)
+        .bind(&r.arkade_server_pk)
+        .bind(r.vhtlc_refund_locktime)
+        .bind(r.unilateral_claim_delay)
+        .bind(r.unilateral_refund_delay)
+        .bind(r.unilateral_refund_without_receiver_delay)
+        .bind(&r.network)
+        .bind(hex::encode(params.secret_key.secret_bytes()))
+        .bind(hex::encode(params.public_key.serialize()))
+        .bind(hex::encode(params.preimage))
+        .bind(hex::encode(params.preimage_hash))
+        .bind(hex::encode(params.user_id.serialize()))
+        .bind(params.key_index as i64)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| crate::Error::Storage(format!("Failed to store ArkadeToEvm swap: {}", e)))?;
 
         Ok(())
     }
@@ -826,6 +905,70 @@ impl SqliteStorage {
         })
     }
 
+    async fn load_arkade_to_evm(
+        &self,
+        swap_id: &str,
+    ) -> Result<ExtendedSwapStorageData, crate::Error> {
+        let row = sqlx::query("SELECT * FROM arkade_to_evm_swaps WHERE swap_id = ?1")
+            .bind(swap_id)
+            .fetch_one(&*self.pool)
+            .await
+            .map_err(|e| crate::Error::Storage(format!("Failed to load ArkadeToEvm: {}", e)))?;
+
+        let swap_params = Self::parse_swap_params(&row)?;
+
+        let status_str: String = row.get("status");
+        let created_at_str: String = row.get("created_at");
+        let source_token_str: String = row.get("source_token");
+        let target_token_str: String = row.get("target_token");
+
+        let response = ArkadeToEvmSwapResponse {
+            id: Uuid::parse_str(swap_id).unwrap(),
+            status: parse_swap_status(&status_str),
+            fee_sats: row.get("fee_sats"),
+            hash_lock: row.get("hash_lock"),
+            source_token: parse_token_id(&source_token_str),
+            target_token: parse_token_id(&target_token_str),
+            created_at: OffsetDateTime::parse(
+                &created_at_str,
+                &time::format_description::well_known::Rfc3339,
+            )
+            .unwrap_or_else(|_| OffsetDateTime::now_utc()),
+            chain: row.get("chain"),
+            evm_chain_id: row.get("evm_chain_id"),
+            target_token_address: row.get("target_token_address"),
+            target_token_symbol: row.get("target_token_symbol"),
+            target_token_decimals: row.get("target_token_decimals"),
+            btc_expected_sats: row.get("btc_expected_sats"),
+            evm_expected_sats: row.get("evm_expected_sats"),
+            target_token_amount: row.get("target_token_amount"),
+            btc_vhtlc_address: row.get("btc_vhtlc_address"),
+            btc_fund_txid: row.get("btc_fund_txid"),
+            btc_claim_txid: row.get("btc_claim_txid"),
+            evm_htlc_address: row.get("evm_htlc_address"),
+            evm_coordinator_address: row.get("evm_coordinator_address"),
+            client_evm_address: row.get("client_evm_address"),
+            server_evm_address: row.get("server_evm_address"),
+            evm_fund_txid: row.get("evm_fund_txid"),
+            evm_claim_txid: row.get("evm_claim_txid"),
+            evm_refund_locktime: row.get("evm_refund_locktime"),
+            sender_pk: row.get("sender_pk"),
+            receiver_pk: row.get("receiver_pk"),
+            arkade_server_pk: row.get("arkade_server_pk"),
+            vhtlc_refund_locktime: row.get("vhtlc_refund_locktime"),
+            unilateral_claim_delay: row.get("unilateral_claim_delay"),
+            unilateral_refund_delay: row.get("unilateral_refund_delay"),
+            unilateral_refund_without_receiver_delay: row
+                .get("unilateral_refund_without_receiver_delay"),
+            network: row.get("network"),
+        };
+
+        Ok(ExtendedSwapStorageData {
+            response: GetSwapResponse::ArkadeToEvm(response),
+            swap_params,
+        })
+    }
+
     async fn load_vtxo_swap(
         &self,
         swap_id: &str,
@@ -956,6 +1099,7 @@ impl SwapStorage for SqliteStorage {
                 Some(SwapType::EvmToBtc) => Ok(Some(self.load_evm_to_btc(&swap_id).await?)),
                 Some(SwapType::BtcToArkade) => Ok(Some(self.load_btc_to_arkade(&swap_id).await?)),
                 Some(SwapType::OnchainToEvm) => Ok(Some(self.load_onchain_to_evm(&swap_id).await?)),
+                Some(SwapType::ArkadeToEvm) => Ok(Some(self.load_arkade_to_evm(&swap_id).await?)),
                 None => Ok(None),
             }
         })
@@ -970,6 +1114,7 @@ impl SwapStorage for SqliteStorage {
                 GetSwapResponse::EvmToBtc(_) => SwapType::EvmToBtc,
                 GetSwapResponse::BtcToArkade(_) => SwapType::BtcToArkade,
                 GetSwapResponse::OnchainToEvm(_) => SwapType::OnchainToEvm,
+                GetSwapResponse::ArkadeToEvm(_) => SwapType::ArkadeToEvm,
             };
 
             // Update registry
@@ -998,6 +1143,10 @@ impl SwapStorage for SqliteStorage {
                     self.store_onchain_to_evm(&swap_id, r, &data.swap_params)
                         .await
                 }
+                GetSwapResponse::ArkadeToEvm(r) => {
+                    self.store_arkade_to_evm(&swap_id, r, &data.swap_params)
+                        .await
+                }
             }
         })
     }
@@ -1019,6 +1168,7 @@ impl SwapStorage for SqliteStorage {
                     "EvmToBtc" => "evm_to_btc_swaps",
                     "BtcToArkade" => "btc_to_arkade_swaps",
                     "OnchainToEvm" => "onchain_to_evm_swaps",
+                    "ArkadeToEvm" => "arkade_to_evm_swaps",
                     _ => return Ok(()),
                 };
 
@@ -1105,6 +1255,19 @@ impl SwapStorage for SqliteStorage {
             for row in rows {
                 let swap_id: String = row.get("swap_id");
                 if let Ok(data) = self.load_onchain_to_evm(&swap_id).await {
+                    swaps.push(data);
+                }
+            }
+
+            // Get all ArkadeToEvm swaps
+            let rows = sqlx::query("SELECT swap_id FROM arkade_to_evm_swaps")
+                .fetch_all(&*self.pool)
+                .await
+                .map_err(|e| crate::Error::Storage(format!("SQLite error: {}", e)))?;
+
+            for row in rows {
+                let swap_id: String = row.get("swap_id");
+                if let Ok(data) = self.load_arkade_to_evm(&swap_id).await {
                     swaps.push(data);
                 }
             }

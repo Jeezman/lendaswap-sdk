@@ -1,9 +1,9 @@
 use crate::api::{
-    AssetPair, BtcToArkadeSwapRequest, BtcToArkadeSwapResponse, BtcToEvmSwapRequest,
-    BtcToEvmSwapResponse, CreateVtxoSwapRequest, EstimateVtxoSwapResponse, EvmChain,
-    EvmToArkadeSwapRequest, EvmToBtcSwapResponse, EvmToLightningSwapRequest, GetSwapResponse,
-    OnchainToEvmSwapRequest, OnchainToEvmSwapResponse, QuoteRequest, QuoteResponse, TokenId,
-    TokenInfo, Version, VtxoSwapResponse,
+    ArkadeToEvmSwapCreateResponse, ArkadeToEvmSwapRequest, AssetPair, BtcToArkadeSwapRequest,
+    BtcToArkadeSwapResponse, BtcToEvmSwapRequest, BtcToEvmSwapResponse, CreateVtxoSwapRequest,
+    EstimateVtxoSwapResponse, EvmChain, EvmToArkadeSwapRequest, EvmToBtcSwapResponse,
+    EvmToLightningSwapRequest, GetSwapResponse, OnchainToEvmSwapRequest, OnchainToEvmSwapResponse,
+    QuoteRequest, QuoteResponse, TokenId, TokenInfo, Version, VtxoSwapResponse,
 };
 use crate::esplora::EsploraClient;
 use crate::onchain_htlc::{
@@ -504,6 +504,63 @@ impl<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> Client<S, SS, VSS>
         Ok(response)
     }
 
+    /// Create an Arkade-to-EVM swap via the chain-agnostic endpoint.
+    ///
+    /// Uses `POST /swap/arkade/evm` with `evm_chain_id` + `token_address` instead of
+    /// per-chain paths. Supports any token reachable through 1inch aggregation.
+    ///
+    /// After creation, the swap is fetched via `get_swap` to store the canonical
+    /// `GetSwapResponse` format.
+    ///
+    /// # Arguments
+    /// * `target_address` - User's EVM address to receive tokens
+    /// * `evm_chain_id` - Target EVM chain ID (1, 137, 42161)
+    /// * `token_address` - ERC-20 token contract address
+    /// * `source_amount` - Amount of BTC to send in satoshis (mutually exclusive with `target_amount`)
+    /// * `target_amount` - Amount of target token to receive in smallest unit (mutually exclusive with `source_amount`)
+    /// * `referral_code` - Optional referral code
+    pub async fn create_arkade_to_evm_swap_generic(
+        &self,
+        target_address: String,
+        evm_chain_id: u64,
+        token_address: String,
+        source_amount: Option<u64>,
+        target_amount: Option<u64>,
+        referral_code: Option<String>,
+    ) -> crate::Result<ArkadeToEvmSwapCreateResponse> {
+        let swap_params = self.wallet.derive_swap_params().await?;
+
+        let request = ArkadeToEvmSwapRequest {
+            target_address,
+            evm_chain_id,
+            token_address,
+            amount_in: source_amount,
+            amount_out: target_amount,
+            hash_lock: format!("0x{}", hex::encode(swap_params.preimage_hash)),
+            refund_pk: hex::encode(swap_params.public_key.serialize()),
+            user_id: hex::encode(swap_params.user_id.serialize()),
+            referral_code,
+        };
+
+        let response = self
+            .api_client
+            .create_arkade_to_evm_swap_generic(&request)
+            .await?;
+
+        // Fetch the canonical GetSwapResponse for storage (creation and get_swap
+        // use different response types on the server side).
+        let swap_id = response.id.to_string();
+        let get_swap_response = self.api_client.get_swap(&swap_id).await?;
+
+        let swap_data = ExtendedSwapStorageData {
+            response: get_swap_response,
+            swap_params,
+        };
+        self.swap_storage.store(&swap_id, &swap_data).await?;
+
+        Ok(response)
+    }
+
     pub async fn get_asset_pairs(&self) -> crate::Result<Vec<AssetPair>> {
         let asset_pairs = self.api_client.get_asset_pairs().await?;
         Ok(asset_pairs)
@@ -602,75 +659,122 @@ impl<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> Client<S, SS, VSS>
 
     /// Get the [`VhtlcAmounts`] for a BTC-EVM swap.
     ///
-    /// This only applies to swaps where the client funds the Arkade VHTLC.
+    /// This applies to swaps where the client funds the Arkade VHTLC
+    /// (BtcToEvm and ArkadeToEvm directions).
     pub async fn amounts_for_swap(&self, swap_id: &str) -> crate::Result<VhtlcAmounts> {
         let swap_data = self.load_swap_data_from_storage(swap_id).await?;
-        if let GetSwapResponse::BtcToEvm(data) = &swap_data.response {
-            let common_swap_data = swap_data
-                .response
-                .common()
-                .ok_or(Error::Other("Missing swap common fields".to_string()))?;
-            let amounts = vhtlc::amounts(
-                &self.arkade_url,
-                SwapData {
-                    key_index: swap_data.swap_params.key_index,
-                    lendaswap_pk: data.common.receiver_pk.clone(),
-                    arkade_server_pk: data.common.server_pk.clone(),
-                    refund_locktime: common_swap_data.vhtlc_refund_locktime,
-                    unilateral_claim_delay: common_swap_data.unilateral_claim_delay,
-                    unilateral_refund_delay: common_swap_data.unilateral_refund_delay,
-                    unilateral_refund_without_receiver_delay: common_swap_data
-                        .unilateral_refund_without_receiver_delay,
-                    network: common_swap_data.network.parse()?,
-                    vhtlc_address: data.htlc_address_arkade.clone(),
-                },
-            )
-            .await?;
-
-            Ok(amounts)
-        } else {
-            Err(Error::Vhtlc("Swap was not a Btc to Evm swap".to_string()))
+        match &swap_data.response {
+            GetSwapResponse::BtcToEvm(data) => {
+                let common_swap_data = swap_data
+                    .response
+                    .common()
+                    .ok_or(Error::Other("Missing swap common fields".to_string()))?;
+                let amounts = vhtlc::amounts(
+                    &self.arkade_url,
+                    SwapData {
+                        key_index: swap_data.swap_params.key_index,
+                        lendaswap_pk: data.common.receiver_pk.clone(),
+                        arkade_server_pk: data.common.server_pk.clone(),
+                        refund_locktime: common_swap_data.vhtlc_refund_locktime,
+                        unilateral_claim_delay: common_swap_data.unilateral_claim_delay,
+                        unilateral_refund_delay: common_swap_data.unilateral_refund_delay,
+                        unilateral_refund_without_receiver_delay: common_swap_data
+                            .unilateral_refund_without_receiver_delay,
+                        network: common_swap_data.network.parse()?,
+                        vhtlc_address: data.htlc_address_arkade.clone(),
+                    },
+                )
+                .await?;
+                Ok(amounts)
+            }
+            GetSwapResponse::ArkadeToEvm(data) => {
+                let amounts = vhtlc::amounts(
+                    &self.arkade_url,
+                    SwapData {
+                        key_index: swap_data.swap_params.key_index,
+                        lendaswap_pk: data.receiver_pk.clone(),
+                        arkade_server_pk: data.arkade_server_pk.clone(),
+                        refund_locktime: data.vhtlc_refund_locktime as u32,
+                        unilateral_claim_delay: data.unilateral_claim_delay,
+                        unilateral_refund_delay: data.unilateral_refund_delay,
+                        unilateral_refund_without_receiver_delay: data
+                            .unilateral_refund_without_receiver_delay,
+                        network: data.network.parse()?,
+                        vhtlc_address: data.btc_vhtlc_address.clone(),
+                    },
+                )
+                .await?;
+                Ok(amounts)
+            }
+            _ => Err(Error::Vhtlc(
+                "Swap was not a BtcToEvm or ArkadeToEvm swap".to_string(),
+            )),
         }
     }
 
     /// Refund the VHTLC of a BTC-EVM swap.
     ///
-    /// This only applies to swaps where the client funds the Arkade VHTLC directly with Arkade. It
-    /// does not apply to swaps funded with Lightning, since the user's Lightning wallet is
-    /// responsible for refunding the Lightning HTLC.
+    /// This applies to swaps where the client funds the Arkade VHTLC directly
+    /// (BtcToEvm and ArkadeToEvm directions). It does not apply to swaps funded
+    /// with Lightning, since the user's Lightning wallet is responsible for
+    /// refunding the Lightning HTLC.
     pub async fn refund_vhtlc(&self, swap_id: &str, refund_address: &str) -> crate::Result<String> {
         let swap_data = self.load_swap_data_from_storage(swap_id).await?;
-        if let GetSwapResponse::BtcToEvm(data) = &swap_data.response {
-            let refund_address = ArkAddress::from_str(refund_address)
-                .map_err(|e| Error::Parse(format!("Invalid refund ark address {e})")))?;
+        let refund_address = ArkAddress::from_str(refund_address)
+            .map_err(|e| Error::Parse(format!("Invalid refund ark address {e})")))?;
 
-            let common_swap_data = swap_data
-                .response
-                .common()
-                .ok_or(Error::Other("Missing swap common fields".to_string()))?;
-            let txid = vhtlc::refund(
-                &self.arkade_url,
-                refund_address,
-                SwapData {
-                    key_index: swap_data.swap_params.key_index,
-                    lendaswap_pk: data.common.receiver_pk.clone(),
-                    arkade_server_pk: data.common.server_pk.clone(),
-                    refund_locktime: common_swap_data.vhtlc_refund_locktime,
-                    unilateral_claim_delay: common_swap_data.unilateral_claim_delay,
-                    unilateral_refund_delay: common_swap_data.unilateral_refund_delay,
-                    unilateral_refund_without_receiver_delay: common_swap_data
-                        .unilateral_refund_without_receiver_delay,
-                    network: common_swap_data.network.parse()?,
-                    vhtlc_address: data.htlc_address_arkade.clone(),
-                },
-                swap_data.swap_params,
-                self.wallet.network(),
-            )
-            .await?;
-
-            Ok(txid.to_string())
-        } else {
-            Err(Error::Vhtlc("Swap was not a Btc to Evm swap".to_string()))
+        match &swap_data.response {
+            GetSwapResponse::BtcToEvm(data) => {
+                let common_swap_data = swap_data
+                    .response
+                    .common()
+                    .ok_or(Error::Other("Missing swap common fields".to_string()))?;
+                let txid = vhtlc::refund(
+                    &self.arkade_url,
+                    refund_address,
+                    SwapData {
+                        key_index: swap_data.swap_params.key_index,
+                        lendaswap_pk: data.common.receiver_pk.clone(),
+                        arkade_server_pk: data.common.server_pk.clone(),
+                        refund_locktime: common_swap_data.vhtlc_refund_locktime,
+                        unilateral_claim_delay: common_swap_data.unilateral_claim_delay,
+                        unilateral_refund_delay: common_swap_data.unilateral_refund_delay,
+                        unilateral_refund_without_receiver_delay: common_swap_data
+                            .unilateral_refund_without_receiver_delay,
+                        network: common_swap_data.network.parse()?,
+                        vhtlc_address: data.htlc_address_arkade.clone(),
+                    },
+                    swap_data.swap_params,
+                    self.wallet.network(),
+                )
+                .await?;
+                Ok(txid.to_string())
+            }
+            GetSwapResponse::ArkadeToEvm(data) => {
+                let txid = vhtlc::refund(
+                    &self.arkade_url,
+                    refund_address,
+                    SwapData {
+                        key_index: swap_data.swap_params.key_index,
+                        lendaswap_pk: data.receiver_pk.clone(),
+                        arkade_server_pk: data.arkade_server_pk.clone(),
+                        refund_locktime: data.vhtlc_refund_locktime as u32,
+                        unilateral_claim_delay: data.unilateral_claim_delay,
+                        unilateral_refund_delay: data.unilateral_refund_delay,
+                        unilateral_refund_without_receiver_delay: data
+                            .unilateral_refund_without_receiver_delay,
+                        network: data.network.parse()?,
+                        vhtlc_address: data.btc_vhtlc_address.clone(),
+                    },
+                    swap_data.swap_params,
+                    self.wallet.network(),
+                )
+                .await?;
+                Ok(txid.to_string())
+            }
+            _ => Err(Error::Vhtlc(
+                "Swap was not a BtcToEvm or ArkadeToEvm swap".to_string(),
+            )),
         }
     }
 

@@ -307,6 +307,11 @@ async fn test_get_swap() {
                     println!("  ID: {}", s.id);
                     println!("  Status: {:?}", s.status);
                 }
+                GetSwapResponse::ArkadeToEvm(s) => {
+                    println!("  Direction: Arkade -> EVM");
+                    println!("  ID: {}", s.id);
+                    println!("  Status: {:?}", s.status);
+                }
             }
         }
         Err(e) => println!("Failed to get swap: {:#}", e),

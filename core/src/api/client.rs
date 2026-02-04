@@ -3,12 +3,12 @@
 use crate::error::{Error, Result};
 
 use super::types::{
-    ApiError, AssetPair, BtcToArkadeSwapRequest, BtcToArkadeSwapResponse, BtcToEvmSwapRequest,
-    BtcToEvmSwapResponse, ClaimGelatoRequest, CreateVtxoSwapRequest, EstimateVtxoSwapRequest,
-    EstimateVtxoSwapResponse, EvmChain, EvmToArkadeSwapRequest, EvmToBtcSwapResponse,
-    EvmToLightningSwapRequest, GetSwapResponse, OnchainToEvmSwapRequest, OnchainToEvmSwapResponse,
-    QuoteRequest, QuoteResponse, RecoverSwapsRequest, RecoverSwapsResponse, TokenInfo, Version,
-    VtxoSwapResponse,
+    ApiError, ArkadeToEvmSwapCreateResponse, ArkadeToEvmSwapRequest, AssetPair,
+    BtcToArkadeSwapRequest, BtcToArkadeSwapResponse, BtcToEvmSwapRequest, BtcToEvmSwapResponse,
+    ClaimGelatoRequest, CreateVtxoSwapRequest, EstimateVtxoSwapRequest, EstimateVtxoSwapResponse,
+    EvmChain, EvmToArkadeSwapRequest, EvmToBtcSwapResponse, EvmToLightningSwapRequest,
+    GetSwapResponse, OnchainToEvmSwapRequest, OnchainToEvmSwapResponse, QuoteRequest,
+    QuoteResponse, RecoverSwapsRequest, RecoverSwapsResponse, TokenInfo, Version, VtxoSwapResponse,
 };
 
 /// Lendaswap API client.
@@ -181,6 +181,18 @@ impl ApiClient {
         target_network: EvmChain,
     ) -> Result<OnchainToEvmSwapResponse> {
         let url = format!("{}/swap/bitcoin/{}", self.base_url, target_network);
+        self.post_json(&url, request).await
+    }
+
+    /// Create an Arkade-to-EVM swap via the chain-agnostic endpoint.
+    ///
+    /// Uses `POST /swap/arkade/evm` which takes `evm_chain_id` + `token_address`
+    /// instead of per-chain paths. Supports any token reachable through 1inch.
+    pub async fn create_arkade_to_evm_swap_generic(
+        &self,
+        request: &ArkadeToEvmSwapRequest,
+    ) -> Result<ArkadeToEvmSwapCreateResponse> {
+        let url = format!("{}/swap/arkade/evm", self.base_url);
         self.post_json(&url, request).await
     }
 
