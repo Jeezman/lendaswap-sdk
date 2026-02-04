@@ -1569,28 +1569,64 @@ export class Client {
     }
 
     // Ensure we have a btc_to_evm swap response (Arkade swaps)
-    if (swap.direction !== "btc_to_evm") {
+    if (swap.direction !== "btc_to_evm" && swap.direction !== "arkade_to_evm") {
       return {
         success: false,
         message: `Expected btc_to_evm swap, got ${swap.direction}`,
       };
     }
 
-    // Type assertion - we've verified direction is btc_to_evm
-    const arkadeSwap = swap as BtcToEvmSwapResponse & {
-      direction: "btc_to_evm";
-    };
+    // Extract VHTLC parameters — field names differ between btc_to_evm and arkade_to_evm
+    let lendaswapPubKey: string;
+    let arkadeServerPubKey: string;
+    let vhtlcAddress: string;
+    let vhtlcRefundLocktime: number;
+    let unilateralClaimDelay: number;
+    let unilateralRefundDelay: number;
+    let unilateralRefundWithoutReceiverDelay: number;
+    let hashLockRaw: string;
+    let network: string;
+
+    if (swap.direction === "arkade_to_evm") {
+      const s = swap as ArkadeToEvmSwapResponse & {
+        direction: "arkade_to_evm";
+      };
+      lendaswapPubKey = s.receiver_pk;
+      arkadeServerPubKey = s.arkade_server_pk;
+      vhtlcAddress = s.btc_vhtlc_address;
+      vhtlcRefundLocktime = s.vhtlc_refund_locktime;
+      unilateralClaimDelay = s.unilateral_claim_delay;
+      unilateralRefundDelay = s.unilateral_refund_delay;
+      unilateralRefundWithoutReceiverDelay =
+        s.unilateral_refund_without_receiver_delay;
+      hashLockRaw = s.hash_lock;
+      network = s.network;
+    } else {
+      const s = swap as BtcToEvmSwapResponse & {
+        direction: "btc_to_evm";
+      };
+      lendaswapPubKey = s.receiver_pk;
+      arkadeServerPubKey = s.server_pk;
+      vhtlcAddress = s.htlc_address_arkade;
+      vhtlcRefundLocktime = s.vhtlc_refund_locktime;
+      unilateralClaimDelay = s.unilateral_claim_delay;
+      unilateralRefundDelay = s.unilateral_refund_delay;
+      unilateralRefundWithoutReceiverDelay =
+        s.unilateral_refund_without_receiver_delay;
+      hashLockRaw = s.hash_lock;
+      network = s.network;
+    }
 
     // Check refund locktime
     const now = Math.floor(Date.now() / 1000);
-    if (now < arkadeSwap.vhtlc_refund_locktime) {
-      const remainingSeconds = arkadeSwap.vhtlc_refund_locktime - now;
+    if (now < vhtlcRefundLocktime) {
+      const remainingSeconds = vhtlcRefundLocktime - now;
       const remainingMinutes = Math.ceil(remainingSeconds / 60);
       return {
         success: false,
         message:
           `Refund is not yet available. The VHTLC locktime expires in ${remainingMinutes} minutes ` +
-          `(at ${new Date(arkadeSwap.vhtlc_refund_locktime * 1000).toISOString()}).`,
+          `(at ${new Date(vhtlcRefundLocktime * 1000).toISOString()}).`,
       };
     }
 
@@ -1602,25 +1638,24 @@ export class Client {
       fullPubKey.length === 66 ? fullPubKey.slice(2) : fullPubKey;
 
     // Parse the hash lock - remove 0x prefix if present
-    const hashLock = arkadeSwap.hash_lock.startsWith("0x")
-      ? arkadeSwap.hash_lock.slice(2)
-      : arkadeSwap.hash_lock;
+    const hashLock = hashLockRaw.startsWith("0x")
+      ? hashLockRaw.slice(2)
+      : hashLockRaw;
 
     try {
       const result = await buildArkadeRefund({
         userSecretKey: storedSwap.secretKey,
         userPubKey,
-        lendaswapPubKey: arkadeSwap.receiver_pk,
-        arkadeServerPubKey: arkadeSwap.server_pk,
+        lendaswapPubKey,
+        arkadeServerPubKey,
         hashLock,
-        vhtlcAddress: arkadeSwap.htlc_address_arkade,
-        refundLocktime: arkadeSwap.vhtlc_refund_locktime,
-        unilateralClaimDelay: arkadeSwap.unilateral_claim_delay,
-        unilateralRefundDelay: arkadeSwap.unilateral_refund_delay,
-        unilateralRefundWithoutReceiverDelay:
-          arkadeSwap.unilateral_refund_without_receiver_delay,
+        vhtlcAddress,
+        refundLocktime: vhtlcRefundLocktime,
+        unilateralClaimDelay,
+        unilateralRefundDelay,
+        unilateralRefundWithoutReceiverDelay,
         destinationAddress: options.destinationAddress,
-        network: arkadeSwap.network,
+        network,
         arkadeServerUrl:
           options.arkadeServerUrl ?? this.#config.arkadeServerUrl,
       });
