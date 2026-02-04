@@ -434,6 +434,7 @@ pub enum SwapDirection {
     EvmToBtc,
     BtcToArkade,
     OnchainToEvm,
+    ArkadeToEvm,
 }
 
 /// Tagged union for swap responses.
@@ -444,6 +445,7 @@ pub enum GetSwapResponse {
     EvmToBtc(EvmToBtcSwapResponse),
     BtcToArkade(BtcToArkadeSwapResponse),
     OnchainToEvm(OnchainToEvmSwapResponse),
+    ArkadeToEvm(ArkadeToEvmSwapResponse),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -490,6 +492,7 @@ impl GetSwapResponse {
             GetSwapResponse::EvmToBtc(r) => Some(&r.common),
             GetSwapResponse::BtcToArkade(_) => None,
             GetSwapResponse::OnchainToEvm(_) => None,
+            GetSwapResponse::ArkadeToEvm(_) => None,
         }
     }
 
@@ -500,6 +503,7 @@ impl GetSwapResponse {
             GetSwapResponse::EvmToBtc(r) => r.common.id.to_string(),
             GetSwapResponse::BtcToArkade(r) => r.id.to_string(),
             GetSwapResponse::OnchainToEvm(r) => r.id.to_string(),
+            GetSwapResponse::ArkadeToEvm(r) => r.id.to_string(),
         }
     }
 
@@ -510,6 +514,7 @@ impl GetSwapResponse {
             GetSwapResponse::EvmToBtc(r) => r.common.status,
             GetSwapResponse::BtcToArkade(r) => r.status,
             GetSwapResponse::OnchainToEvm(r) => r.status,
+            GetSwapResponse::ArkadeToEvm(r) => r.status,
         }
     }
 
@@ -520,6 +525,7 @@ impl GetSwapResponse {
             GetSwapResponse::EvmToBtc(_) => SwapDirection::EvmToBtc,
             GetSwapResponse::BtcToArkade(_) => SwapDirection::BtcToArkade,
             GetSwapResponse::OnchainToEvm(_) => SwapDirection::OnchainToEvm,
+            GetSwapResponse::ArkadeToEvm(_) => SwapDirection::ArkadeToEvm,
         }
     }
 }
@@ -876,4 +882,139 @@ pub struct OnchainToEvmSwapResponse {
     pub target_amount: f64,
     /// Amount user must send in satoshis
     pub source_amount: u64,
+}
+
+// ============================================================================
+// Arkade-to-EVM Swap Types (chain-agnostic endpoint)
+// ============================================================================
+
+/// Token summary returned in Arkade-to-EVM creation responses.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenSummary {
+    pub address: String,
+    pub symbol: String,
+    pub decimals: u32,
+}
+
+/// DEX swap calldata for the coordinator contract.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DexCallData {
+    pub to: String,
+    pub data: String,
+    pub value: String,
+}
+
+/// Request to create an Arkade-to-EVM swap via the chain-agnostic endpoint.
+///
+/// Uses `evm_chain_id` + `token_address` instead of per-chain paths.
+/// Supports any token reachable through 1inch aggregation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArkadeToEvmSwapRequest {
+    /// Target EVM address to receive the tokens.
+    pub target_address: String,
+    /// Numeric EVM chain ID (1 = Ethereum, 137 = Polygon, 42161 = Arbitrum).
+    pub evm_chain_id: u64,
+    /// ERC-20 contract address of the desired token on the target chain.
+    pub token_address: String,
+    /// How many sats the user wants to send (mutually exclusive with `amount_out`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub amount_in: Option<u64>,
+    /// How much target token the user wants to receive (mutually exclusive with `amount_in`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub amount_out: Option<u64>,
+    /// Hash lock (32-byte hex string with 0x prefix).
+    pub hash_lock: String,
+    /// Refund public key for the Arkade VHTLC.
+    pub refund_pk: String,
+    /// User ID for recovery purposes.
+    pub user_id: String,
+    /// Optional referral code.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub referral_code: Option<String>,
+}
+
+/// Response from creating an Arkade-to-EVM swap (creation endpoint).
+///
+/// This is the response from `POST /swap/arkade/evm`. It uses `TokenSummary`
+/// objects for source/target tokens and includes `dex_call_data`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArkadeToEvmSwapCreateResponse {
+    pub id: Uuid,
+    pub status: String,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+    pub evm_chain_id: u64,
+    pub chain: String,
+    pub source_token: TokenSummary,
+    pub target_token: TokenSummary,
+    pub btc_expected_sats: i64,
+    pub evm_expected_sats: i64,
+    pub target_token_amount: Option<u64>,
+    pub fee_sats: i64,
+    pub hash_lock: String,
+    pub btc_vhtlc_address: String,
+    /// HTLCErc20 contract address.
+    pub evm_htlc_address: String,
+    /// HTLCCoordinator contract address.
+    pub evm_coordinator_address: String,
+    pub server_evm_address: String,
+    pub evm_refund_locktime: u64,
+    pub sender_pk: String,
+    pub receiver_pk: String,
+    pub arkade_server_pk: String,
+    pub network: String,
+    pub vhtlc_refund_locktime: u64,
+    pub unilateral_claim_delay: i64,
+    pub unilateral_refund_delay: i64,
+    pub unilateral_refund_without_receiver_delay: i64,
+    /// DEX swap calldata for non-WBTC targets.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dex_call_data: Option<DexCallData>,
+}
+
+/// Arkade → EVM swap response (from get_swap endpoint).
+///
+/// This matches the `GetSwapResponse::ArkadeToEvm` variant returned by
+/// `GET /swap/{id}`. Uses `TokenId` strings instead of `TokenSummary` objects.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArkadeToEvmSwapResponse {
+    pub id: Uuid,
+    pub status: SwapStatus,
+    pub fee_sats: i64,
+    pub hash_lock: String,
+    pub source_token: TokenId,
+    pub target_token: TokenId,
+    #[serde(with = "time::serde::rfc3339")]
+    pub created_at: OffsetDateTime,
+    pub chain: String,
+    pub evm_chain_id: i64,
+    pub target_token_address: String,
+    pub target_token_symbol: String,
+    pub target_token_decimals: i64,
+    pub btc_expected_sats: i64,
+    pub evm_expected_sats: i64,
+    pub target_token_amount: Option<i64>,
+    pub btc_vhtlc_address: String,
+    pub btc_fund_txid: Option<String>,
+    pub btc_claim_txid: Option<String>,
+    /// HTLCErc20 contract address.
+    pub evm_htlc_address: String,
+    /// HTLCCoordinator contract address.
+    pub evm_coordinator_address: String,
+    pub client_evm_address: String,
+    pub server_evm_address: String,
+    pub evm_fund_txid: Option<String>,
+    pub evm_claim_txid: Option<String>,
+    pub evm_refund_locktime: i64,
+    pub sender_pk: String,
+    pub receiver_pk: String,
+    pub arkade_server_pk: String,
+    pub vhtlc_refund_locktime: i64,
+    pub unilateral_claim_delay: i64,
+    pub unilateral_refund_delay: i64,
+    pub unilateral_refund_without_receiver_delay: i64,
+    pub network: String,
+    /// DEX swap calldata for non-WBTC targets.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dex_call_data: Option<DexCallData>,
 }

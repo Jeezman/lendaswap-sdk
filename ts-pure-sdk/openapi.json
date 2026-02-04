@@ -397,6 +397,51 @@
         }
       }
     },
+    "/swap/arkade/evm": {
+      "post": {
+        "tags": ["swap-arkade-evm"],
+        "summary": "Create a chain-agnostic Arkade-to-EVM swap.",
+        "operationId": "create_arkade_evm_swap",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArkadeToEvmSwapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Swap created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArkadeToEvmSwapResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/swap/arkade/polygon": {
       "post": {
         "tags": ["swap-arkade-polygon"],
@@ -1022,6 +1067,59 @@
         }
       }
     },
+    "/swap/{id}/claim-gasless": {
+      "post": {
+        "tags": ["gasless"],
+        "summary": "Claims an Arkade-to-EVM swap gaslessly via the HTLCCoordinator contract.",
+        "description": "The server submits `coordinator.redeemAndExecute` on the client's behalf,\nusing the client's EIP-712 signature and secret.",
+        "operationId": "claim_via_gasless",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Swap ID",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ClaimGaslessRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Swap claimed successfully via gasless execution",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimGaslessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - swap not found or in wrong state",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/swap/{id}/claim-gelato": {
       "post": {
         "tags": ["gelato"],
@@ -1351,6 +1449,143 @@
           "user_id": {
             "type": "string",
             "description": "User ID derived from wallet for recovery purposes"
+          }
+        }
+      },
+      "ArkadeToEvmSwapRequest": {
+        "type": "object",
+        "description": "Chain-agnostic request for Arkade-to-EVM swaps.\n\nThe caller specifies the target chain via `evm_chain_id` and the token\nvia its ERC-20 contract `token_address`. This endpoint supports any token\nreachable through 1inch aggregation (which covers Uniswap, Curve, etc.).",
+        "required": [
+          "target_address",
+          "evm_chain_id",
+          "token_address",
+          "hash_lock",
+          "refund_pk",
+          "user_id"
+        ],
+        "properties": {
+          "amount_in": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "How many sats the user wants to send (mutually exclusive with `amount_out`).\nValue is in satoshis (smallest BTC unit).",
+            "minimum": 0
+          },
+          "amount_out": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "How much target token the user wants to receive (mutually exclusive with `amount_in`).\nValue is in the target token's smallest unit (e.g. for USDC with 6 decimals, 1000000 = 1 USDC).",
+            "minimum": 0
+          },
+          "evm_chain_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Numeric EVM chain ID: 1 (Ethereum), 137 (Polygon), 42161 (Arbitrum).",
+            "minimum": 0
+          },
+          "hash_lock": {
+            "type": "string",
+            "description": "Hash lock provided by the client (32-byte hex string with 0x prefix)."
+          },
+          "referral_code": {
+            "type": ["string", "null"],
+            "description": "Optional referral code for tracking."
+          },
+          "refund_pk": {
+            "type": "string",
+            "description": "Refund public key used to generate the Arkade VHTLC."
+          },
+          "target_address": {
+            "type": "string",
+            "description": "Target EVM address to receive the tokens."
+          },
+          "token_address": {
+            "type": "string",
+            "description": "ERC-20 contract address of the desired token on the target chain."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User ID derived from wallet for recovery purposes."
+          }
+        }
+      },
+      "ArkadeToEvmSwapResponse": {
+        "type": "object",
+        "description": "Arkade → EVM swap response",
+        "required": [
+          "id",
+          "status",
+          "fee_sats",
+          "hash_lock",
+          "source_token",
+          "target_token",
+          "created_at",
+          "chain",
+          "evm_chain_id",
+          "target_token_address",
+          "target_token_symbol",
+          "target_token_decimals",
+          "btc_expected_sats",
+          "evm_expected_sats",
+          "btc_vhtlc_address",
+          "evm_htlc_address",
+          "evm_coordinator_address",
+          "client_evm_address",
+          "server_evm_address",
+          "evm_refund_locktime",
+          "sender_pk",
+          "receiver_pk",
+          "arkade_server_pk",
+          "vhtlc_refund_locktime",
+          "unilateral_claim_delay",
+          "unilateral_refund_delay",
+          "unilateral_refund_without_receiver_delay",
+          "network"
+        ],
+        "properties": {
+          "arkade_server_pk": { "type": "string" },
+          "btc_claim_txid": { "type": ["string", "null"] },
+          "btc_expected_sats": { "type": "integer", "format": "int64" },
+          "btc_fund_txid": { "type": ["string", "null"] },
+          "btc_vhtlc_address": { "type": "string" },
+          "chain": { "type": "string" },
+          "client_evm_address": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "evm_chain_id": { "type": "integer", "format": "int64" },
+          "evm_claim_txid": { "type": ["string", "null"] },
+          "evm_coordinator_address": { "type": "string" },
+          "evm_expected_sats": { "type": "integer", "format": "int64" },
+          "evm_fund_txid": { "type": ["string", "null"] },
+          "evm_htlc_address": { "type": "string" },
+          "evm_refund_locktime": { "type": "integer", "format": "int64" },
+          "fee_sats": { "type": "integer", "format": "int64" },
+          "hash_lock": { "type": "string" },
+          "id": { "type": "string" },
+          "network": { "type": "string" },
+          "receiver_pk": { "type": "string" },
+          "sender_pk": { "type": "string" },
+          "server_evm_address": { "type": "string" },
+          "source_token": { "$ref": "#/components/schemas/TokenId" },
+          "status": { "$ref": "#/components/schemas/SwapStatus" },
+          "target_token": { "$ref": "#/components/schemas/TokenId" },
+          "target_token_address": { "type": "string" },
+          "target_token_amount": {
+            "type": ["integer", "null"],
+            "format": "int64"
+          },
+          "target_token_decimals": { "type": "integer", "format": "int64" },
+          "target_token_symbol": { "type": "string" },
+          "unilateral_claim_delay": { "type": "integer", "format": "int64" },
+          "unilateral_refund_delay": { "type": "integer", "format": "int64" },
+          "unilateral_refund_without_receiver_delay": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "vhtlc_refund_locktime": { "type": "integer", "format": "int64" },
+          "dex_call_data": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/DexCallData" },
+              { "type": "null" }
+            ]
           }
         }
       },
@@ -1804,6 +2039,44 @@
           "Arbitrum"
         ]
       },
+      "ClaimGaslessRequest": {
+        "type": "object",
+        "required": ["secret", "destination", "v", "r", "s"],
+        "properties": {
+          "destination": {
+            "type": "string",
+            "description": "EVM address where tokens should be sent"
+          },
+          "r": {
+            "type": "string",
+            "description": "EIP-712 signature r (32-byte hex string, with or without 0x prefix)"
+          },
+          "s": {
+            "type": "string",
+            "description": "EIP-712 signature s (32-byte hex string, with or without 0x prefix)"
+          },
+          "secret": {
+            "type": "string",
+            "description": "The secret/preimage (32-byte hex string, with or without 0x prefix)"
+          },
+          "v": {
+            "type": "integer",
+            "format": "int32",
+            "description": "EIP-712 signature v",
+            "minimum": 0
+          }
+        }
+      },
+      "ClaimGaslessResponse": {
+        "type": "object",
+        "required": ["id", "status", "tx_hash", "message"],
+        "properties": {
+          "id": { "type": "string", "description": "Swap ID" },
+          "message": { "type": "string", "description": "Success message" },
+          "status": { "type": "string", "description": "Current swap status" },
+          "tx_hash": { "type": "string", "description": "Transaction hash" }
+        }
+      },
       "ClaimGelatoRequest": {
         "type": "object",
         "required": ["secret"],
@@ -2157,6 +2430,18 @@
                 }
               }
             ]
+          },
+          {
+            "allOf": [
+              { "$ref": "#/components/schemas/ArkadeToEvmSwapResponse" },
+              {
+                "type": "object",
+                "required": ["direction"],
+                "properties": {
+                  "direction": { "type": "string", "enum": ["arkade_to_evm"] }
+                }
+              }
+            ]
           }
         ]
       },
@@ -2419,6 +2704,16 @@
             "$ref": "#/components/schemas/TokenId",
             "description": "Target token (e.g., polygon_usdc)"
           }
+        }
+      },
+      "DexCallData": {
+        "type": "object",
+        "description": "DEX swap calldata for the coordinator contract.",
+        "required": ["to", "data", "value"],
+        "properties": {
+          "data": { "type": "string" },
+          "to": { "type": "string" },
+          "value": { "type": "string" }
         }
       },
       "PolygonToArkadeSwapRequest": {
@@ -2785,6 +3080,16 @@
           "token_id": { "$ref": "#/components/schemas/TokenId" }
         }
       },
+      "TokenSummary": {
+        "type": "object",
+        "description": "Token summary returned in the response.",
+        "required": ["address", "symbol", "decimals"],
+        "properties": {
+          "address": { "type": "string" },
+          "decimals": { "type": "integer", "format": "int32", "minimum": 0 },
+          "symbol": { "type": "string" }
+        }
+      },
       "TradingPairPrices": {
         "type": "object",
         "required": ["pair", "source", "target", "tiers"],
@@ -2954,6 +3259,10 @@
     {
       "name": "swap-onchain-ethereum",
       "description": "Create on-chain Bitcoin to Ethereum swaps."
+    },
+    {
+      "name": "swap-arkade-evm",
+      "description": "Create chain-agnostic Arkade to EVM swaps."
     },
     {
       "name": "swap-arkade-arbitrum",

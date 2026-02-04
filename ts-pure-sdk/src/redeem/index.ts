@@ -5,13 +5,16 @@
  * - Gelato relay for gasless EVM claims (Polygon, Arbitrum)
  * - Manual claiming with call data for Ethereum
  * - Arkade VHTLC claiming for EVM-to-Arkade swaps
+ * - Coordinator redeemAndExecute for Arkade-to-EVM swaps
  */
 
+import type { ArkadeToEvmSwapResponse } from "../api/client.js";
 import { buildEthereumClaimData } from "./ethereum.js";
 import { claimGasless } from "./gasless.js";
 import {
   type ArkadeClaimData,
   type ClaimResult,
+  type CoordinatorClaimData,
   getChainFromTokenId,
   type RedeemContext,
 } from "./types.js";
@@ -28,7 +31,9 @@ export { encodeClaimSwapCallData, uuidToBytes32 } from "./ethereum.js";
 export type {
   ArkadeClaimData,
   ClaimChain,
+  ClaimGaslessResult,
   ClaimResult,
+  CoordinatorClaimData,
   EthereumClaimData,
   RedeemContext,
 } from "./types.js";
@@ -37,7 +42,8 @@ export { getChainFromTokenId } from "./types.js";
 /**
  * Claims a swap by revealing the preimage.
  *
- * The claim method depends on the target chain:
+ * The claim method depends on the swap direction and target chain:
+ * - **Arkade-to-EVM**: Returns coordinator data for `redeemAndExecute` (user must sign EIP-712 and submit tx)
  * - **Polygon/Arbitrum**: Uses Gelato Relay for gasless execution
  * - **Ethereum**: Returns call data for manual claiming
  * - **Arkade**: Returns data needed for `buildArkadeClaim()`
@@ -51,18 +57,15 @@ export { getChainFromTokenId } from "./types.js";
  * ```ts
  * const result = await claim(swapId, storedSwap.preimage, ctx);
  * if (result.success) {
- *   if (result.chain === "arkade") {
+ *   if (result.coordinatorClaimData) {
+ *     // Arkade-to-EVM: build EIP-712 sig and call redeemAndExecute
+ *     const digest = buildRedeemDigest({ ... result.coordinatorClaimData });
+ *     // Sign digest with EVM wallet, then encodeRedeemAndExecute(...)
+ *   } else if (result.chain === "arkade") {
  *     // Arkade claim needs user's keys
- *     const claimResult = await buildArkadeClaim({
- *       ...result.arkadeClaimData,
- *       userSecretKey: mySecretKey,
- *       userPubKey: myPubKey,
- *       preimage: storedSwap.preimage,
- *       destinationAddress: myArkadeAddress,
- *     });
+ *     await buildArkadeClaim({ ...result.arkadeClaimData, ... });
  *   } else if (result.chain === "ethereum") {
- *     // Manual EVM claim needed
- *     console.log("Contract:", result.ethereumClaimData.contractAddress);
+ *     // Manual EVM claim
  *     console.log("Call data:", result.ethereumClaimData.callData);
  *   } else {
  *     // Gelato relay (Polygon/Arbitrum)
@@ -78,6 +81,14 @@ export async function claim(
 ): Promise<ClaimResult> {
   // Get the swap to determine target chain
   const swap = await ctx.getSwap(id);
+
+  // Check if this is an arkade_to_evm swap (uses coordinator redeemAndExecute)
+  if ("direction" in swap && swap.direction === "arkade_to_evm") {
+    return buildCoordinatorClaimData(
+      swap as unknown as ArkadeToEvmSwapResponse,
+    );
+  }
+
   const targetToken = swap.target_token;
   const chain = getChainFromTokenId(targetToken);
 
@@ -111,6 +122,37 @@ export async function claim(
 
   // Polygon and Arbitrum use Gelato relay
   return claimGasless(id, secret, chain, ctx);
+}
+
+/**
+ * Builds the claim data for an Arkade-to-EVM swap (coordinator redeemAndExecute).
+ *
+ * The user must:
+ * 1. Build the EIP-712 digest using `buildRedeemDigest()` from `evm/coordinator`
+ * 2. Sign the digest with their EVM wallet
+ * 3. Build the transaction using `encodeRedeemAndExecute()`
+ * 4. Submit the transaction to the coordinator contract
+ */
+function buildCoordinatorClaimData(swap: ArkadeToEvmSwapResponse): ClaimResult {
+  const coordinatorClaimData: CoordinatorClaimData = {
+    htlcAddress: swap.evm_htlc_address,
+    coordinatorAddress: swap.evm_coordinator_address,
+    chainId: swap.evm_chain_id,
+    amount: swap.evm_expected_sats,
+    wbtcAddress: swap.target_token_address,
+    sender: swap.server_evm_address,
+    timelock: swap.evm_refund_locktime,
+    dexCallData: swap.dex_call_data,
+    targetTokenAddress: swap.target_token_address,
+    network: swap.network,
+  };
+
+  return {
+    success: true,
+    message:
+      "Arkade-to-EVM claims require EIP-712 signing. Use buildRedeemDigest() and encodeRedeemAndExecute() with the provided data.",
+    coordinatorClaimData,
+  };
 }
 
 /**

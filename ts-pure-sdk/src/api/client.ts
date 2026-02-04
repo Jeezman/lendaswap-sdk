@@ -52,6 +52,14 @@ export type EthereumToArkadeSwapRequest =
 export type ClaimGelatoRequest = components["schemas"]["ClaimGelatoRequest"];
 export type ClaimGelatoResponse = components["schemas"]["ClaimGelatoResponse"];
 
+// Arkade-to-EVM (generic endpoint) types
+export type ArkadeToEvmSwapRequest =
+  components["schemas"]["ArkadeToEvmSwapRequest"];
+export type ArkadeToEvmSwapResponse =
+  components["schemas"]["ArkadeToEvmSwapResponse"];
+export type DexCallData = components["schemas"]["DexCallData"];
+export type TokenSummary = components["schemas"]["TokenSummary"];
+
 export interface ApiClientOptions {
   baseUrl: string;
   apiKey?: string;

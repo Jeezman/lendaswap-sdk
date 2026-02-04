@@ -21,6 +21,30 @@ export interface EthereumClaimData {
   functionSignature: string;
 }
 
+/** Data needed for Arkade-to-EVM coordinator claims (redeemAndExecute) */
+export interface CoordinatorClaimData {
+  /** HTLCErc20 contract address (for EIP-712 domain) */
+  htlcAddress: string;
+  /** HTLCCoordinator contract address (target for redeemAndExecute) */
+  coordinatorAddress: string;
+  /** EVM chain ID */
+  chainId: number;
+  /** WBTC amount locked in the HTLC (evm_expected_sats) */
+  amount: number;
+  /** WBTC token address (derived from chain config or response) */
+  wbtcAddress: string;
+  /** HTLC sender (server's EVM address) */
+  sender: string;
+  /** EVM refund locktime (unix timestamp) */
+  timelock: number;
+  /** DEX swap calldata (null for WBTC-to-WBTC swaps) */
+  dexCallData?: { to: string; data: string; value: string } | null;
+  /** Target token address (for sweepToken) */
+  targetTokenAddress: string;
+  /** Bitcoin network */
+  network: string;
+}
+
 /** Data needed for Arkade VHTLC claims */
 export interface ArkadeClaimData {
   /** Lendaswap's public key (SENDER in the VHTLC) */
@@ -57,6 +81,20 @@ export interface ClaimResult {
   ethereumClaimData?: EthereumClaimData;
   /** Data for Arkade VHTLC claims */
   arkadeClaimData?: ArkadeClaimData;
+  /** Data for Arkade-to-EVM coordinator claims (redeemAndExecute) */
+  coordinatorClaimData?: CoordinatorClaimData;
+}
+
+/** Result of a gasless claim via the server-side claim-gasless endpoint */
+export interface ClaimGaslessResult {
+  /** Swap ID */
+  id: string;
+  /** Current swap status */
+  status: string;
+  /** Transaction hash of the redeemAndExecute call */
+  txHash: string;
+  /** Success message */
+  message: string;
 }
 
 /**

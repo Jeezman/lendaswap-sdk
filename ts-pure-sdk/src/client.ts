@@ -1,5 +1,6 @@
 import {
   type ApiClient,
+  type ArkadeToEvmSwapResponse,
   type AssetPair,
   type BtcToArkadeSwapResponse,
   type BtcToEvmSwapResponse,
@@ -12,6 +13,8 @@ import {
 } from "./api/client.js";
 import { getVhtlcAmounts, type VhtlcAmounts } from "./arkade.js";
 import {
+  type ArkadeToEvmSwapOptions,
+  type ArkadeToEvmSwapResult,
   type BitcoinToArkadeSwapOptions,
   type BitcoinToArkadeSwapResult,
   type BitcoinToEvmSwapOptions,
@@ -20,6 +23,7 @@ import {
   type BtcToEvmSwapResult,
   type CreateSwapContext,
   createArkadeToEvmSwap,
+  createArkadeToEvmSwapGeneric,
   createBitcoinToArkadeSwap,
   createBitcoinToEvmSwap,
   createEvmToArkadeSwap,
@@ -32,11 +36,14 @@ import {
 } from "./create/index.js";
 import { broadcastTransaction, findOutputByAddress } from "./esplora.js";
 import {
+  buildRedeemDigest,
   encodeApproveCallData,
   encodeRefundSwapCallData,
+  signEvmDigest,
 } from "./evm/index.js";
 import {
   buildArkadeClaim,
+  type ClaimGaslessResult,
   type ClaimResult,
   claim as redeemClaim,
 } from "./redeem/index.js";
@@ -56,6 +63,8 @@ import {
 
 // Re-export types from create module for backwards compatibility
 export type {
+  ArkadeToEvmSwapOptions,
+  ArkadeToEvmSwapResult,
   BitcoinToArkadeSwapOptions,
   BitcoinToArkadeSwapResult,
   BitcoinToEvmSwapOptions,
@@ -69,9 +78,23 @@ export type {
   EvmToLightningSwapResult,
 } from "./create/index.js";
 export type { BitcoinToEvmSwapResponse } from "./create/types.js";
-
+// Re-export coordinator utilities for Arkade-to-EVM redeemAndExecute flow
+export {
+  buildRedeemCalls,
+  buildRedeemDigest,
+  type CoordinatorCall,
+  encodeRedeemAndExecute,
+  type RedeemAndExecuteCallData,
+  type RedeemAndExecuteParams,
+  type RedeemDigestParams,
+} from "./evm/index.js";
 // Re-export types from redeem module
-export type { ClaimResult, EthereumClaimData } from "./redeem/index.js";
+export type {
+  ClaimGaslessResult,
+  ClaimResult,
+  CoordinatorClaimData,
+  EthereumClaimData,
+} from "./redeem/index.js";
 
 /** Result of attempting a refund */
 export interface RefundResult {
@@ -122,6 +145,12 @@ export interface ArkadeClaimOptions {
   destinationAddress: string;
   /** Arkade server URL (optional, uses default based on network) */
   arkadeServerUrl?: string;
+}
+
+/** Options for claiming a swap */
+export interface ClaimOptions {
+  /** EVM address where tokens should be sent (required for Arkade-to-EVM gasless claims) */
+  destination?: string;
 }
 
 /** Result of getting EVM funding call data */
@@ -762,10 +791,11 @@ export class Client {
     if (
       swap.direction !== "btc_to_evm" &&
       swap.direction !== "evm_to_btc" &&
-      swap.direction !== "btc_to_arkade"
+      swap.direction !== "btc_to_arkade" &&
+      swap.direction !== "arkade_to_evm"
     ) {
       throw new Error(
-        `amountsForSwap only applies to btc_to_evm, evm_to_btc, or btc_to_arkade swaps, got ${swap.direction}`,
+        `amountsForSwap only applies to btc_to_evm, evm_to_btc, btc_to_arkade, or arkade_to_evm swaps, got ${swap.direction}`,
       );
     }
 
@@ -773,6 +803,10 @@ export class Client {
     let vhtlcAddress: string | undefined;
     if (swap.direction === "btc_to_arkade") {
       vhtlcAddress = (swap as BtcToArkadeSwapResponse).arkade_vhtlc_address;
+    } else if (swap.direction === "arkade_to_evm") {
+      vhtlcAddress = (
+        swap as ArkadeToEvmSwapResponse & { direction: "arkade_to_evm" }
+      ).btc_vhtlc_address;
     } else {
       vhtlcAddress = (swap as BtcToEvmSwapResponse | EvmToBtcSwapResponse)
         .htlc_address_arkade;
@@ -796,29 +830,31 @@ export class Client {
    * Claims a swap by revealing the preimage.
    *
    * Reads swap data and preimage from local storage. The claim method
-   * depends on the target chain:
+   * depends on the swap direction and target chain:
+   * - **Arkade-to-EVM**: Gasless claim via server (requires `evmSigner` and `destination` in options)
    * - **Polygon/Arbitrum**: Uses Gelato Relay for gasless execution
    * - **Ethereum**: Returns call data for manual claiming
    * - **Arkade**: Claims via Arkade protocol
    *
    * @param id - The UUID of the swap.
+   * @param options - Optional claim configuration. Required for Arkade-to-EVM swaps.
    * @returns A ClaimResult with the outcome.
    *
    * @example
    * ```ts
+   * // Arkade-to-EVM (gasless via server, SDK signs internally)
+   * const result = await client.claim(swapId, {
+   *   destination: "0xYourAddress",
+   * });
+   *
+   * // Other swap types
    * const result = await client.claim(swapId);
    * if (result.success) {
-   *   if (result.chain === "arkade") {
-   *     console.log("Arkade TX:", result.txHash);
-   *   } else {
-   *     console.log("Claim TX:", result.txHash);
-   *   }
-   * } else {
-   *   console.error("Claim failed:", result.message);
+   *   console.log("Claim TX:", result.txHash);
    * }
    * ```
    */
-  async claim(id: string): Promise<ClaimResult> {
+  async claim(id: string, options?: ClaimOptions): Promise<ClaimResult> {
     // Check swap storage is configured
     if (!this.#swapStorage) {
       return {
@@ -839,6 +875,28 @@ export class Client {
 
     const swap = storedSwap.response;
     const secret = storedSwap.preimage;
+    console.log(`we found our swap ${storedSwap.swapId}`);
+
+    // Arkade-to-EVM: use gasless claim via server (SDK signs internally)
+    if (swap.direction === "arkade_to_evm") {
+      console.log(`We are here`);
+      if (!options?.destination) {
+        return {
+          success: false,
+          message:
+            "Arkade-to-EVM claims require a destination address. " +
+            'Pass it via claim(id, { destination: "0x..." }).',
+        };
+      }
+      console.log(`We are here too`);
+      const gaslessResult = await this.claimViaGasless(id, options.destination);
+      console.log(`we claimed`);
+      return {
+        success: true,
+        message: gaslessResult.message,
+        txHash: gaslessResult.txHash,
+      };
+    }
 
     // Check if target is Arkade
     if (swap.target_token === "btc_arkade") {
@@ -881,6 +939,125 @@ export class Client {
       apiClient: this.#apiClient,
       getSwap: () => Promise.resolve(swap),
     });
+  }
+
+  /**
+   * Claims an Arkade-to-EVM swap gaslessly via the server.
+   *
+   * The SDK builds the EIP-712 digest, signs it with the swap's internally
+   * derived EVM key, and sends the signature + secret to the server. The
+   * server submits the `coordinator.redeemAndExecute` transaction.
+   *
+   * @param id - The UUID of the swap.
+   * @param destination - The EVM address where tokens should be sent.
+   * @returns The gasless claim result with transaction hash.
+   *
+   * @example
+   * ```ts
+   * const result = await client.claimViaGasless(swapId, "0xYourAddress");
+   * console.log("Claimed! TX:", result.txHash);
+   * ```
+   */
+  async claimViaGasless(
+    id: string,
+    destination: string,
+  ): Promise<ClaimGaslessResult> {
+    // Get stored swap data (contains preimage and secret key)
+    if (!this.#swapStorage) {
+      throw new Error(
+        "Swap storage is not configured. Cannot retrieve preimage needed for gasless claim.",
+      );
+    }
+
+    const storedSwap = await this.#swapStorage.get(id);
+    if (!storedSwap) {
+      throw new Error(
+        `Swap ${id} not found in local storage. Cannot claim without stored data.`,
+      );
+    }
+
+    const swap = storedSwap.response;
+
+    if (swap.direction !== "arkade_to_evm") {
+      throw new Error(
+        `Expected arkade_to_evm swap, got ${swap.direction}. claimViaGasless is for Arkade-to-EVM swaps.`,
+      );
+    }
+
+    const arkadeSwap = swap as ArkadeToEvmSwapResponse & {
+      direction: "arkade_to_evm";
+    };
+
+    console.log(`1`);
+
+    const secret = storedSwap.preimage;
+    const secretHex = secret.startsWith("0x") ? secret : `0x${secret}`;
+    console.log(`2`);
+
+    // Determine sweepToken (server builds the calls array from stored data)
+    const wbtcAddress = arkadeSwap.target_token_address;
+    const amount = BigInt(arkadeSwap.evm_expected_sats);
+
+    const sweepToken = arkadeSwap.dex_call_data
+      ? arkadeSwap.target_token_address
+      : wbtcAddress;
+
+    console.log(`3`);
+
+    // Build EIP-712 digest
+    const digest = buildRedeemDigest({
+      htlcAddress: arkadeSwap.evm_htlc_address,
+      chainId: arkadeSwap.evm_chain_id,
+      preimage: secretHex,
+      amount,
+      token: wbtcAddress,
+      sender: arkadeSwap.server_evm_address,
+      timelock: arkadeSwap.evm_refund_locktime,
+      caller: arkadeSwap.evm_coordinator_address,
+      destination,
+      sweepToken,
+      minAmountOut: 0n,
+    });
+
+    console.log(`3a`);
+    // Sign with the swap's internally derived EVM key
+    const sig = signEvmDigest(storedSwap.secretKey, digest);
+
+    // Send to server
+    console.log(`4`);
+
+    const response = await fetch(
+      `${this.#config.baseUrl}swap/${id}/claim-gasless`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          secret: secretHex,
+          destination,
+          v: sig.v,
+          r: sig.r,
+          s: sig.s,
+        }),
+      },
+    );
+    console.log(`5`);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `Gasless claim failed (${response.status}): ${errorText}`,
+      );
+    }
+
+    console.log(`6`);
+
+    const result = await response.json();
+    return {
+      id: result.id,
+      status: result.status,
+      txHash: result.tx_hash,
+      message: result.message,
+    };
   }
 
   /**
@@ -1531,6 +1708,35 @@ export class Client {
     options: BtcToEvmSwapOptions,
   ): Promise<BtcToEvmSwapResult> {
     return createArkadeToEvmSwap(options, this.#getCreateContext());
+  }
+
+  /**
+   * Creates a new Arkade-to-EVM swap via the generic chain-agnostic endpoint.
+   *
+   * Uses the `/swap/arkade/evm` endpoint which supports any ERC-20 token
+   * reachable through 1inch aggregation. Returns coordinator address and
+   * optional 1inch calldata for the redeem-and-swap flow.
+   *
+   * @param options - The swap options.
+   * @returns The swap response and parameters for storage.
+   * @throws Error if the swap creation fails.
+   *
+   * @example
+   * ```ts
+   * const result = await client.createArkadeToEvmSwapGeneric({
+   *   targetAddress: "0x1234...",
+   *   tokenAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // USDC on Polygon
+   *   evmChainId: 137,
+   *   sourceAmount: 100000, // 100k sats
+   * });
+   * console.log("Fund:", result.response.btc_vhtlc_address);
+   * console.log("Coordinator:", result.response.evm_coordinator_address);
+   * ```
+   */
+  async createArkadeToEvmSwapGeneric(
+    options: ArkadeToEvmSwapOptions,
+  ): Promise<ArkadeToEvmSwapResult> {
+    return createArkadeToEvmSwapGeneric(options, this.#getCreateContext());
   }
 
   /**

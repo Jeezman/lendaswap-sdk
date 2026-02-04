@@ -5,6 +5,12 @@
  * for the HTLCCoordinator contract used in Arkade-to-EVM swaps.
  */
 
+import { keccak_256 } from "@noble/hashes/sha3";
+import {
+  hexToBytes as nobleFromHex,
+  bytesToHex as nobleToHex,
+} from "@noble/hashes/utils";
+
 // ── ABI helpers ──────────────────────────────────────────────────────────────
 
 /** A single call struct for the coordinator's calls array: (address target, uint256 value, bytes data) */
@@ -101,15 +107,14 @@ const REDEEM_AND_EXECUTE_SELECTOR = keccak256(
 // ── keccak256 ────────────────────────────────────────────────────────────────
 
 /**
- * Computes keccak256 hash. Uses a minimal JS implementation to avoid
- * external dependencies (the SDK is a pure library).
+ * Computes keccak256 hash using @noble/hashes.
  *
  * @param input - Hex string (with or without 0x) or Uint8Array
  * @returns 32-byte hex string with 0x prefix
  */
 export function keccak256(input: string | Uint8Array): string {
   const data = typeof input === "string" ? hexToBytes(input) : input;
-  const hash = keccak256Bytes(data);
+  const hash = keccak_256(data);
   return `0x${bytesToHex(hash)}`;
 }
 
@@ -138,6 +143,7 @@ export function keccak256(input: string | Uint8Array): string {
  * ```
  */
 export function buildRedeemDigest(params: RedeemDigestParams): string {
+  console.log(params);
   // Domain separator
   const domainSeparator = keccak256(
     abiEncode([
@@ -151,6 +157,7 @@ export function buildRedeemDigest(params: RedeemDigestParams): string {
       { type: "address", value: params.htlcAddress },
     ]),
   );
+  console.log("a");
 
   // Struct hash
   const typeHash = keccak256(stringToUtf8Bytes(REDEEM_TYPEHASH));
@@ -168,6 +175,7 @@ export function buildRedeemDigest(params: RedeemDigestParams): string {
       { type: "uint256", value: params.minAmountOut },
     ]),
   );
+  console.log("b");
 
   // EIP-712 digest: \x19\x01 ‖ domainSeparator ‖ structHash
   const prefix = new Uint8Array([0x19, 0x01]);
@@ -179,6 +187,7 @@ export function buildRedeemDigest(params: RedeemDigestParams): string {
   message.set(prefix, 0);
   message.set(domainBytes, prefix.length);
   message.set(structBytes, prefix.length + domainBytes.length);
+  console.log("c");
 
   return keccak256(message);
 }
@@ -188,25 +197,25 @@ export function buildRedeemDigest(params: RedeemDigestParams): string {
 /**
  * Builds the calls array for `redeemAndExecute` based on 1inch calldata.
  *
- * - If `oneinchCalldata` is provided: returns [approve WBTC to 1inch, execute 1inch swap]
- * - If `oneinchCalldata` is null/undefined (WBTC target): returns empty array
+ * - If `dexCallData` is provided: returns [approve WBTC to DEX, execute DEX swap]
+ * - If `dexCallData` is null/undefined (WBTC target): returns empty array
  *
  * @param wbtcAddress - WBTC token contract address
  * @param amount - WBTC amount to approve
- * @param oneinchCalldata - 1inch swap calldata from the creation response (optional)
+ * @param dexCallData - DEX swap calldata from the creation response (optional)
  * @returns Array of CoordinatorCall structs
  */
 export function buildRedeemCalls(
   wbtcAddress: string,
   amount: bigint,
-  oneinchCalldata?: { to: string; data: string; value: string } | null,
+  dexCallData?: { to: string; data: string; value: string } | null,
 ): CoordinatorCall[] {
-  if (!oneinchCalldata) {
+  if (!dexCallData) {
     return [];
   }
 
-  // Build approve calldata: WBTC.approve(1inch_router, amount)
-  const approveData = encodeApprove(oneinchCalldata.to, amount);
+  // Build approve calldata: WBTC.approve(dex_router, amount)
+  const approveData = encodeApprove(dexCallData.to, amount);
 
   return [
     {
@@ -215,9 +224,9 @@ export function buildRedeemCalls(
       data: approveData,
     },
     {
-      target: oneinchCalldata.to,
-      value: BigInt(oneinchCalldata.value || "0"),
-      data: oneinchCalldata.data,
+      target: dexCallData.to,
+      value: BigInt(dexCallData.value || "0"),
+      data: dexCallData.data,
     },
   ];
 }
@@ -239,7 +248,7 @@ export function buildRedeemCalls(
  *   token: "0xWBTC...",
  *   sender: "0xServer...",
  *   timelock: 1700000000,
- *   calls: buildRedeemCalls(wbtcAddr, amount, oneinchCalldata),
+ *   calls: buildRedeemCalls(wbtcAddr, amount, dexCallData),
  *   sweepToken: targetTokenAddr,
  *   minAmountOut: 0n,
  *   v: 27,
@@ -383,6 +392,8 @@ function abiEncode(values: AbiValue[]): string {
           return encodeUint256(v.value as bigint);
         case "address":
           return normalizeAddress(v.value as string);
+        default:
+          throw new Error(`Unknown ABI type: ${v.type}`);
       }
     })
     .join("");
@@ -408,140 +419,13 @@ function encodeUint256(value: bigint): string {
 // ── Hex / bytes utilities ────────────────────────────────────────────────────
 
 function hexToBytes(hex: string): Uint8Array {
-  const clean = hex.replace(/^0x/, "");
-  const bytes = new Uint8Array(clean.length / 2);
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(clean.substr(i * 2, 2), 16);
-  }
-  return bytes;
+  return nobleFromHex(hex.replace(/^0x/, ""));
 }
 
 function bytesToHex(bytes: Uint8Array): string {
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  return nobleToHex(bytes);
 }
 
 function stringToUtf8Bytes(str: string): Uint8Array {
   return new TextEncoder().encode(str);
-}
-
-// ── Keccak-256 implementation ────────────────────────────────────────────────
-// Minimal pure-JS keccak-256 (no dependencies).
-
-const RC = [
-  0x0000000000000001n,
-  0x0000000000008082n,
-  0x800000000000808an,
-  0x8000000080008000n,
-  0x000000000000808bn,
-  0x0000000080000001n,
-  0x8000000080008081n,
-  0x8000000000008009n,
-  0x000000000000008an,
-  0x0000000000000088n,
-  0x0000000080008009n,
-  0x000000008000000an,
-  0x000000008000808bn,
-  0x800000000000008bn,
-  0x8000000000008089n,
-  0x8000000000008003n,
-  0x8000000000008002n,
-  0x8000000000000080n,
-  0x000000000000800an,
-  0x800000008000000an,
-  0x8000000080008081n,
-  0x8000000000008080n,
-  0x0000000080000001n,
-  0x8000000080008008n,
-];
-
-const ROTC = [
-  1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14, 27, 41, 56, 8, 25, 43, 62, 18, 39,
-  61, 20, 44,
-];
-
-const PI = [
-  10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4, 15, 23, 19, 13, 12, 2, 20, 14, 22,
-  9, 6, 1,
-];
-
-function keccakF(state: bigint[]): void {
-  for (let round = 0; round < 24; round++) {
-    // θ
-    const C: bigint[] = [];
-    for (let x = 0; x < 5; x++) {
-      C[x] =
-        state[x] ^ state[x + 5] ^ state[x + 10] ^ state[x + 15] ^ state[x + 20];
-    }
-    const D: bigint[] = [];
-    for (let x = 0; x < 5; x++) {
-      D[x] = C[(x + 4) % 5] ^ rot64(C[(x + 1) % 5], 1);
-    }
-    for (let x = 0; x < 5; x++) {
-      for (let y = 0; y < 5; y++) {
-        state[x + 5 * y] ^= D[x];
-      }
-    }
-    // ρ and π
-    let last = state[1];
-    for (let i = 0; i < 24; i++) {
-      const j = PI[i];
-      const temp = state[j];
-      state[j] = rot64(last, ROTC[i]);
-      last = temp;
-    }
-    // χ
-    for (let y = 0; y < 5; y++) {
-      const row: bigint[] = [];
-      for (let x = 0; x < 5; x++) row[x] = state[x + 5 * y];
-      for (let x = 0; x < 5; x++) {
-        state[x + 5 * y] = row[x] ^ (~row[(x + 1) % 5] & row[(x + 2) % 5]);
-      }
-    }
-    // ι
-    state[0] ^= RC[round];
-  }
-}
-
-function rot64(x: bigint, n: number): bigint {
-  const mask = (1n << 64n) - 1n;
-  return ((x << BigInt(n)) | (x >> BigInt(64 - n))) & mask;
-}
-
-function keccak256Bytes(data: Uint8Array): Uint8Array {
-  const rate = 136; // 1088 bits / 8  (capacity = 512 bits)
-
-  // Pad
-  const blockSize = rate;
-  const padLen = blockSize - (data.length % blockSize);
-  const padded = new Uint8Array(data.length + padLen);
-  padded.set(data);
-  padded[data.length] = 0x01;
-  padded[padded.length - 1] |= 0x80;
-
-  // Absorb
-  const state = new Array<bigint>(25).fill(0n);
-  const mask64 = (1n << 64n) - 1n;
-
-  for (let offset = 0; offset < padded.length; offset += blockSize) {
-    for (let i = 0; i < blockSize / 8; i++) {
-      let lane = 0n;
-      for (let b = 0; b < 8; b++) {
-        lane |= BigInt(padded[offset + i * 8 + b]) << BigInt(b * 8);
-      }
-      state[i] ^= lane & mask64;
-    }
-    keccakF(state);
-  }
-
-  // Squeeze (32 bytes)
-  const out = new Uint8Array(32);
-  for (let i = 0; i < 4; i++) {
-    const lane = state[i];
-    for (let b = 0; b < 8; b++) {
-      out[i * 8 + b] = Number((lane >> BigInt(b * 8)) & 0xffn);
-    }
-  }
-  return out;
 }
