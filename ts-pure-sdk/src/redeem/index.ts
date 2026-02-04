@@ -139,7 +139,7 @@ function buildCoordinatorClaimData(swap: ArkadeToEvmSwapResponse): ClaimResult {
     coordinatorAddress: swap.evm_coordinator_address,
     chainId: swap.evm_chain_id,
     amount: swap.evm_expected_sats,
-    wbtcAddress: swap.target_token_address,
+    wbtcAddress: swap.wbtc_address,
     sender: swap.server_evm_address,
     timelock: swap.evm_refund_locktime,
     dexCallData: swap.dex_call_data,

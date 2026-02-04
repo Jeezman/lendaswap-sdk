@@ -1014,6 +1014,8 @@ pub struct ArkadeToEvmSwapResponse {
     pub unilateral_refund_delay: i64,
     pub unilateral_refund_without_receiver_delay: i64,
     pub network: String,
+    /// WBTC contract address (the token locked in the HTLC).
+    pub wbtc_address: String,
     /// DEX swap calldata for non-WBTC targets.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dex_call_data: Option<DexCallData>,

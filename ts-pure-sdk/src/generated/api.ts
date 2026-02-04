@@ -763,6 +763,8 @@ export interface components {
       unilateral_refund_without_receiver_delay: number;
       /** Format: int64 */
       vhtlc_refund_locktime: number;
+      /** @description WBTC contract address (the token locked in the HTLC). */
+      wbtc_address: string;
     };
     ArkadeToPolygonSwapRequest: {
       /**

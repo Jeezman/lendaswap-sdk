@@ -1539,7 +1539,8 @@
           "unilateral_claim_delay",
           "unilateral_refund_delay",
           "unilateral_refund_without_receiver_delay",
-          "network"
+          "network",
+          "wbtc_address"
         ],
         "properties": {
           "arkade_server_pk": { "type": "string" },
@@ -1589,7 +1590,11 @@
             "type": "integer",
             "format": "int64"
           },
-          "vhtlc_refund_locktime": { "type": "integer", "format": "int64" }
+          "vhtlc_refund_locktime": { "type": "integer", "format": "int64" },
+          "wbtc_address": {
+            "type": "string",
+            "description": "WBTC contract address (the token locked in the HTLC)."
+          }
         }
       },
       "ArkadeToPolygonSwapRequest": {

@@ -452,12 +452,13 @@ impl SqliteStorage {
                 evm_coordinator_address, client_evm_address, server_evm_address, evm_fund_txid,
                 evm_claim_txid, evm_refund_locktime, sender_pk, receiver_pk, arkade_server_pk,
                 vhtlc_refund_locktime, unilateral_claim_delay, unilateral_refund_delay,
-                unilateral_refund_without_receiver_delay, network,
+                unilateral_refund_without_receiver_delay, network, wbtc_address,
+                dex_call_data_to, dex_call_data_data, dex_call_data_value,
                 secret_key, public_key, preimage, preimage_hash, user_id, key_index
             ) VALUES (
                 ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
                 ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33,
-                ?34, ?35, ?36, ?37, ?38, ?39
+                ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41, ?42, ?43
             )
             "#,
         )
@@ -494,6 +495,10 @@ impl SqliteStorage {
         .bind(r.unilateral_refund_delay)
         .bind(r.unilateral_refund_without_receiver_delay)
         .bind(&r.network)
+        .bind(&r.wbtc_address)
+        .bind(r.dex_call_data.as_ref().map(|c| &c.to))
+        .bind(r.dex_call_data.as_ref().map(|c| &c.data))
+        .bind(r.dex_call_data.as_ref().map(|c| &c.value))
         .bind(hex::encode(params.secret_key.secret_bytes()))
         .bind(hex::encode(params.public_key.serialize()))
         .bind(hex::encode(params.preimage))
@@ -961,6 +966,18 @@ impl SqliteStorage {
             unilateral_refund_without_receiver_delay: row
                 .get("unilateral_refund_without_receiver_delay"),
             network: row.get("network"),
+            wbtc_address: row.get("wbtc_address"),
+            dex_call_data: {
+                let to: Option<String> = row.get("dex_call_data_to");
+                let data: Option<String> = row.get("dex_call_data_data");
+                let value: Option<String> = row.get("dex_call_data_value");
+                match (to, data, value) {
+                    (Some(to), Some(data), Some(value)) => {
+                        Some(crate::api::DexCallData { to, data, value })
+                    }
+                    _ => None,
+                }
+            },
         };
 
         Ok(ExtendedSwapStorageData {

@@ -995,15 +995,15 @@ export class Client {
     const secretHex = secret.startsWith("0x") ? secret : `0x${secret}`;
 
     // token = WBTC address (what's locked in the HTLC)
-    // For arkade-to-evm swaps, the HTLC always locks WBTC.
+    // The server now returns the actual WBTC address explicitly.
     // target_token_address is the final token the user wants (e.g. USDC).
-    // When there's no DEX swap, target_token_address IS WBTC.
-    const wbtcAddress = arkadeSwap.target_token_address;
+    const wbtcAddress = arkadeSwap.wbtc_address;
     const amount = BigInt(arkadeSwap.evm_expected_sats);
 
+    // sweepToken: after a DEX swap, sweep the target token; otherwise sweep WBTC.
     const sweepToken = arkadeSwap.dex_call_data
       ? arkadeSwap.target_token_address
-      : wbtcAddress;
+      : arkadeSwap.wbtc_address;
 
     // Build EIP-712 digest
     const digest = buildRedeemDigest({

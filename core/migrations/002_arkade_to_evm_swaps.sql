@@ -33,6 +33,10 @@ CREATE TABLE IF NOT EXISTS arkade_to_evm_swaps (
     unilateral_refund_delay INTEGER NOT NULL,
     unilateral_refund_without_receiver_delay INTEGER NOT NULL,
     network TEXT NOT NULL,
+    wbtc_address TEXT NOT NULL DEFAULT '',
+    dex_call_data_to TEXT,
+    dex_call_data_data TEXT,
+    dex_call_data_value TEXT,
     -- SwapParams
     secret_key TEXT NOT NULL,
     public_key TEXT NOT NULL,
