@@ -4,6 +4,7 @@
 
 import type {
   ApiClient,
+  ArkadeToEvmSwapResponse,
   BtcToArkadeSwapResponse,
   BtcToEvmSwapResponse,
   EvmToBtcSwapResponse,
@@ -131,6 +132,34 @@ export interface EvmToLightningSwapOptions {
 export interface EvmToLightningSwapResult {
   /** The swap response from the API */
   response: EvmToBtcSwapResponse;
+  /** The swap parameters used (for storage/recovery) */
+  swapParams: SwapParams;
+}
+
+/** Options for creating an Arkade-to-EVM swap via the generic endpoint */
+export interface ArkadeToEvmSwapOptions {
+  /**
+   * EVM address used as the HTLC receiver.
+   * If omitted, the SDK derives an internal EVM key from the swap's HD wallet
+   * and uses its address. The SDK can then sign the gasless claim internally.
+   */
+  targetAddress?: string;
+  /** ERC-20 contract address of the desired token on the target chain */
+  tokenAddress: string;
+  /** Numeric EVM chain ID: 1 (Ethereum), 137 (Polygon), 42161 (Arbitrum) */
+  evmChainId: number;
+  /** Amount in satoshis to send (mutually exclusive with targetAmount) */
+  sourceAmount?: number;
+  /** Amount of target token to receive in smallest unit (mutually exclusive with sourceAmount) */
+  targetAmount?: number;
+  /** Optional referral code */
+  referralCode?: string;
+}
+
+/** Result of creating an Arkade-to-EVM swap via the generic endpoint */
+export interface ArkadeToEvmSwapResult {
+  /** The swap response from the API */
+  response: ArkadeToEvmSwapResponse;
   /** The swap parameters used (for storage/recovery) */
   swapParams: SwapParams;
 }

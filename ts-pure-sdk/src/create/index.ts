@@ -9,13 +9,18 @@
  * - EVM to Lightning
  */
 
-export { createArkadeToEvmSwap } from "./arkade.js";
+export {
+  createArkadeToEvmSwap,
+  createArkadeToEvmSwapGeneric,
+} from "./arkade.js";
 export { createBitcoinToEvmSwap } from "./bitcoin.js";
 export { createBitcoinToArkadeSwap } from "./bitcoin-to-arkade.js";
 export { createEvmToArkadeSwap } from "./evm-to-arkade.js";
 export { createEvmToLightningSwap } from "./evm-to-lightning.js";
 export { createLightningToEvmSwap } from "./lightning.js";
 export type {
+  ArkadeToEvmSwapOptions,
+  ArkadeToEvmSwapResult,
   BitcoinToArkadeSwapOptions,
   BitcoinToArkadeSwapResult,
   BitcoinToEvmSwapOptions,

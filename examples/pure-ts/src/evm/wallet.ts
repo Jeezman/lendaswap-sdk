@@ -13,8 +13,8 @@ import {
   type Chain,
   type Account,
 } from "viem";
-import { mnemonicToAccount } from "viem/accounts";
-import { polygon, arbitrum, mainnet } from "viem/chains";
+import {mnemonicToAccount} from "viem/accounts";
+import {polygon, arbitrum, mainnet} from "viem/chains";
 
 /** Supported EVM chains */
 export type EvmChainName = "polygon" | "arbitrum" | "ethereum";
@@ -28,7 +28,8 @@ const CHAINS: Record<EvmChainName, Chain> = {
 
 /** Default RPC URLs (can be overridden via env) */
 const DEFAULT_RPC_URLS: Record<EvmChainName, string> = {
-  polygon: "https://polygon-rpc.com",
+  // FIXME: undo this change
+  polygon: "http://localhost:8545",
   arbitrum: "https://arb1.arbitrum.io/rpc",
   ethereum: "https://eth.llamarpc.com",
 };

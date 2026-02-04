@@ -1550,6 +1550,15 @@
           "chain": { "type": "string" },
           "client_evm_address": { "type": "string" },
           "created_at": { "type": "string", "format": "date-time" },
+          "dex_call_data": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "$ref": "#/components/schemas/DexCallData",
+                "description": "DEX swap calldata for non-WBTC targets."
+              }
+            ]
+          },
           "evm_chain_id": { "type": "integer", "format": "int64" },
           "evm_claim_txid": { "type": ["string", "null"] },
           "evm_coordinator_address": { "type": "string" },
@@ -1580,13 +1589,7 @@
             "type": "integer",
             "format": "int64"
           },
-          "vhtlc_refund_locktime": { "type": "integer", "format": "int64" },
-          "dex_call_data": {
-            "oneOf": [
-              { "$ref": "#/components/schemas/DexCallData" },
-              { "type": "null" }
-            ]
-          }
+          "vhtlc_refund_locktime": { "type": "integer", "format": "int64" }
         }
       },
       "ArkadeToPolygonSwapRequest": {
@@ -2119,6 +2122,16 @@
             "items": { "type": "string" },
             "description": "List of VTXO outpoints to refresh"
           }
+        }
+      },
+      "DexCallData": {
+        "type": "object",
+        "description": "DEX swap calldata for the coordinator contract.",
+        "required": ["to", "data", "value"],
+        "properties": {
+          "data": { "type": "string" },
+          "to": { "type": "string" },
+          "value": { "type": "string" }
         }
       },
       "ErrorResponse": {
@@ -2704,16 +2717,6 @@
             "$ref": "#/components/schemas/TokenId",
             "description": "Target token (e.g., polygon_usdc)"
           }
-        }
-      },
-      "DexCallData": {
-        "type": "object",
-        "description": "DEX swap calldata for the coordinator contract.",
-        "required": ["to", "data", "value"],
-        "properties": {
-          "data": { "type": "string" },
-          "to": { "type": "string" },
-          "value": { "type": "string" }
         }
       },
       "PolygonToArkadeSwapRequest": {

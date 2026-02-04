@@ -101,16 +101,30 @@ console.log(`Swap ID: ${result.response.id}`);
 #### Arkade to EVM
 
 ```typescript
-const result = await client.createArkadeToEvmSwap({
+// Create an Arkade-to-EVM swap (any ERC-20 token via 1inch)
+const result = await client.createArkadeToEvmSwapGeneric({
   targetAddress: "0x1234567890abcdef1234567890abcdef12345678",
-  targetToken: "usdc_arb",
-  targetChain: "arbitrum",
-  sourceAmount: 100000,
+  tokenAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // USDC on Polygon
+  evmChainId: 137,
+  sourceAmount: 100000, // sats
 });
 
 // Send BTC to the Arkade VHTLC address
-console.log(`Send BTC to: ${result.response.htlc_address_arkade}`);
+console.log(`Send BTC to: ${result.response.btc_vhtlc_address}`);
 console.log(`Swap ID: ${result.response.id}`);
+
+// Once the server has funded the EVM HTLC (status: "serverfunded"),
+// claim gaslessly — the server submits the tx on your behalf:
+const claimResult = await client.claimViaGasless(
+  result.response.id,
+  async (digest) => {
+    // Sign the EIP-712 digest with your EVM wallet
+    // e.g. using ethers.js: wallet.signMessage(ethers.getBytes(digest))
+    return { v: 27, r: "0x...", s: "0x..." };
+  },
+  "0x1234567890abcdef1234567890abcdef12345678", // destination
+);
+console.log(`Claimed! TX: ${claimResult.txHash}`);
 ```
 
 #### On-chain BTC to EVM
@@ -175,8 +189,19 @@ console.log(`Status: ${swap.status}`);
 Once the server has funded the EVM HTLC (`serverfunded` status), claim your tokens:
 
 ```typescript
-const claimResult = await client.claimEvmSwap("swap-uuid");
-console.log(`Claim tx: ${claimResult.tx_hash}`);
+// Gasless claim for Arkade-to-EVM swaps — the server submits the tx
+const claimResult = await client.claimViaGasless(
+  "swap-uuid",
+  async (digest) => {
+    // Sign the EIP-712 digest with your EVM wallet
+    return { v: 27, r: "0x...", s: "0x..." };
+  },
+  "0xYourDestinationAddress",
+);
+console.log(`Claim tx: ${claimResult.txHash}`);
+
+// For other swap types (Lightning/On-chain to EVM), use the existing claim:
+const result = await client.claim("swap-uuid");
 ```
 
 ### Refund (if swap times out)

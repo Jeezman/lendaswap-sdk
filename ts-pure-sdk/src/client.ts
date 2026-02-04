@@ -976,7 +976,10 @@ export class Client {
       );
     }
 
-    const swap = storedSwap.response;
+    // Fetch fresh swap data from the API to get the full GET response shape
+    // (the stored creation response has a different schema and may lack fields
+    // like target_token_address and dex_call_data).
+    const swap = await this.getSwap(id, { updateStorage: true });
 
     if (swap.direction !== "arkade_to_evm") {
       throw new Error(
@@ -988,21 +991,19 @@ export class Client {
       direction: "arkade_to_evm";
     };
 
-    console.log(`1`);
-
     const secret = storedSwap.preimage;
     const secretHex = secret.startsWith("0x") ? secret : `0x${secret}`;
-    console.log(`2`);
 
-    // Determine sweepToken (server builds the calls array from stored data)
+    // token = WBTC address (what's locked in the HTLC)
+    // For arkade-to-evm swaps, the HTLC always locks WBTC.
+    // target_token_address is the final token the user wants (e.g. USDC).
+    // When there's no DEX swap, target_token_address IS WBTC.
     const wbtcAddress = arkadeSwap.target_token_address;
     const amount = BigInt(arkadeSwap.evm_expected_sats);
 
     const sweepToken = arkadeSwap.dex_call_data
       ? arkadeSwap.target_token_address
       : wbtcAddress;
-
-    console.log(`3`);
 
     // Build EIP-712 digest
     const digest = buildRedeemDigest({
@@ -1027,7 +1028,7 @@ export class Client {
     console.log(`4`);
 
     const response = await fetch(
-      `${this.#config.baseUrl}swap/${id}/claim-gasless`,
+      `${this.#config.baseUrl}/swap/${id}/claim-gasless`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

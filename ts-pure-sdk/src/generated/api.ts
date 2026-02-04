@@ -727,6 +727,7 @@ export interface components {
       client_evm_address: string;
       /** Format: date-time */
       created_at: string;
+      dex_call_data?: null | components["schemas"]["DexCallData"];
       /** Format: int64 */
       evm_chain_id: number;
       evm_claim_txid?: string | null;
@@ -762,7 +763,6 @@ export interface components {
       unilateral_refund_without_receiver_delay: number;
       /** Format: int64 */
       vhtlc_refund_locktime: number;
-      dex_call_data?: components["schemas"]["DexCallData"] | null;
     };
     ArkadeToPolygonSwapRequest: {
       /**
@@ -1075,6 +1075,12 @@ export interface components {
       user_id: string;
       /** @description List of VTXO outpoints to refresh */
       vtxos: string[];
+    };
+    /** @description DEX swap calldata for the coordinator contract. */
+    DexCallData: {
+      data: string;
+      to: string;
+      value: string;
     };
     ErrorResponse: {
       error: string;
@@ -1393,12 +1399,6 @@ export interface components {
       target_amount: number;
       /** @description Target token (e.g., polygon_usdc) */
       target_token: components["schemas"]["TokenId"];
-    };
-    /** @description DEX swap calldata for the coordinator contract. */
-    DexCallData: {
-      data: string;
-      to: string;
-      value: string;
     };
     PolygonToArkadeSwapRequest: {
       /**

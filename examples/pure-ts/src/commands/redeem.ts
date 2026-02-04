@@ -11,12 +11,16 @@ export async function redeemSwap(
   client: Client,
   swapStorage: SwapStorage | undefined,
   swapId: string | undefined,
+  destination: string | undefined,
 ): Promise<void> {
   if (!swapId) {
-    console.error("Usage: tsx src/index.ts redeem <swap-id>");
+    console.error("Usage: tsx src/index.ts redeem <swap-id> [destination]");
     console.error("");
-    console.error("Example:");
+    console.error("Examples:");
     console.error("  tsx src/index.ts redeem 12345678-1234-1234-1234-123456789abc");
+    console.error("");
+    console.error("  # Arkade-to-EVM gasless claim (destination required):");
+    console.error("  tsx src/index.ts redeem 12345678-... 0xYourEvmAddress");
     process.exit(1);
   }
 
@@ -32,13 +36,22 @@ export async function redeemSwap(
 
   console.log(`Current status: ${swap.status}`);
 
+  // For arkade_to_evm swaps, destination is required
+  if (swap.direction === "arkade_to_evm" && !destination) {
+    console.error("Error: Arkade-to-EVM swaps require a destination EVM address.");
+    console.error("");
+    console.error("Usage: tsx src/index.ts redeem <swap-id> <destination-evm-address>");
+    console.error("Example: tsx src/index.ts redeem " + swapId + " 0x1234...");
+    process.exit(1);
+  }
+
   // Claim the swap (reads preimage and keys from storage)
   console.log("");
   console.log("Attempting to claim swap...");
   console.log("");
 
   try {
-    const result = await client.claim(swapId);
+    const result = await client.claim(swapId, destination ? { destination } : undefined);
 
     if (!result.success) {
       console.error("=".repeat(60));
@@ -84,6 +97,19 @@ export async function redeemSwap(
       console.log("=".repeat(60));
       console.log("");
       console.log("Your BTC has been claimed on Arkade.");
+
+    } else if (swap.direction === "arkade_to_evm") {
+      // Arkade-to-EVM - gasless claim via server
+      console.log(`  Direction:    arkade_to_evm (gasless)`);
+      console.log(`  TX Hash:      ${result.txHash}`);
+      console.log(`  Destination:  ${destination}`);
+      console.log("");
+      console.log(`  Message:      ${result.message}`);
+      console.log("");
+      console.log("=".repeat(60));
+      console.log("");
+      console.log("The server has submitted the redeemAndExecute transaction.");
+      console.log("Use 'npm run watch -- " + swapId + "' to monitor until completion.");
 
     } else {
       // Polygon/Arbitrum - gasless claim via Gelato

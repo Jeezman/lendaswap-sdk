@@ -3,9 +3,21 @@
  * The Client automatically stores swaps when swap storage is configured.
  */
 
-import { type Client, type EvmChain } from "@lendasat/lendaswap-sdk-pure";
+import {type Client, type EvmChain} from "@lendasat/lendaswap-sdk-pure";
 
 type SwapType = "lightning" | "arkade" | "bitcoin" | "bitcoin-to-arkade" | "evm-to-arkade" | "evm-to-lightning";
+
+
+// TODO: we should pass in the token id not something like usdc_pol.
+/** Token metadata for the generic Arkade-to-EVM endpoint (mainnet addresses) */
+const EVM_TOKEN_MAP: Record<string, { tokenAddress: string; evmChainId: number }> = {
+  usdc_pol: {tokenAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", evmChainId: 137},
+  usdc_arb: {tokenAddress: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", evmChainId: 42161},
+  usdc_eth: {tokenAddress: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", evmChainId: 1},
+  usdt_pol: {tokenAddress: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F", evmChainId: 137},
+  usdt_arb: {tokenAddress: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9", evmChainId: 42161},
+  usdt_eth: {tokenAddress: "0xdAC17F958D2ee523a2206206994597C13D831ec7", evmChainId: 1},
+};
 
 export async function createSwap(
   client: Client,
@@ -14,12 +26,15 @@ export async function createSwap(
   amount: string | undefined,
   address: string | undefined,
 ): Promise<void> {
-  if (!from || !to || !amount || !address) {
-    console.error("Usage: tsx src/index.ts swap <from> <to> <amount> <address>");
+  if (!from || !to || !amount) {
+    console.error("Usage: tsx src/index.ts swap <from> <to> <amount> [address]");
+    console.error("");
+    console.error("Arkade to EVM Examples (gasless — no address needed, SDK derives internally):");
+    console.error("  tsx src/index.ts swap btc_arkade usdc_pol 100000");
+    console.error("  tsx src/index.ts swap btc_arkade usdc_arb 100000");
     console.error("");
     console.error("BTC to EVM Examples:");
     console.error("  tsx src/index.ts swap btc_lightning usdc_pol 100000 0xYourAddress");
-    console.error("  tsx src/index.ts swap btc_arkade usdc_pol 100000 0xYourAddress");
     console.error("  tsx src/index.ts swap btc_onchain usdc_pol 100000 0xYourAddress");
     console.error("");
     console.error("BTC On-chain to Arkade Examples:");
@@ -63,6 +78,13 @@ export async function createSwap(
     console.error("Supported EVM to Lightning:");
     console.error("  Source: usdc_pol, usdc_arb, usdc_eth (or any *_pol, *_arb, *_eth)");
     console.error("  Target: btc_lightning");
+    process.exit(1);
+  }
+
+  // Address is required for all swap types except arkade (SDK derives EVM address internally)
+  if (swapType !== "arkade" && !address) {
+    console.error("Error: address is required for this swap type");
+    console.error("Usage: tsx src/index.ts swap <from> <to> <amount> <address>");
     process.exit(1);
   }
 
@@ -123,7 +145,7 @@ export async function createSwap(
         sourceChain,
         sourceToken: from,
         sourceAmount: amountNum,
-        targetAddress: address, // Arkade address
+        targetAddress: address!, // Arkade address (validated above)
         userAddress: evmUserAddress, // EVM wallet address
       });
 
@@ -149,7 +171,7 @@ export async function createSwap(
       // - `amount` is actually the bolt11 invoice
       // - `address` is the user's EVM wallet address
       const bolt11Invoice = amount; // amount param contains the invoice
-      const evmUserAddress = address; // address param contains the EVM address
+      const evmUserAddress = address!; // address param contains the EVM address (validated above)
 
       const sourceChain = parseSourceChain(from);
       if (!sourceChain) {
@@ -188,7 +210,7 @@ export async function createSwap(
     } else if (swapType === "bitcoin-to-arkade") {
       const result = await client.createBitcoinToArkadeSwap({
         satsReceive: Math.floor(amountNum),
-        targetAddress: address,
+        targetAddress: address!,
       });
 
       swapId = result.response.id;
@@ -214,7 +236,7 @@ export async function createSwap(
       }
 
       const result = await client.createLightningToEvmSwap({
-        targetAddress: address,
+        targetAddress: address!,
         targetToken: to,
         targetChain,
         sourceAmount: Math.floor(amountNum),
@@ -230,27 +252,36 @@ export async function createSwap(
       paymentInfo = `Pay this Lightning Invoice:\n  ${result.response.ln_invoice}`;
 
     } else if (swapType === "arkade") {
-      const targetChain = parseTargetChain(to);
-      if (!targetChain) {
-        console.error(`Unsupported target token: ${to}`);
+      const tokenInfo = EVM_TOKEN_MAP[to];
+      if (!tokenInfo) {
+        console.error(`Unknown target token: ${to}`);
+        console.error(`Supported tokens: ${Object.keys(EVM_TOKEN_MAP).join(", ")}`);
         process.exit(1);
       }
 
-      const result = await client.createArkadeToEvmSwap({
-        targetAddress: address,
-        targetToken: to,
-        targetChain,
+      const result = await client.createArkadeToEvmSwapGeneric({
+        tokenAddress: tokenInfo.tokenAddress,
+        evmChainId: tokenInfo.evmChainId,
         sourceAmount: Math.floor(amountNum),
+        ...(address ? {targetAddress: address} : {}),
       });
 
       swapId = result.response.id;
       status = result.response.status;
       keyIndex = result.swapParams.keyIndex;
-      sourceAmount = result.response.source_amount;
-      targetAmount = result.response.target_amount;
-      sourceToken = from;
-      targetToken = to;
-      paymentInfo = `Fund this Arkade VHTLC Address:\n  ${result.response.htlc_address_arkade}`;
+      sourceAmount = result.response.btc_expected_sats;
+      targetAmount = result.response.target_token_amount ?? 0;
+      sourceToken = result.response.source_token;
+      targetToken = `${result.response.target_token_symbol} (chain ${result.response.evm_chain_id})`;
+      paymentInfo = [
+        `Fund this Arkade VHTLC Address:`,
+        `  ${result.response.btc_vhtlc_address}`,
+        ``,
+        `Amount: ${result.response.btc_expected_sats} sats`,
+        ``,
+        `Once funded, the server will fund the EVM HTLC.`,
+        `Then redeem with: npm run redeem -- ${result.response.id} <destination-evm-address>`,
+      ].join("\n");
 
     } else {
       // bitcoin on-chain
@@ -261,7 +292,7 @@ export async function createSwap(
       }
 
       const result = await client.createBitcoinToEvmSwap({
-        targetAddress: address,
+        targetAddress: address!,
         targetToken: to,
         targetChain,
         sourceAmount: Math.floor(amountNum),

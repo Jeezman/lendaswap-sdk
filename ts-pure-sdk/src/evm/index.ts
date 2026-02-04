@@ -5,6 +5,16 @@
  */
 
 export {
+  buildRedeemCalls,
+  buildRedeemDigest,
+  type CoordinatorCall,
+  encodeRedeemAndExecute,
+  keccak256,
+  type RedeemAndExecuteCallData,
+  type RedeemAndExecuteParams,
+  type RedeemDigestParams,
+} from "./coordinator.js";
+export {
   type ApproveCallData,
   buildEvmHtlcCallData,
   type CreateSwapCallData,
@@ -15,3 +25,4 @@ export {
   type RefundSwapCallData,
   uuidToBytes32,
 } from "./htlc.js";
+export { deriveEvmAddress, signEvmDigest } from "./signing.js";

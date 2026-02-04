@@ -8,9 +8,9 @@
  * Usage:
  *   tsx src/index.ts pairs                          - List available trading pairs
  *   tsx src/index.ts quote <from> <to> <amount>     - Get a quote
- *   tsx src/index.ts swap <from> <to> <amount> <address> [evmAddr] - Create a swap
+ *   tsx src/index.ts swap <from> <to> <amount> [address] [evmAddr] - Create a swap
  *   tsx src/index.ts watch <id>                     - Watch swap status
- *   tsx src/index.ts redeem <id>                    - Redeem a swap
+ *   tsx src/index.ts redeem <id> [destination]      - Redeem a swap
  *   tsx src/index.ts refund <id>                    - Refund a swap
  *   tsx src/index.ts swaps                          - List stored swaps
  *   tsx src/index.ts info                           - Show wallet info
@@ -24,23 +24,23 @@
 // Load .env file before anything else
 import "dotenv/config";
 
-import { Client } from "@lendasat/lendaswap-sdk-pure";
-import { sqliteStorageFactory } from "@lendasat/lendaswap-sdk-pure/node";
+import {Client} from "@lendasat/lendaswap-sdk-pure";
+import {sqliteStorageFactory} from "@lendasat/lendaswap-sdk-pure/node";
 import * as path from "node:path";
 import * as os from "node:os";
 
-import { listPairs } from "./commands/pairs.js";
-import { getQuote } from "./commands/quote.js";
-import { createSwap } from "./commands/swap.js";
-import { listSwaps } from "./commands/swaps.js";
-import { showInfo } from "./commands/info.js";
-import { watchSwap } from "./commands/watch.js";
-import { redeemSwap } from "./commands/redeem.js";
-import { refundSwap } from "./commands/refund.js";
-import { evmFundSwap } from "./commands/evm-fund.js";
-import { evmRefundSwap } from "./commands/evm-refund.js";
-import { evmClaimSwap } from "./commands/evm-claim.js";
-import { showEvmBalances } from "./commands/evm-balances.js";
+import {listPairs} from "./commands/pairs.js";
+import {getQuote} from "./commands/quote.js";
+import {createSwap} from "./commands/swap.js";
+import {listSwaps} from "./commands/swaps.js";
+import {showInfo} from "./commands/info.js";
+import {watchSwap} from "./commands/watch.js";
+import {redeemSwap} from "./commands/redeem.js";
+import {refundSwap} from "./commands/refund.js";
+import {evmFundSwap} from "./commands/evm-fund.js";
+import {evmRefundSwap} from "./commands/evm-refund.js";
+import {evmClaimSwap} from "./commands/evm-claim.js";
+import {showEvmBalances} from "./commands/evm-balances.js";
 
 // Configuration from environment variables
 export const CONFIG = {
@@ -55,15 +55,16 @@ export const CONFIG = {
 
 // Ensure the database directory exists
 import * as fs from "node:fs";
+
 const dbDir = path.dirname(CONFIG.dbPath);
 if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
+  fs.mkdirSync(dbDir, {recursive: true});
 }
 
 // SQLite storage (persists to disk)
-const { walletStorage, swapStorage, close: closeStorage } = sqliteStorageFactory(CONFIG.dbPath);
+const {walletStorage, swapStorage, close: closeStorage} = sqliteStorageFactory(CONFIG.dbPath);
 
-export { swapStorage };
+export {swapStorage};
 
 /**
  * Create and initialize the client.
@@ -102,7 +103,7 @@ Commands:
   swap <from> <to> <amount> <addr>   Create a new swap
   evm-fund <id>                      Fund an EVM HTLC (EVM-to-Arkade/Lightning)
   watch <id>                         Watch a swap's status (polls backend)
-  redeem <id>                        Redeem a swap (when serverfunded)
+  redeem <id> [destination]          Redeem a swap (when serverfunded)
   refund <id> [addr] [fee]           Refund a swap (addr/fee for on-chain)
   evm-refund <id>                    Refund an EVM HTLC (EVM-to-Arkade/Lightning)
   evm-claim <id>                     Claim EVM tokens (BTC-to-Ethereum only)
@@ -111,9 +112,12 @@ Commands:
   info                               Show wallet info
   help                               Show this help message
 
+Examples (Arkade to EVM — gasless, no address needed):
+  tsx src/index.ts swap btc_arkade usdc_pol 100000
+  tsx src/index.ts swap btc_arkade usdc_arb 100000
+
 Examples (BTC to EVM):
   tsx src/index.ts swap btc_lightning usdc_pol 100000 0x1234...
-  tsx src/index.ts swap btc_arkade usdc_pol 100000 0x1234...
   tsx src/index.ts swap btc_onchain usdc_pol 100000 0x1234...
 
 Examples (BTC on-chain to Arkade):
@@ -132,6 +136,7 @@ Other Examples:
   tsx src/index.ts quote btc_lightning usdc_pol 100000
   tsx src/index.ts watch 12345678-1234-1234-1234-123456789abc
   tsx src/index.ts redeem 12345678-1234-1234-1234-123456789abc
+  tsx src/index.ts redeem 12345678-... 0x1234...   (Arkade-to-EVM gasless claim)
   tsx src/index.ts refund 12345678-... bc1q... 5
   tsx src/index.ts swaps
   tsx src/index.ts info
@@ -179,7 +184,7 @@ async function main(): Promise<void> {
       await watchSwap(client, args[1]);
       break;
     case "redeem":
-      await redeemSwap(client, swapStorage, args[1]);
+      await redeemSwap(client, swapStorage, args[1], args[2]);
       break;
     case "refund":
       await refundSwap(client, swapStorage, args[1], args[2], args[3], args[4]);

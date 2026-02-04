@@ -47,6 +47,8 @@ export type {
   BitcoinToEvmSwapResult,
   BtcToEvmSwapOptions,
   BtcToEvmSwapResult,
+  ClaimGaslessResult,
+  ClaimOptions,
   ClaimResult,
   ClientConfig,
   EthereumClaimData,
@@ -68,8 +70,10 @@ export {
   buildEvmHtlcCallData,
   type CreateSwapCallData,
   type CreateSwapParams,
+  deriveEvmAddress,
   encodeApproveCallData,
   encodeCreateSwapCallData,
+  signEvmDigest,
 } from "./evm/index.js";
 export {
   calculateSourceAmount,
