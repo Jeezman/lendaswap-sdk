@@ -80,13 +80,21 @@ export type {
 export type { BitcoinToEvmSwapResponse } from "./create/types.js";
 // Re-export coordinator utilities for Arkade-to-EVM redeemAndExecute flow
 export {
+  buildExecuteAndCreateCalls,
   buildRedeemCalls,
   buildRedeemDigest,
   type CoordinatorCall,
+  type ExecuteAndCreateCallData,
+  type ExecuteAndCreateParams,
+  encodeExecuteAndCreate,
   encodeRedeemAndExecute,
+  encodeRefundAndExecute,
+  encodeRefundTo,
   type RedeemAndExecuteCallData,
   type RedeemAndExecuteParams,
   type RedeemDigestParams,
+  type RefundAndExecuteParams,
+  type RefundToParams,
 } from "./evm/index.js";
 // Re-export types from redeem module
 export type {
@@ -169,6 +177,38 @@ export interface EvmFundingCallData {
     /** Encoded createSwap call data (from server) */
     data: string;
   };
+}
+
+/** Result of getting coordinator funding call data for EVM-to-BTC swaps */
+export interface CoordinatorFundingCallData {
+  /** Call data for approving source token spend to the coordinator */
+  approve: {
+    /** Source token contract address to call */
+    to: string;
+    /** Encoded approve(coordinator, amount) call data */
+    data: string;
+  };
+  /** Call data for executeAndCreate on the coordinator */
+  executeAndCreate: {
+    /** Coordinator contract address to call */
+    to: string;
+    /** Encoded executeAndCreate call data */
+    data: string;
+  };
+}
+
+/** Result of getting coordinator refund call data */
+export interface CoordinatorRefundCallData {
+  /** Contract address to call */
+  to: string;
+  /** Encoded refund call data */
+  data: string;
+  /** Whether the timelock has expired (refund is possible) */
+  timelockExpired: boolean;
+  /** Unix timestamp when the timelock expires */
+  timelockExpiry: number;
+  /** Refund mode used */
+  mode: "swap-back" | "direct";
 }
 
 const DEFAULT_BASE_URL = "https://apilendaswap.lendasat.com/";
@@ -2060,6 +2100,193 @@ export class Client {
       data: refundData.data,
       timelockExpired,
       timelockExpiry: timelock,
+    };
+  }
+
+  // =========================================================================
+  // Coordinator Funding (EVM-to-BTC via DEX + HTLC)
+  // =========================================================================
+
+  /**
+   * Gets call data to fund an EVM-to-BTC swap via the HTLCCoordinator.
+   *
+   * The coordinator atomically swaps source tokens (e.g. USDC) to WBTC via DEX
+   * and locks the WBTC into an HTLC in a single transaction.
+   *
+   * Fetches the coordinator calldata from the server, which builds the 1inch
+   * swap calldata and computes the refundCallsHash.
+   *
+   * @param swapId - The UUID of the swap.
+   * @param tokenDecimals - Decimals of the source token (e.g., 6 for USDC).
+   * @param approveMax - If true, approves max uint256. If false, approves exact amount. Default: true.
+   * @returns The approve and executeAndCreate call data.
+   *
+   * @example
+   * ```ts
+   * const swap = await client.createEvmToArkadeSwap({...});
+   * const funding = await client.getCoordinatorFundingCallData(swap.response.id, 6);
+   *
+   * // Step 1: Approve source token to coordinator
+   * await wallet.sendTransaction({ to: funding.approve.to, data: funding.approve.data });
+   *
+   * // Step 2: Execute swap + create HTLC
+   * await wallet.sendTransaction({ to: funding.executeAndCreate.to, data: funding.executeAndCreate.data });
+   * ```
+   */
+  async getCoordinatorFundingCallData(
+    swapId: string,
+    tokenDecimals: number,
+    approveMax = true,
+  ): Promise<CoordinatorFundingCallData> {
+    const swap = await this.getSwap(swapId);
+
+    if (swap.direction !== "evm_to_btc") {
+      throw new Error(
+        `Expected evm_to_btc swap, got ${swap.direction}. This method is for EVM-to-Arkade/Lightning swaps via coordinator.`,
+      );
+    }
+
+    const evmSwap = swap as EvmToBtcSwapResponse & { direction: "evm_to_btc" };
+
+    // Fetch coordinator funding calldata from server
+    const baseUrl = this.#config.baseUrl.replace(/\/$/, "");
+    const url = `${baseUrl}/swap/${swapId}/swap-and-lock-calldata`;
+    const headers: Record<string, string> = {};
+    if (this.#config.apiKey) {
+      headers["X-API-Key"] = this.#config.apiKey;
+    }
+
+    const resp = await fetch(url, { headers });
+    if (!resp.ok) {
+      const body = await resp.text();
+      throw new Error(
+        `Failed to get coordinator funding calldata: ${resp.status} ${body}`,
+      );
+    }
+
+    const serverData = (await resp.json()) as {
+      coordinator_address: string;
+      source_token_address: string;
+      approve_amount: string;
+      execute_and_create_calldata: string;
+    };
+
+    // Build approve call data: approve source token to coordinator
+    const exactAmount = BigInt(
+      Math.floor(evmSwap.source_amount * 10 ** tokenDecimals),
+    );
+    const maxUint256 = BigInt(
+      "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    );
+    const approveAmount = approveMax ? maxUint256 : exactAmount;
+
+    const approve = encodeApproveCallData(
+      serverData.source_token_address,
+      serverData.coordinator_address,
+      approveAmount,
+    );
+
+    return {
+      approve: {
+        to: approve.to,
+        data: approve.data,
+      },
+      executeAndCreate: {
+        to: serverData.coordinator_address,
+        data: serverData.execute_and_create_calldata,
+      },
+    };
+  }
+
+  /**
+   * Gets call data for refunding an EVM HTLC created via the coordinator.
+   *
+   * Two modes:
+   * - `"swap-back"`: calls `refundAndExecute` to swap WBTC back to source token via DEX
+   * - `"direct"`: calls `refundTo` to get WBTC directly
+   *
+   * Both are permissionless — anyone can call after the timelock expires.
+   *
+   * @param swapId - The UUID of the swap.
+   * @param mode - `"swap-back"` to reverse the DEX swap, or `"direct"` to get WBTC.
+   * @returns The refund call data.
+   */
+  async getCoordinatorRefundCallData(
+    swapId: string,
+    mode: "swap-back" | "direct",
+  ): Promise<CoordinatorRefundCallData> {
+    const swap = await this.getSwap(swapId);
+
+    if (swap.direction !== "evm_to_btc") {
+      throw new Error(
+        `Expected evm_to_btc swap, got ${swap.direction}. This method is for EVM-to-Arkade/Lightning swaps via coordinator.`,
+      );
+    }
+
+    const evmSwap = swap as EvmToBtcSwapResponse;
+    const timelock = evmSwap.evm_refund_locktime;
+    const now = Math.floor(Date.now() / 1000);
+    const timelockExpired = now >= timelock;
+
+    if (mode === "direct") {
+      // refundTo — get WBTC directly, no DEX swap
+      // We need to fetch swap details from server to get coordinator address and HTLC params
+      const baseUrl = this.#config.baseUrl.replace(/\/$/, "");
+      const url = `${baseUrl}/swap/${swapId}/refund-and-swap-calldata?mode=direct`;
+      const headers: Record<string, string> = {};
+      if (this.#config.apiKey) {
+        headers["X-API-Key"] = this.#config.apiKey;
+      }
+
+      const resp = await fetch(url, { headers });
+      if (!resp.ok) {
+        const body = await resp.text();
+        throw new Error(
+          `Failed to get coordinator refund calldata: ${resp.status} ${body}`,
+        );
+      }
+
+      const serverData = (await resp.json()) as {
+        coordinator_address: string;
+        calldata: string;
+      };
+
+      return {
+        to: serverData.coordinator_address,
+        data: serverData.calldata,
+        timelockExpired,
+        timelockExpiry: timelock,
+        mode,
+      };
+    }
+
+    // swap-back mode — refundAndExecute with reverse DEX swap
+    const baseUrl = this.#config.baseUrl.replace(/\/$/, "");
+    const url = `${baseUrl}/swap/${swapId}/refund-and-swap-calldata?mode=swap-back`;
+    const headers: Record<string, string> = {};
+    if (this.#config.apiKey) {
+      headers["X-API-Key"] = this.#config.apiKey;
+    }
+
+    const resp = await fetch(url, { headers });
+    if (!resp.ok) {
+      const body = await resp.text();
+      throw new Error(
+        `Failed to get coordinator refund calldata: ${resp.status} ${body}`,
+      );
+    }
+
+    const serverData = (await resp.json()) as {
+      coordinator_address: string;
+      calldata: string;
+    };
+
+    return {
+      to: serverData.coordinator_address,
+      data: serverData.calldata,
+      timelockExpired,
+      timelockExpiry: timelock,
+      mode,
     };
   }
 }

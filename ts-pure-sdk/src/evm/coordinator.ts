@@ -2,7 +2,8 @@
  * HTLCCoordinator contract utilities.
  *
  * Provides helpers for EIP-712 signing and encoding `redeemAndExecute` call data
- * for the HTLCCoordinator contract used in Arkade-to-EVM swaps.
+ * for the HTLCCoordinator contract used in Arkade-to-EVM swaps, and
+ * `executeAndCreate` / refund helpers for EVM-to-BTC coordinator swaps.
  */
 
 import { keccak_256 } from "@noble/hashes/sha3";
@@ -85,6 +86,66 @@ export interface RedeemAndExecuteCallData {
   data: string;
   /** Human-readable function signature */
   functionSignature: string;
+}
+
+// ── executeAndCreate interfaces (EVM-to-BTC coordinator flow) ────────────────
+
+/** Parameters for encoding executeAndCreate call data */
+export interface ExecuteAndCreateParams {
+  /** Array of calls to execute (approve + DEX swap) */
+  calls: CoordinatorCall[];
+  /** SHA256 hash of the preimage (32-byte hex with 0x prefix) */
+  preimageHash: string;
+  /** WBTC token address (token locked in the HTLC) */
+  token: string;
+  /** Claim address (server's EVM address that can claim) */
+  claimAddress: string;
+  /** HTLC timelock (unix timestamp) */
+  timelock: number;
+}
+
+/** Result of building executeAndCreate call data */
+export interface ExecuteAndCreateCallData {
+  /** The coordinator contract address */
+  to: string;
+  /** The encoded call data */
+  data: string;
+  /** Human-readable function signature */
+  functionSignature: string;
+}
+
+/** Parameters for encoding refundAndExecute call data */
+export interface RefundAndExecuteParams {
+  /** SHA256 hash of the preimage (32-byte hex with 0x prefix) */
+  preimageHash: string;
+  /** WBTC amount locked in the HTLC */
+  amount: bigint;
+  /** WBTC token address */
+  token: string;
+  /** Claim address (server's EVM address) */
+  claimAddress: string;
+  /** HTLC timelock (unix timestamp) */
+  timelock: number;
+  /** Array of calls to execute (approve + reverse DEX swap) */
+  calls: CoordinatorCall[];
+  /** Token to sweep after calls (source token) */
+  sweepToken: string;
+  /** Minimum amount of sweepToken to receive (slippage protection) */
+  minAmountOut: bigint;
+}
+
+/** Parameters for encoding refundTo call data */
+export interface RefundToParams {
+  /** SHA256 hash of the preimage (32-byte hex with 0x prefix) */
+  preimageHash: string;
+  /** WBTC amount locked in the HTLC */
+  amount: bigint;
+  /** WBTC token address */
+  token: string;
+  /** Claim address (server's EVM address) */
+  claimAddress: string;
+  /** HTLC timelock (unix timestamp) */
+  timelock: number;
 }
 
 // ── EIP-712 constants ────────────────────────────────────────────────────────
@@ -308,6 +369,182 @@ export function encodeRedeemAndExecute(
     data,
     functionSignature:
       "redeemAndExecute(bytes32,uint256,address,address,uint256,(address,uint256,bytes)[],address,uint256,address,uint8,bytes32,bytes32)",
+  };
+}
+
+// ── executeAndCreate selector ────────────────────────────────────────────────
+// keccak256("executeAndCreate((address,uint256,bytes)[],bytes32,address,address,uint256)")
+const EXECUTE_AND_CREATE_SELECTOR = keccak256(
+  stringToUtf8Bytes(
+    "executeAndCreate((address,uint256,bytes)[],bytes32,address,address,uint256)",
+  ),
+).slice(0, 10);
+
+// ── refundAndExecute selector ────────────────────────────────────────────────
+// keccak256("refundAndExecute(bytes32,uint256,address,address,uint256,(address,uint256,bytes)[],address,uint256)")
+const REFUND_AND_EXECUTE_SELECTOR = keccak256(
+  stringToUtf8Bytes(
+    "refundAndExecute(bytes32,uint256,address,address,uint256,(address,uint256,bytes)[],address,uint256)",
+  ),
+).slice(0, 10);
+
+// ── refundTo selector ────────────────────────────────────────────────────────
+// keccak256("refundTo(bytes32,uint256,address,address,uint256)")
+const REFUND_TO_SELECTOR = keccak256(
+  stringToUtf8Bytes("refundTo(bytes32,uint256,address,address,uint256)"),
+).slice(0, 10);
+
+// ── executeAndCreate calldata ────────────────────────────────────────────────
+
+/**
+ * Builds the calls array for `executeAndCreate` — approve source token to DEX + execute swap.
+ *
+ * @param sourceToken - Source token contract address (e.g. USDC)
+ * @param sourceAmount - Amount of source token to approve
+ * @param dexCallData - DEX swap calldata (from 1inch)
+ * @returns Array of CoordinatorCall structs
+ */
+export function buildExecuteAndCreateCalls(
+  sourceToken: string,
+  sourceAmount: bigint,
+  dexCallData: { to: string; data: string; value?: string },
+): CoordinatorCall[] {
+  const approveData = encodeApprove(dexCallData.to, sourceAmount);
+
+  return [
+    {
+      target: sourceToken,
+      value: 0n,
+      data: approveData,
+    },
+    {
+      target: dexCallData.to,
+      value: BigInt(dexCallData.value || "0"),
+      data: dexCallData.data,
+    },
+  ];
+}
+
+/**
+ * Encodes the call data for `coordinator.executeAndCreate(...)`.
+ *
+ * Signature: executeAndCreate(Call[] calls, bytes32 preimageHash, address token, address claimAddress, uint256 timelock)
+ *
+ * @param coordinatorAddress - The HTLCCoordinator contract address
+ * @param params - All parameters for the call
+ * @returns The encoded call data
+ */
+export function encodeExecuteAndCreate(
+  coordinatorAddress: string,
+  params: ExecuteAndCreateParams,
+): ExecuteAndCreateCallData {
+  // Head: calls_offset, preimageHash, token, claimAddress, timelock (5 slots)
+  const callsOffset = encodeUint256(5n * 32n);
+  const preimageHash = normalizeBytes32(params.preimageHash);
+  const token = normalizeAddress(params.token);
+  const claimAddress = normalizeAddress(params.claimAddress);
+  const timelock = encodeUint256(BigInt(params.timelock));
+
+  // Encode the calls array (tail)
+  const callsEncoded = encodeCalls(params.calls);
+
+  const data = [
+    EXECUTE_AND_CREATE_SELECTOR,
+    callsOffset,
+    preimageHash,
+    token,
+    claimAddress,
+    timelock,
+    callsEncoded,
+  ].join("");
+
+  return {
+    to: coordinatorAddress,
+    data,
+    functionSignature:
+      "executeAndCreate((address,uint256,bytes)[],bytes32,address,address,uint256)",
+  };
+}
+
+/**
+ * Encodes the call data for `coordinator.refundAndExecute(...)`.
+ *
+ * Signature: refundAndExecute(bytes32 preimageHash, uint256 amount, address token, address claimAddress, uint256 timelock, Call[] calls, address sweepToken, uint256 minAmountOut)
+ *
+ * @param coordinatorAddress - The HTLCCoordinator contract address
+ * @param params - All parameters for the call
+ * @returns The encoded call data
+ */
+export function encodeRefundAndExecute(
+  coordinatorAddress: string,
+  params: RefundAndExecuteParams,
+): ExecuteAndCreateCallData {
+  // Head: preimageHash, amount, token, claimAddress, timelock, calls_offset, sweepToken, minAmountOut (8 slots)
+  const preimageHash = normalizeBytes32(params.preimageHash);
+  const amount = encodeUint256(params.amount);
+  const token = normalizeAddress(params.token);
+  const claimAddress = normalizeAddress(params.claimAddress);
+  const timelock = encodeUint256(BigInt(params.timelock));
+  const callsOffset = encodeUint256(8n * 32n);
+  const sweepToken = normalizeAddress(params.sweepToken);
+  const minAmountOut = encodeUint256(params.minAmountOut);
+
+  // Encode the calls array (tail)
+  const callsEncoded = encodeCalls(params.calls);
+
+  const data = [
+    REFUND_AND_EXECUTE_SELECTOR,
+    preimageHash,
+    amount,
+    token,
+    claimAddress,
+    timelock,
+    callsOffset,
+    sweepToken,
+    minAmountOut,
+    callsEncoded,
+  ].join("");
+
+  return {
+    to: coordinatorAddress,
+    data,
+    functionSignature:
+      "refundAndExecute(bytes32,uint256,address,address,uint256,(address,uint256,bytes)[],address,uint256)",
+  };
+}
+
+/**
+ * Encodes the call data for `coordinator.refundTo(...)`.
+ *
+ * Signature: refundTo(bytes32 preimageHash, uint256 amount, address token, address claimAddress, uint256 timelock)
+ *
+ * @param coordinatorAddress - The HTLCCoordinator contract address
+ * @param params - All parameters for the call
+ * @returns The encoded call data
+ */
+export function encodeRefundTo(
+  coordinatorAddress: string,
+  params: RefundToParams,
+): ExecuteAndCreateCallData {
+  const preimageHash = normalizeBytes32(params.preimageHash);
+  const amount = encodeUint256(params.amount);
+  const token = normalizeAddress(params.token);
+  const claimAddress = normalizeAddress(params.claimAddress);
+  const timelock = encodeUint256(BigInt(params.timelock));
+
+  const data = [
+    REFUND_TO_SELECTOR,
+    preimageHash,
+    amount,
+    token,
+    claimAddress,
+    timelock,
+  ].join("");
+
+  return {
+    to: coordinatorAddress,
+    data,
+    functionSignature: "refundTo(bytes32,uint256,address,address,uint256)",
   };
 }
 
