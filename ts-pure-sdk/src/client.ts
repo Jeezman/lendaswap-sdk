@@ -1232,7 +1232,7 @@ export class Client {
     } else if (swap.direction === "evm_to_arkade") {
       // New generic evm_to_arkade endpoint - works with both creation and GET responses
       const evmToArkadeSwap = swap as {
-        receiver_pk: string;
+        sender_pk: string;
         arkade_server_pk: string;
         btc_vhtlc_address: string;
         vhtlc_refund_locktime: number;
@@ -1241,11 +1241,11 @@ export class Client {
         unilateral_refund_without_receiver_delay: number;
         network: string;
       };
-      // For claim: lendaswap is SENDER in the VHTLC (locks BTC), user is RECEIVER
+      // For EVM-to-Arkade: Lendaswap is SENDER in the VHTLC (locks BTC), user is RECEIVER
       // In the API response:
-      //   sender_pk = client's public key (they send EVM tokens)
-      //   receiver_pk = lendaswap's public key (receives EVM, locks BTC)
-      lendaswapPubKey = evmToArkadeSwap.receiver_pk;
+      //   sender_pk = lendaswap's derived key (VHTLC sender, locks BTC)
+      //   receiver_pk = user's key (VHTLC receiver, claims BTC)
+      lendaswapPubKey = evmToArkadeSwap.sender_pk;
       arkadeServerPubKey = evmToArkadeSwap.arkade_server_pk;
       vhtlcAddress = evmToArkadeSwap.btc_vhtlc_address;
       refundLocktime = evmToArkadeSwap.vhtlc_refund_locktime;
