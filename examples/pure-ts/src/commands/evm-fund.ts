@@ -88,20 +88,68 @@ export async function evmFundSwap(
   // Get swap details
   const swap = await client.getSwap(swapId);
 
-  if (swap.direction !== "evm_to_btc") {
-    console.error(`This command is for EVM-to-BTC swaps, got: ${swap.direction}`);
+  if (swap.direction !== "evm_to_btc" && swap.direction !== "evm_to_arkade") {
+    console.error(`This command is for EVM-to-BTC/Arkade swaps, got: ${swap.direction}`);
     process.exit(1);
   }
 
-  // Determine chain from source token
-  const chainName = getChainFromToken(swap.source_token);
+  // Handle both evm_to_btc (old) and evm_to_arkade (new) response formats
+  let chainName: ReturnType<typeof getChainFromToken>;
+  let tokenAddress: `0x${string}`;
+  let tokenDecimals: number;
+  let amountNeeded: bigint;
+  let htlcAddress: string;
+  let sourceTokenDisplay: string;
+  let sourceAmountDisplay: number;
+
+  if (swap.direction === "evm_to_arkade") {
+    // New generic endpoint - source_token fields are separate
+    const evmSwap = swap as typeof swap & {
+      evm_htlc_address: string;
+      evm_chain_id: number;
+      source_token_address: string;
+      source_token_symbol: string;
+      source_token_decimals: number;
+      source_token_amount: number;
+    };
+
+    // Determine chain from chain ID
+    const chainIdToName: Record<number, ReturnType<typeof getChainFromToken>> = {
+      1: "ethereum",
+      137: "polygon",
+      42161: "arbitrum",
+    };
+    chainName = chainIdToName[evmSwap.evm_chain_id];
+    tokenAddress = evmSwap.source_token_address as `0x${string}`;
+    tokenDecimals = evmSwap.source_token_decimals;
+    amountNeeded = BigInt(evmSwap.source_token_amount);
+    htlcAddress = evmSwap.evm_htlc_address;
+    sourceTokenDisplay = evmSwap.source_token_symbol;
+    sourceAmountDisplay = evmSwap.source_token_amount / (10 ** tokenDecimals);
+  } else {
+    // Old chain-specific endpoint - source_token is a string like "usdc_pol"
+    const evmSwap = swap as typeof swap & {
+      htlc_address_evm: string;
+      source_token_address: string;
+      source_amount: number;
+    };
+
+    chainName = getChainFromToken(swap.source_token);
+    tokenDecimals = getTokenDecimals(swap.source_token);
+    tokenAddress = evmSwap.source_token_address as `0x${string}`;
+    amountNeeded = BigInt(Math.floor(evmSwap.source_amount * 10 ** tokenDecimals));
+    htlcAddress = evmSwap.htlc_address_evm;
+    sourceTokenDisplay = swap.source_token;
+    sourceAmountDisplay = evmSwap.source_amount;
+  }
+
   if (!chainName) {
-    console.error(`Could not determine chain from token: ${swap.source_token}`);
+    console.error(`Could not determine chain from swap`);
     process.exit(1);
   }
 
   console.log(`Chain: ${chainName}`);
-  console.log(`Source Token: ${swap.source_token}`);
+  console.log(`Source Token: ${sourceTokenDisplay}`);
   console.log(`Status: ${swap.status}`);
   console.log("");
 
@@ -113,51 +161,44 @@ export async function evmFundSwap(
   }
 
   // Detect coordinator mode
-  const useCoordinator = process.env.USE_COORDINATOR === "1";
+  // For evm_to_arkade swaps, always use coordinator (source token needs DEX swap to WBTC)
+  // For evm_to_btc swaps, can optionally use coordinator via USE_COORDINATOR=1
+  const useCoordinator = swap.direction === "evm_to_arkade" || process.env.USE_COORDINATOR === "1";
 
   // Create EVM wallet
   const evmWallet = createEvmWallet(evmMnemonic, chainName);
   console.log(`EVM Wallet Address: ${evmWallet.address}`);
-  console.log(`Mode: ${useCoordinator ? "Coordinator (executeAndCreate)" : "Direct HTLC (createSwap)"}`);
+  console.log(`Mode: ${useCoordinator ? "Coordinator (swap + lock)" : "Direct HTLC (createSwap)"}`);
   console.log("");
 
-  const tokenDecimals = getTokenDecimals(swap.source_token);
-
-  // Type assertion for the swap response
-  const evmSwap = swap as typeof swap & {
-    htlc_address_evm: string;
-    source_token_address: string;
-    source_amount: number;
-    create_swap_tx?: string;
-  };
-
-  const tokenAddress = evmSwap.source_token_address as `0x${string}`;
-  const amountNeeded = BigInt(Math.floor(evmSwap.source_amount * 10 ** tokenDecimals));
-
   console.log(`Token Address: ${tokenAddress}`);
-  console.log(`Amount: ${evmSwap.source_amount} (${amountNeeded} smallest units)`);
+  console.log(`Amount: ${sourceAmountDisplay} (${amountNeeded} smallest units)`);
   console.log("");
 
   try {
     if (useCoordinator) {
       // ── Coordinator mode: approve source token to coordinator, then executeAndCreate ──
-      const funding = await client.getCoordinatorFundingCallData(swapId, tokenDecimals);
 
-      console.log(`Coordinator: ${funding.executeAndCreate.to}`);
+      // First, get coordinator address to check allowance
+      console.log("Fetching coordinator info...");
+      const initialFunding = await client.getCoordinatorFundingCallData(swapId, tokenDecimals);
+      const coordinatorAddress = initialFunding.executeAndCreate.to as `0x${string}`;
+
+      console.log(`Coordinator: ${coordinatorAddress}`);
       console.log("");
 
-      // Step 1: Approve source token to coordinator
-      console.log("Step 1: Approving source token to coordinator...");
+      // Step 1: Approve source token to coordinator (if needed)
+      console.log("Step 1: Checking token allowance...");
 
-      const spender = funding.approve.to as `0x${string}`;
       const currentAllowance = await evmWallet.publicClient.readContract({
         address: tokenAddress,
         abi: ERC20_ABI,
         functionName: "allowance",
-        args: [evmWallet.address as `0x${string}`, spender],
+        args: [evmWallet.address as `0x${string}`, coordinatorAddress],
       });
 
       if (currentAllowance < amountNeeded) {
+        console.log(`  Current allowance: ${currentAllowance}, needed: ${amountNeeded}`);
         const confirmApprove = await confirm("Send approve transaction?");
         if (!confirmApprove) {
           console.log("Cancelled.");
@@ -165,8 +206,8 @@ export async function evmFundSwap(
         }
 
         const approveTxHash = await evmWallet.walletClient.sendTransaction({
-          to: funding.approve.to as `0x${string}`,
-          data: funding.approve.data as `0x${string}`,
+          to: initialFunding.approve.to as `0x${string}`,
+          data: initialFunding.approve.data as `0x${string}`,
           chain: evmWallet.chain,
           account: evmWallet.account,
         });
@@ -184,10 +225,10 @@ export async function evmFundSwap(
         console.log("  Allowance sufficient, skipping.");
       }
 
-      // Step 2: Call executeAndCreate on coordinator
+      // Step 2: Ask for confirmation first, THEN fetch fresh calldata
       console.log("");
       console.log("Step 2: Calling executeAndCreate on coordinator...");
-      console.log(`  This will swap ${evmSwap.source_amount} ${swap.source_token} to WBTC and lock into HTLC.`);
+      console.log(`  This will swap ${sourceAmountDisplay} ${sourceTokenDisplay} to WBTC and lock into HTLC.`);
       console.log("");
 
       const confirmFund = await confirm("Send executeAndCreate transaction?");
@@ -196,9 +237,13 @@ export async function evmFundSwap(
         return;
       }
 
+      // Fetch FRESH calldata right before sending (1inch quotes expire quickly)
+      console.log("  Fetching fresh DEX calldata...");
+      const freshFunding = await client.getCoordinatorFundingCallData(swapId, tokenDecimals);
+
       const txHash = await evmWallet.walletClient.sendTransaction({
-        to: funding.executeAndCreate.to as `0x${string}`,
-        data: funding.executeAndCreate.data as `0x${string}`,
+        to: freshFunding.executeAndCreate.to as `0x${string}`,
+        data: freshFunding.executeAndCreate.data as `0x${string}`,
         chain: evmWallet.chain,
         account: evmWallet.account,
       });
@@ -221,9 +266,9 @@ export async function evmFundSwap(
     } else {
       // ── Direct HTLC mode: approve + createSwap ──
       const funding = await client.getEvmFundingCallData(swapId, tokenDecimals);
-      const htlcAddress = evmSwap.htlc_address_evm as `0x${string}`;
+      const htlcAddressHex = htlcAddress as `0x${string}`;
 
-      console.log(`HTLC Address: ${htlcAddress}`);
+      console.log(`HTLC Address: ${htlcAddressHex}`);
       console.log("");
 
       // Step 1: Check and approve if needed
@@ -233,7 +278,7 @@ export async function evmFundSwap(
         address: tokenAddress,
         abi: ERC20_ABI,
         functionName: "allowance",
-        args: [evmWallet.address as `0x${string}`, htlcAddress],
+        args: [evmWallet.address as `0x${string}`, htlcAddressHex],
       });
 
       console.log(`  Current allowance: ${currentAllowance}`);
@@ -278,7 +323,7 @@ export async function evmFundSwap(
 
       // Step 2: Create the swap
       console.log("Step 2: Funding the HTLC...");
-      console.log(`  This will transfer ${evmSwap.source_amount} ${swap.source_token} to the HTLC.`);
+      console.log(`  This will transfer ${sourceAmountDisplay} ${sourceTokenDisplay} to the HTLC.`);
       console.log("");
 
       const confirmFund = await confirm("Send createSwap transaction?");

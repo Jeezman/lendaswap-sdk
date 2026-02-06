@@ -10,6 +10,7 @@ import {
   type OnchainToEvmSwapResponse,
   type QuoteResponse,
   type TokenInfo,
+  type TokenSummary,
 } from "./api/client.js";
 import { getVhtlcAmounts, type VhtlcAmounts } from "./arkade.js";
 import {
@@ -27,8 +28,11 @@ import {
   createBitcoinToArkadeSwap,
   createBitcoinToEvmSwap,
   createEvmToArkadeSwap,
+  createEvmToArkadeSwapGeneric,
   createEvmToLightningSwap,
   createLightningToEvmSwap,
+  type EvmToArkadeSwapGenericOptions,
+  type EvmToArkadeSwapGenericResult,
   type EvmToArkadeSwapOptions,
   type EvmToArkadeSwapResult,
   type EvmToLightningSwapOptions,
@@ -72,6 +76,8 @@ export type {
   BtcToEvmSwapOptions,
   BtcToEvmSwapResult,
   EvmChain,
+  EvmToArkadeSwapGenericOptions,
+  EvmToArkadeSwapGenericResult,
   EvmToArkadeSwapOptions,
   EvmToArkadeSwapResult,
   EvmToLightningSwapOptions,
@@ -153,6 +159,15 @@ export interface ArkadeClaimOptions {
   destinationAddress: string;
   /** Arkade server URL (optional, uses default based on network) */
   arkadeServerUrl?: string;
+}
+
+/** Options for claiming a swap */
+export interface ClaimOptions {
+  /**
+   * @deprecated For Arkade-to-EVM swaps, the destination is now set at swap creation time
+   * and stored on the server. This option is ignored for arkade_to_evm swaps.
+   */
+  destination?: string;
 }
 
 /** Result of getting EVM funding call data */
@@ -886,7 +901,7 @@ export class Client {
    * }
    * ```
    */
-  async claim(id: string): Promise<ClaimResult> {
+  async claim(id: string, _options?: ClaimOptions): Promise<ClaimResult> {
     // Check swap storage is configured
     if (!this.#swapStorage) {
       return {
@@ -934,8 +949,14 @@ export class Client {
       };
     }
 
-    // Check if target is Arkade
-    if (swap.target_token === "btc_arkade") {
+    // Check if target is Arkade (handle both string "btc_arkade" and TokenSummary object)
+    const isArkadeTarget =
+      swap.target_token === "btc_arkade" ||
+      (typeof swap.target_token === "object" &&
+        swap.target_token !== null &&
+        (swap.target_token as TokenSummary).symbol === "BTC");
+
+    if (isArkadeTarget) {
       // Determine destination address based on swap direction
       let destinationAddress: string | undefined;
 
@@ -949,6 +970,21 @@ export class Client {
           direction: "evm_to_btc";
         };
         destinationAddress = evmSwap.user_address_arkade ?? undefined;
+      } else if (swap.direction === "evm_to_arkade") {
+        // For evm_to_arkade swaps, check if we have target_arkade_address in stored response
+        // The creation response (EvmToArkadeGenericSwapResponse) doesn't have it,
+        // but the GET response (EvmToArkadeSwapResponse) does.
+        const storedResponse = swap as { target_arkade_address?: string };
+        if (storedResponse.target_arkade_address) {
+          destinationAddress = storedResponse.target_arkade_address;
+        } else {
+          // Fetch from API to get the full response with target_arkade_address
+          const freshSwap = await this.getSwap(id);
+          const evmToArkadeSwap = freshSwap as {
+            target_arkade_address: string;
+          };
+          destinationAddress = evmToArkadeSwap.target_arkade_address;
+        }
       }
 
       if (!destinationAddress) {
@@ -1036,10 +1072,11 @@ export class Client {
     const wbtcAddress = arkadeSwap.wbtc_address;
     const amount = BigInt(arkadeSwap.evm_expected_sats);
 
-    // sweepToken: after a DEX swap, sweep the target token; otherwise sweep WBTC.
-    const sweepToken = arkadeSwap.dex_call_data
-      ? arkadeSwap.target_token_address
-      : arkadeSwap.wbtc_address;
+    // sweepToken: if there's a DEX swap (target != wbtc), sweep the target token; otherwise sweep WBTC.
+    const sweepToken =
+      arkadeSwap.target_token_address !== arkadeSwap.wbtc_address
+        ? arkadeSwap.target_token_address
+        : arkadeSwap.wbtc_address;
 
     // Build EIP-712 digest
     const digest = buildRedeemDigest({
@@ -1153,10 +1190,14 @@ export class Client {
     const swap = storedSwap.response;
 
     // Ensure we have an Arkade-target swap
-    if (swap.direction !== "evm_to_btc" && swap.direction !== "btc_to_arkade") {
+    if (
+      swap.direction !== "evm_to_btc" &&
+      swap.direction !== "btc_to_arkade" &&
+      swap.direction !== "evm_to_arkade"
+    ) {
       return {
         success: false,
-        message: `Expected evm_to_btc or btc_to_arkade swap, got ${swap.direction}. claimArkade is for swaps targeting Arkade.`,
+        message: `Expected evm_to_btc, btc_to_arkade, or evm_to_arkade swap, got ${swap.direction}. claimArkade is for swaps targeting Arkade.`,
       };
     }
 
@@ -1188,7 +1229,33 @@ export class Client {
       unilateralRefundWithoutReceiverDelay =
         btcToArkadeSwap.unilateral_refund_without_receiver_delay;
       network = btcToArkadeSwap.network;
+    } else if (swap.direction === "evm_to_arkade") {
+      // New generic evm_to_arkade endpoint - works with both creation and GET responses
+      const evmToArkadeSwap = swap as {
+        receiver_pk: string;
+        arkade_server_pk: string;
+        btc_vhtlc_address: string;
+        vhtlc_refund_locktime: number;
+        unilateral_claim_delay: number;
+        unilateral_refund_delay: number;
+        unilateral_refund_without_receiver_delay: number;
+        network: string;
+      };
+      // For claim: lendaswap is SENDER in the VHTLC (locks BTC), user is RECEIVER
+      // In the API response:
+      //   sender_pk = client's public key (they send EVM tokens)
+      //   receiver_pk = lendaswap's public key (receives EVM, locks BTC)
+      lendaswapPubKey = evmToArkadeSwap.receiver_pk;
+      arkadeServerPubKey = evmToArkadeSwap.arkade_server_pk;
+      vhtlcAddress = evmToArkadeSwap.btc_vhtlc_address;
+      refundLocktime = evmToArkadeSwap.vhtlc_refund_locktime;
+      unilateralClaimDelay = evmToArkadeSwap.unilateral_claim_delay;
+      unilateralRefundDelay = evmToArkadeSwap.unilateral_refund_delay;
+      unilateralRefundWithoutReceiverDelay =
+        evmToArkadeSwap.unilateral_refund_without_receiver_delay;
+      network = evmToArkadeSwap.network;
     } else {
+      // Old evm_to_btc endpoint (targeting Arkade)
       const evmToArkadeSwap = swap as EvmToBtcSwapResponse & {
         direction: "evm_to_btc";
       };
@@ -1926,6 +1993,34 @@ export class Client {
   }
 
   /**
+   * Creates a new EVM-to-Arkade swap via the generic endpoint.
+   *
+   * Uses the chain-agnostic `/swap/evm/arkade` endpoint which supports any
+   * ERC-20 token reachable through 1inch aggregation.
+   *
+   * @param options - The swap options.
+   * @returns The swap response and parameters for storage.
+   * @throws Error if the swap creation fails.
+   *
+   * @example
+   * ```ts
+   * const result = await client.createEvmToArkadeSwapGeneric({
+   *   targetAddress: "ark1q...",
+   *   tokenAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // USDC on Polygon
+   *   evmChainId: 137,
+   *   userAddress: "0x1234...",
+   *   sourceAmount: 100000000, // 100 USDC (6 decimals)
+   * });
+   * console.log("HTLC:", result.response.evm_htlc_address);
+   * ```
+   */
+  async createEvmToArkadeSwapGeneric(
+    options: EvmToArkadeSwapGenericOptions,
+  ): Promise<EvmToArkadeSwapGenericResult> {
+    return createEvmToArkadeSwapGeneric(options, this.#getCreateContext());
+  }
+
+  /**
    * Creates a new EVM to Lightning swap.
    *
    * This allows users to swap ERC-20 tokens (USDC, USDT, etc.) from EVM chains
@@ -1996,9 +2091,9 @@ export class Client {
   ): Promise<EvmFundingCallData> {
     const swap = await this.getSwap(swapId);
 
-    if (swap.direction !== "evm_to_btc") {
+    if (swap.direction !== "evm_to_btc" && swap.direction !== "evm_to_arkade") {
       throw new Error(
-        `Expected evm_to_btc swap, got ${swap.direction}. This method is for EVM-to-Arkade/Lightning swaps.`,
+        `Expected evm_to_btc swap, got ${swap.direction}. Even funding call data method is for EVM-to-Arkade/Lightning swaps.`,
       );
     }
 
@@ -2071,9 +2166,9 @@ export class Client {
 
     const swap = storedSwap?.response ?? (await this.getSwap(swapId));
 
-    if (swap.direction !== "evm_to_btc") {
+    if (swap.direction !== "evm_to_btc" && swap.direction !== "evm_to_arkade") {
       throw new Error(
-        `Expected evm_to_btc swap, got ${swap.direction}. This method is for EVM-to-Arkade/Lightning swaps.`,
+        `Expected evm_to_btc swap, got ${swap.direction}. Evm refund call data is for EVM-to-Arkade/Lightning swaps.`,
       );
     }
 
@@ -2131,13 +2226,30 @@ export class Client {
   ): Promise<CoordinatorFundingCallData> {
     const swap = await this.getSwap(swapId);
 
-    if (swap.direction !== "evm_to_btc") {
+    if (swap.direction !== "evm_to_btc" && swap.direction !== "evm_to_arkade") {
       throw new Error(
-        `Expected evm_to_btc swap, got ${swap.direction}. This method is for EVM-to-Arkade/Lightning swaps via coordinator.`,
+        `Expected evm_to_btc swap, got ${swap.direction}. Coordinator fund call data method is for EVM-to-Arkade/Lightning swaps via coordinator.`,
       );
     }
 
-    const evmSwap = swap as EvmToBtcSwapResponse & { direction: "evm_to_btc" };
+    // Get source amount based on swap direction
+    // For evm_to_arkade: source_token_amount is already in smallest units (integer)
+    // For evm_to_btc: source_amount is in human-readable units (decimal)
+    let exactAmount: bigint;
+    if (swap.direction === "evm_to_arkade") {
+      const evmSwap = swap as GetSwapResponse & {
+        direction: "evm_to_arkade";
+        source_token_amount: number;
+      };
+      exactAmount = BigInt(evmSwap.source_token_amount);
+    } else {
+      const evmSwap = swap as EvmToBtcSwapResponse & {
+        direction: "evm_to_btc";
+      };
+      exactAmount = BigInt(
+        Math.floor(evmSwap.source_amount * 10 ** tokenDecimals),
+      );
+    }
 
     // Fetch coordinator funding calldata from server
     const baseUrl = this.#config.baseUrl.replace(/\/$/, "");
@@ -2163,9 +2275,6 @@ export class Client {
     };
 
     // Build approve call data: approve source token to coordinator
-    const exactAmount = BigInt(
-      Math.floor(evmSwap.source_amount * 10 ** tokenDecimals),
-    );
     const maxUint256 = BigInt(
       "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
     );
@@ -2210,7 +2319,7 @@ export class Client {
 
     if (swap.direction !== "evm_to_btc") {
       throw new Error(
-        `Expected evm_to_btc swap, got ${swap.direction}. This method is for EVM-to-Arkade/Lightning swaps via coordinator.`,
+        `Expected evm_to_btc swap, got ${swap.direction}. Coordinator refund call data method is for EVM-to-Arkade/Lightning swaps via coordinator.`,
       );
     }
 

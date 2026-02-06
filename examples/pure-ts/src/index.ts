@@ -175,7 +175,7 @@ async function main(): Promise<void> {
       await getQuote(client, args[1], args[2], args[3]);
       break;
     case "swap":
-      await createSwap(client, args[1], args[2], args[3], args[4]);
+      await createSwap(client, args[1], args[2], args[3], args[4], CONFIG.evmMnemonic);
       break;
     case "evm-fund":
       await evmFundSwap(client, swapStorage, args[1], CONFIG.evmMnemonic);

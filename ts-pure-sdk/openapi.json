@@ -1745,15 +1745,6 @@
             "description": "EVM address that will sign the HTLC claim (SDK-derived for gasless claims)."
           },
           "created_at": { "type": "string", "format": "date-time" },
-          "dex_call_data": {
-            "oneOf": [
-              { "type": "null" },
-              {
-                "$ref": "#/components/schemas/DexCallData",
-                "description": "DEX swap calldata for non-WBTC targets."
-              }
-            ]
-          },
           "evm_chain_id": { "type": "integer", "format": "int64" },
           "evm_claim_txid": { "type": ["string", "null"] },
           "evm_coordinator_address": { "type": "string" },

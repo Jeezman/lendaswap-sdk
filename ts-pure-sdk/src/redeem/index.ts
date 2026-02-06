@@ -51,11 +51,13 @@ export { getChainFromTokenId } from "./types.js";
  * @param id - The UUID of the swap.
  * @param secret - The preimage/secret (32-byte hex string, with or without 0x prefix).
  * @param ctx - The context containing the API client and getSwap function.
+ * @param destination - (Optional) EVM address for receiving tokens. Required for Arkade-to-EVM
+ *                      swaps to fetch fresh DEX calldata.
  * @returns A ClaimResult with the outcome.
  *
  * @example
  * ```ts
- * const result = await claim(swapId, storedSwap.preimage, ctx);
+ * const result = await claim(swapId, storedSwap.preimage, ctx, "0x1234...");
  * if (result.success) {
  *   if (result.coordinatorClaimData) {
  *     // Arkade-to-EVM: build EIP-712 sig and call redeemAndExecute
@@ -78,6 +80,7 @@ export async function claim(
   id: string,
   secret: string,
   ctx: RedeemContext,
+  destination?: string,
 ): Promise<ClaimResult> {
   // Get the swap to determine target chain
   const swap = await ctx.getSwap(id);
@@ -85,7 +88,10 @@ export async function claim(
   // Check if this is an arkade_to_evm swap (uses coordinator redeemAndExecute)
   if ("direction" in swap && swap.direction === "arkade_to_evm") {
     return buildCoordinatorClaimData(
+      id,
       swap as unknown as ArkadeToEvmSwapResponse,
+      ctx,
+      destination,
     );
   }
 
@@ -132,8 +138,52 @@ export async function claim(
  * 2. Sign the digest with their EVM wallet
  * 3. Build the transaction using `encodeRedeemAndExecute()`
  * 4. Submit the transaction to the coordinator contract
+ *
+ * @param id - The swap ID
+ * @param swap - The swap response
+ * @param ctx - The redeem context with API client
+ * @param destination - Optional EVM address for receiving tokens. If provided and the swap
+ *                      involves a DEX swap (target != WBTC), fresh calldata is fetched.
  */
-function buildCoordinatorClaimData(swap: ArkadeToEvmSwapResponse): ClaimResult {
+async function buildCoordinatorClaimData(
+  id: string,
+  swap: ArkadeToEvmSwapResponse,
+  ctx: RedeemContext,
+  destination?: string,
+): Promise<ClaimResult> {
+  // Check if this swap involves a DEX swap (target token is different from WBTC)
+  const needsDexSwap = swap.target_token_address !== swap.wbtc_address;
+
+  let dexCallData: { to: string; data: string; value: string } | undefined;
+
+  // Fetch fresh DEX calldata if destination is provided and swap needs DEX
+  if (destination && needsDexSwap) {
+    const response = await ctx.apiClient.GET(
+      "/swap/{id}/redeem-and-swap-calldata",
+      {
+        params: {
+          path: { id },
+          query: { destination },
+        },
+      },
+    );
+
+    if (response.error) {
+      return {
+        success: false,
+        message: `Failed to fetch DEX calldata: ${response.error.error || "Unknown error"}`,
+      };
+    }
+
+    if (response.data) {
+      dexCallData = {
+        to: response.data.to,
+        data: response.data.data,
+        value: response.data.value,
+      };
+    }
+  }
+
   const coordinatorClaimData: CoordinatorClaimData = {
     htlcAddress: swap.evm_htlc_address,
     coordinatorAddress: swap.evm_coordinator_address,
@@ -142,15 +192,18 @@ function buildCoordinatorClaimData(swap: ArkadeToEvmSwapResponse): ClaimResult {
     wbtcAddress: swap.wbtc_address,
     sender: swap.server_evm_address,
     timelock: swap.evm_refund_locktime,
-    dexCallData: swap.dex_call_data,
+    dexCallData,
     targetTokenAddress: swap.target_token_address,
     network: swap.network,
   };
 
+  const message = destination
+    ? "Arkade-to-EVM claims require EIP-712 signing. Use buildRedeemDigest() and encodeRedeemAndExecute() with the provided data."
+    : "Arkade-to-EVM claims require EIP-712 signing. Note: No destination provided - call claim() again with your EVM address to fetch fresh DEX calldata.";
+
   return {
     success: true,
-    message:
-      "Arkade-to-EVM claims require EIP-712 signing. Use buildRedeemDigest() and encodeRedeemAndExecute() with the provided data.",
+    message,
     coordinatorClaimData,
   };
 }

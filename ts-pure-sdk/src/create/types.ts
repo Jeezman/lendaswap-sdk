@@ -7,6 +7,7 @@ import type {
   ArkadeToEvmSwapResponse,
   BtcToArkadeSwapResponse,
   BtcToEvmSwapResponse,
+  EvmToArkadeGenericSwapResponse,
   EvmToBtcSwapResponse,
   GetSwapResponse,
   OnchainToEvmSwapResponse,
@@ -132,6 +133,32 @@ export interface EvmToLightningSwapOptions {
 export interface EvmToLightningSwapResult {
   /** The swap response from the API */
   response: EvmToBtcSwapResponse;
+  /** The swap parameters used (for storage/recovery) */
+  swapParams: SwapParams;
+}
+
+/** Options for creating an EVM-to-Arkade swap via the generic endpoint */
+export interface EvmToArkadeSwapGenericOptions {
+  /** Target Arkade address to receive BTC */
+  targetAddress: string;
+  /** ERC-20 contract address of the source token on the EVM chain */
+  tokenAddress: string;
+  /** Numeric EVM chain ID: 1 (Ethereum), 137 (Polygon), 42161 (Arbitrum) */
+  evmChainId: number;
+  /** User's EVM wallet address (sender of the ERC-20 token) */
+  userAddress: string;
+  /** Amount of source token to send in smallest units (mutually exclusive with targetAmount) */
+  sourceAmount?: number;
+  /** Desired BTC output in sats (mutually exclusive with sourceAmount) */
+  targetAmount?: number;
+  /** Optional referral code */
+  referralCode?: string;
+}
+
+/** Result of creating an EVM-to-Arkade swap via the generic endpoint */
+export interface EvmToArkadeSwapGenericResult {
+  /** The swap response from the API */
+  response: EvmToArkadeGenericSwapResponse;
   /** The swap parameters used (for storage/recovery) */
   swapParams: SwapParams;
 }

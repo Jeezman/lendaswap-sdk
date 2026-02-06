@@ -60,6 +60,12 @@ export type ArkadeToEvmSwapResponse =
 export type DexCallData = components["schemas"]["DexCallData"];
 export type TokenSummary = components["schemas"]["TokenSummary"];
 
+// EVM-to-Arkade (generic endpoint) types
+export type EvmToArkadeGenericSwapRequest =
+  components["schemas"]["EvmToArkadeGenericSwapRequest"];
+export type EvmToArkadeGenericSwapResponse =
+  components["schemas"]["EvmToArkadeGenericSwapResponse"];
+
 export interface ApiClientOptions {
   baseUrl: string;
   apiKey?: string;

@@ -4,8 +4,19 @@
  */
 
 import {type Client, type EvmChain} from "@lendasat/lendaswap-sdk-pure";
+import {mnemonicToAccount} from "viem/accounts";
 
 type SwapType = "lightning" | "arkade" | "bitcoin" | "bitcoin-to-arkade" | "evm-to-arkade" | "evm-to-lightning";
+
+/** Format an amount from smallest units to human-readable with the raw value */
+function formatAmount(amount: number, decimals: number, symbol: string): string {
+  const humanReadable = amount / Math.pow(10, decimals);
+  if (decimals === 0) {
+    // For sats, just show the number
+    return `${amount} ${symbol}`;
+  }
+  return `${humanReadable} ${symbol} (${amount} smallest units)`;
+}
 
 
 // TODO: we should pass in the token id not something like usdc_pol.
@@ -25,6 +36,7 @@ export async function createSwap(
   to: string | undefined,
   amount: string | undefined,
   address: string | undefined,
+  evmMnemonic?: string,
 ): Promise<void> {
   if (!from || !to || !amount) {
     console.error("Usage: tsx src/index.ts swap <from> <to> <amount> [address]");
@@ -110,7 +122,11 @@ export async function createSwap(
     let status: string;
     let keyIndex: number;
     let sourceAmount: number;
+    let sourceDecimals: number;
+    let sourceSymbol: string;
     let targetAmount: number;
+    let targetDecimals: number;
+    let targetSymbol: string;
     let sourceToken: string;
     let targetToken: string;
     let paymentInfo: string;
@@ -118,60 +134,90 @@ export async function createSwap(
     // Use the appropriate helper method based on swap type
     // The Client automatically stores the swap if swap storage is configured
     if (swapType === "evm-to-arkade") {
-      // EVM to Arkade swap
+      // EVM to Arkade swap using the generic endpoint
       // For this swap type, `address` is the Arkade address
-      // We need a 5th arg for the EVM user address
-      const evmUserAddress = process.argv[7]; // 5th positional arg after 'swap'
+      // We need the EVM user address - try arg first, then derive from EVM_MNEMONIC
+      let evmUserAddress = process.argv[7]; // 5th positional arg after 'swap'
+
+      if (!evmUserAddress && evmMnemonic) {
+        // Derive EVM address from mnemonic
+        const account = mnemonicToAccount(evmMnemonic);
+        evmUserAddress = account.address;
+        console.log(`  Using EVM address from EVM_MNEMONIC: ${evmUserAddress}`);
+      }
 
       if (!evmUserAddress) {
-        console.error("Error: EVM to Arkade swaps require your EVM wallet address as the 5th argument");
+        console.error("Error: EVM to Arkade swaps require your EVM wallet address.");
+        console.error("Either provide it as the 5th argument or set EVM_MNEMONIC environment variable.");
         console.error("");
-        console.error("Usage: tsx src/index.ts swap <sourceToken> btc_arkade <amount> <arkadeAddress> <evmAddress>");
+        console.error("Usage: tsx src/index.ts swap <sourceToken> btc_arkade <amount> <arkadeAddress> [evmAddress]");
         console.error("Example: tsx src/index.ts swap usdc_pol btc_arkade 100 ark1... 0x1234...");
         process.exit(1);
       }
 
-      const sourceChain = parseSourceChain(from);
-      if (!sourceChain) {
-        console.error(`Unsupported source token: ${from}`);
+      // Look up token info from the map
+      const tokenInfo = EVM_TOKEN_MAP[from];
+      if (!tokenInfo) {
+        console.error(`Unknown source token: ${from}`);
+        console.error(`Supported tokens: ${Object.keys(EVM_TOKEN_MAP).join(", ")}`);
         process.exit(1);
       }
 
-      console.log(`  Source Chain: ${sourceChain}`);
+      console.log(`  Chain ID: ${tokenInfo.evmChainId}`);
+      console.log(`  Token Address: ${tokenInfo.tokenAddress}`);
       console.log(`  EVM User Address: ${evmUserAddress}`);
       console.log("");
 
-      const result = await client.createEvmToArkadeSwap({
-        sourceChain,
-        sourceToken: from,
-        sourceAmount: amountNum,
+      const result = await client.createEvmToArkadeSwapGeneric({
         targetAddress: address!, // Arkade address (validated above)
-        userAddress: evmUserAddress, // EVM wallet address
+        tokenAddress: tokenInfo.tokenAddress,
+        evmChainId: tokenInfo.evmChainId,
+        userAddress: evmUserAddress,
+        sourceAmount: amountNum,
       });
 
       swapId = result.response.id;
       status = result.response.status;
       keyIndex = result.swapParams.keyIndex;
-      sourceAmount = result.response.source_amount;
-      targetAmount = result.response.target_amount;
-      sourceToken = result.response.source_token;
-      targetToken = result.response.target_token;
+      sourceAmount = result.response.source_token_amount;
+      sourceDecimals = result.response.source_token.decimals;
+      sourceSymbol = result.response.source_token.symbol;
+      targetAmount = result.response.btc_expected_sats;
+      targetDecimals = 0; // sats
+      targetSymbol = "sats";
+      sourceToken = `${result.response.source_token.symbol} (chain ${result.response.evm_chain_id})`;
+      targetToken = "btc_arkade";
       paymentInfo = [
-        `1. Approve token spend:`,
-        `   Token contract: ${result.response.source_token_address}`,
-        `   HTLC contract:  ${result.response.htlc_address_evm}`,
+        `1. Approve token spend to coordinator:`,
+        `   Token contract: ${result.response.source_token.address}`,
         ``,
-        `2. Fund the HTLC (call createSwap or similar on the contract)`,
-        `   HTLC Address: ${result.response.htlc_address_evm}`,
+        `2. Fund via coordinator using 'npm run evm-fund -- ${result.response.id}'`,
+        `   This will swap ${sourceSymbol} → WBTC and lock into HTLC`,
       ].join("\n");
 
     } else if (swapType === "evm-to-lightning") {
       // EVM to Lightning swap
       // For this swap type:
       // - `amount` is actually the bolt11 invoice
-      // - `address` is the user's EVM wallet address
+      // - `address` is the user's EVM wallet address (optional if EVM_MNEMONIC is set)
       const bolt11Invoice = amount; // amount param contains the invoice
-      const evmUserAddress = address!; // address param contains the EVM address (validated above)
+      let evmUserAddress = address;
+
+      if (!evmUserAddress && evmMnemonic) {
+        // Derive EVM address from mnemonic
+        const account = mnemonicToAccount(evmMnemonic);
+        evmUserAddress = account.address;
+        console.log(`  Using EVM address from EVM_MNEMONIC: ${evmUserAddress}`);
+      }
+
+      if (!evmUserAddress) {
+        console.error("Error: EVM to Lightning swaps require your EVM wallet address.");
+        console.error("Either provide it as the 4th argument or set EVM_MNEMONIC environment variable.");
+        console.error("");
+        console.error("Usage: tsx src/index.ts swap <sourceToken> btc_lightning <invoice> [evmAddress]");
+        console.error("Example: tsx src/index.ts swap usdc_pol btc_lightning lnbc... 0x1234...");
+        process.exit(1);
+      }
 
       const sourceChain = parseSourceChain(from);
       if (!sourceChain) {
@@ -193,7 +239,11 @@ export async function createSwap(
       status = result.response.status;
       keyIndex = result.swapParams.keyIndex;
       sourceAmount = result.response.source_amount;
+      sourceDecimals = 6; // USDC/USDT have 6 decimals
+      sourceSymbol = result.response.source_token.replace(/_.*$/, "").toUpperCase();
       targetAmount = result.response.target_amount;
+      targetDecimals = 0; // sats
+      targetSymbol = "sats";
       sourceToken = result.response.source_token;
       targetToken = result.response.target_token;
       paymentInfo = [
@@ -217,7 +267,11 @@ export async function createSwap(
       status = result.response.status;
       keyIndex = result.swapParams.keyIndex;
       sourceAmount = result.response.source_amount;
+      sourceDecimals = 0; // sats
+      sourceSymbol = "sats";
       targetAmount = result.response.target_amount;
+      targetDecimals = 0; // sats
+      targetSymbol = "sats";
       sourceToken = result.response.source_token;
       targetToken = result.response.target_token;
       paymentInfo = [
@@ -246,7 +300,11 @@ export async function createSwap(
       status = result.response.status;
       keyIndex = result.swapParams.keyIndex;
       sourceAmount = result.response.source_amount;
+      sourceDecimals = 0; // sats
+      sourceSymbol = "sats";
       targetAmount = result.response.target_amount;
+      targetDecimals = 6; // USDC/USDT have 6 decimals
+      targetSymbol = to.replace(/_.*$/, "").toUpperCase();
       sourceToken = from;
       targetToken = to;
       paymentInfo = `Pay this Lightning Invoice:\n  ${result.response.ln_invoice}`;
@@ -279,7 +337,11 @@ export async function createSwap(
       status = result.response.status;
       keyIndex = result.swapParams.keyIndex;
       sourceAmount = result.response.btc_expected_sats;
+      sourceDecimals = 0; // sats
+      sourceSymbol = "sats";
       targetAmount = result.response.target_token_amount ?? 0;
+      targetDecimals = result.response.target_token_decimals ?? 6;
+      targetSymbol = result.response.target_token_symbol ?? "tokens";
       sourceToken = result.response.source_token;
       targetToken = `${result.response.target_token_symbol} (chain ${result.response.evm_chain_id})`;
       paymentInfo = [
@@ -315,19 +377,31 @@ export async function createSwap(
       // Handle union type - check which fields exist
       if ("btc_htlc_address" in result.response) {
         sourceAmount = result.response.source_amount;
+        sourceDecimals = 0; // sats
+        sourceSymbol = "sats";
         targetAmount = result.response.target_amount;
+        targetDecimals = 6; // USDC/USDT
+        targetSymbol = to.replace(/_.*$/, "").toUpperCase();
         sourceToken = result.response.source_token;
         targetToken = result.response.target_token;
         paymentInfo = `Send BTC to this address:\n  ${result.response.btc_htlc_address}`;
       } else if ("source_amount" in result.response) {
         sourceAmount = result.response.source_amount;
+        sourceDecimals = 0; // sats
+        sourceSymbol = "sats";
         targetAmount = result.response.target_amount;
+        targetDecimals = 6; // USDC/USDT
+        targetSymbol = to.replace(/_.*$/, "").toUpperCase();
         sourceToken = from;
         targetToken = to;
         paymentInfo = `Fund this address:\n  ${result.response.htlc_address_arkade}`;
       } else {
         sourceAmount = amountNum;
+        sourceDecimals = 0;
+        sourceSymbol = "units";
         targetAmount = 0;
+        targetDecimals = 0;
+        targetSymbol = "units";
         sourceToken = from;
         targetToken = to;
         paymentInfo = "Check swap response for payment details";
@@ -341,10 +415,8 @@ export async function createSwap(
     console.log(`  Status:        ${status}`);
     console.log(`  Key Index:     ${keyIndex}`);
     console.log("");
-    console.log(`  Source Token:  ${sourceToken}`);
-    console.log(`  Source Amount: ${sourceAmount}`);
-    console.log(`  Target Token:  ${targetToken}`);
-    console.log(`  Target Amount: ${targetAmount}`);
+    console.log(`  Source:        ${formatAmount(sourceAmount, sourceDecimals, sourceSymbol)}`);
+    console.log(`  Target:        ${formatAmount(targetAmount, targetDecimals, targetSymbol)}`);
     console.log("");
     console.log(paymentInfo);
     console.log("-".repeat(60));

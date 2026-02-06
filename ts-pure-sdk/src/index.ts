@@ -53,6 +53,8 @@ export type {
   EthereumClaimData,
   EvmChain,
   EvmFundingCallData,
+  EvmToArkadeSwapGenericOptions,
+  EvmToArkadeSwapGenericResult,
   EvmToArkadeSwapOptions,
   EvmToArkadeSwapResult,
   EvmToLightningSwapOptions,

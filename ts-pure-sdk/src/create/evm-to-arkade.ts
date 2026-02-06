@@ -8,6 +8,8 @@ import type { GetSwapResponse } from "../api/client.js";
 import { bytesToHex } from "../signer/index.js";
 import type {
   CreateSwapContext,
+  EvmToArkadeSwapGenericOptions,
+  EvmToArkadeSwapGenericResult,
   EvmToArkadeSwapOptions,
   EvmToArkadeSwapResult,
 } from "./types.js";
@@ -105,4 +107,70 @@ export async function createEvmToArkadeSwap(
   } as GetSwapResponse);
 
   return { response, swapParams };
+}
+
+/**
+ * Creates a new EVM-to-Arkade swap via the generic endpoint.
+ *
+ * Uses the chain-agnostic `/swap/evm/arkade` endpoint which supports any
+ * ERC-20 token reachable through 1inch aggregation.
+ *
+ * @param options - The swap options.
+ * @param ctx - The context containing API client and helper functions.
+ * @returns The swap response and parameters for storage.
+ * @throws Error if the swap creation fails.
+ *
+ * @example
+ * ```ts
+ * const result = await createEvmToArkadeSwapGeneric(
+ *   {
+ *     targetAddress: "ark1q...",
+ *     tokenAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // USDC on Polygon
+ *     evmChainId: 137,
+ *     userAddress: "0x1234...",
+ *     sourceAmount: 100000000, // 100 USDC (6 decimals)
+ *   },
+ *   { apiClient, deriveSwapParams, storeSwap }
+ * );
+ * console.log("HTLC:", result.response.evm_htlc_address);
+ * ```
+ */
+export async function createEvmToArkadeSwapGeneric(
+  options: EvmToArkadeSwapGenericOptions,
+  ctx: CreateSwapContext,
+): Promise<EvmToArkadeSwapGenericResult> {
+  const swapParams = await ctx.deriveSwapParams();
+  const hashLock = `0x${bytesToHex(swapParams.preimageHash)}`;
+  const receiverPk = bytesToHex(swapParams.publicKey);
+  const userId = bytesToHex(swapParams.userId);
+
+  const { data, error } = await ctx.apiClient.POST("/swap/evm/arkade", {
+    body: {
+      hash_lock: hashLock,
+      receiver_pk: receiverPk,
+      user_id: userId,
+      target_address: options.targetAddress,
+      token_address: options.tokenAddress,
+      evm_chain_id: options.evmChainId,
+      user_address: options.userAddress,
+      amount_in: options.sourceAmount,
+      amount_out: options.targetAmount,
+      referral_code: options.referralCode,
+    },
+  });
+
+  if (error) {
+    throw new Error(`Failed to create swap: ${JSON.stringify(error)}`);
+  }
+  if (!data) {
+    throw new Error("No swap data returned");
+  }
+
+  // Store the swap if storage is configured
+  await ctx.storeSwap(data.id, swapParams, {
+    ...data,
+    direction: "evm_to_arkade",
+  } as unknown as GetSwapResponse);
+
+  return { response: data, swapParams };
 }
