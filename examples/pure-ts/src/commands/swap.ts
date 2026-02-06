@@ -259,11 +259,20 @@ export async function createSwap(
         process.exit(1);
       }
 
+      // Target address is required for arkade-to-evm swaps
+      if (!address) {
+        console.error("Error: Arkade-to-EVM swaps require a target EVM address.");
+        console.error("");
+        console.error("Usage: tsx src/index.ts swap btc_arkade <target-token> <amount> <target-evm-address>");
+        console.error("Example: tsx src/index.ts swap btc_arkade usdc_pol 100000 0x1234...");
+        process.exit(1);
+      }
+
       const result = await client.createArkadeToEvmSwapGeneric({
         tokenAddress: tokenInfo.tokenAddress,
         evmChainId: tokenInfo.evmChainId,
         sourceAmount: Math.floor(amountNum),
-        ...(address ? {targetAddress: address} : {}),
+        targetAddress: address,
       });
 
       swapId = result.response.id;
@@ -278,9 +287,10 @@ export async function createSwap(
         `  ${result.response.btc_vhtlc_address}`,
         ``,
         `Amount: ${result.response.btc_expected_sats} sats`,
+        `Target address: ${address}`,
         ``,
         `Once funded, the server will fund the EVM HTLC.`,
-        `Then redeem with: npm run redeem -- ${result.response.id} <destination-evm-address>`,
+        `Then redeem with: npm run redeem -- ${result.response.id}`,
       ].join("\n");
 
     } else {

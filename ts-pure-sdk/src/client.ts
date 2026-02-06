@@ -155,12 +155,6 @@ export interface ArkadeClaimOptions {
   arkadeServerUrl?: string;
 }
 
-/** Options for claiming a swap */
-export interface ClaimOptions {
-  /** EVM address where tokens should be sent (required for Arkade-to-EVM gasless claims) */
-  destination?: string;
-}
-
 /** Result of getting EVM funding call data */
 export interface EvmFundingCallData {
   /** Call data for approving token spend (ERC20 approve) */
@@ -871,21 +865,19 @@ export class Client {
    *
    * Reads swap data and preimage from local storage. The claim method
    * depends on the swap direction and target chain:
-   * - **Arkade-to-EVM**: Gasless claim via server (requires `evmSigner` and `destination` in options)
+   * - **Arkade-to-EVM**: Gasless claim via server (destination set at swap creation time)
    * - **Polygon/Arbitrum**: Uses Gelato Relay for gasless execution
    * - **Ethereum**: Returns call data for manual claiming
    * - **Arkade**: Claims via Arkade protocol
    *
    * @param id - The UUID of the swap.
-   * @param options - Optional claim configuration. Required for Arkade-to-EVM swaps.
+   * @param _options - Deprecated. For Arkade-to-EVM, destination is now set at swap creation.
    * @returns A ClaimResult with the outcome.
    *
    * @example
    * ```ts
-   * // Arkade-to-EVM (gasless via server, SDK signs internally)
-   * const result = await client.claim(swapId, {
-   *   destination: "0xYourAddress",
-   * });
+   * // Arkade-to-EVM (gasless via server, uses stored target address)
+   * const result = await client.claim(swapId);
    *
    * // Other swap types
    * const result = await client.claim(swapId);
@@ -894,7 +886,7 @@ export class Client {
    * }
    * ```
    */
-  async claim(id: string, options?: ClaimOptions): Promise<ClaimResult> {
+  async claim(id: string): Promise<ClaimResult> {
     // Check swap storage is configured
     if (!this.#swapStorage) {
       return {
@@ -915,22 +907,26 @@ export class Client {
 
     const swap = storedSwap.response;
     const secret = storedSwap.preimage;
-    console.log(`we found our swap ${storedSwap.swapId}`);
 
     // Arkade-to-EVM: use gasless claim via server (SDK signs internally)
+    // The destination is always the stored target_evm_address (set at swap creation time)
     if (swap.direction === "arkade_to_evm") {
-      console.log(`We are here`);
-      if (!options?.destination) {
+      const arkadeSwap = swap as ArkadeToEvmSwapResponse & {
+        direction: "arkade_to_evm";
+      };
+      // Use the stored target address - this was set when the swap was created
+      const destination =
+        arkadeSwap.target_evm_address ?? arkadeSwap.client_evm_address;
+
+      if (!destination) {
         return {
           success: false,
           message:
-            "Arkade-to-EVM claims require a destination address. " +
-            'Pass it via claim(id, { destination: "0x..." }).',
+            "Arkade-to-EVM claim failed: no target address found. " +
+            "This swap may have been created before target address storage was implemented.",
         };
       }
-      console.log(`We are here too`);
-      const gaslessResult = await this.claimViaGasless(id, options.destination);
-      console.log(`we claimed`);
+      const gaslessResult = await this.claimViaGasless(id, destination);
       return {
         success: true,
         message: gaslessResult.message,
@@ -1060,12 +1056,10 @@ export class Client {
       minAmountOut: 0n,
     });
 
-    console.log(`3a`);
     // Sign with the swap's internally derived EVM key
     const sig = signEvmDigest(storedSwap.secretKey, digest);
 
     // Send to server
-    console.log(`4`);
 
     const response = await fetch(
       `${this.#config.baseUrl}/swap/${id}/claim-gasless`,
@@ -1081,7 +1075,6 @@ export class Client {
         }),
       },
     );
-    console.log(`5`);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -1089,8 +1082,6 @@ export class Client {
         `Gasless claim failed (${response.status}): ${errorText}`,
       );
     }
-
-    console.log(`6`);
 
     const result = await response.json();
     return {

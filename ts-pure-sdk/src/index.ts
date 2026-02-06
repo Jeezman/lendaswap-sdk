@@ -48,7 +48,6 @@ export type {
   BtcToEvmSwapOptions,
   BtcToEvmSwapResult,
   ClaimGaslessResult,
-  ClaimOptions,
   ClaimResult,
   ClientConfig,
   EthereumClaimData,

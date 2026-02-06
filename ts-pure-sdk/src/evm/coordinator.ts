@@ -218,7 +218,6 @@ export function buildRedeemDigest(params: RedeemDigestParams): string {
       { type: "address", value: params.htlcAddress },
     ]),
   );
-  console.log("a");
 
   // Struct hash
   const typeHash = keccak256(stringToUtf8Bytes(REDEEM_TYPEHASH));
@@ -236,7 +235,6 @@ export function buildRedeemDigest(params: RedeemDigestParams): string {
       { type: "uint256", value: params.minAmountOut },
     ]),
   );
-  console.log("b");
 
   // EIP-712 digest: \x19\x01 ‖ domainSeparator ‖ structHash
   const prefix = new Uint8Array([0x19, 0x01]);
@@ -248,7 +246,6 @@ export function buildRedeemDigest(params: RedeemDigestParams): string {
   message.set(prefix, 0);
   message.set(domainBytes, prefix.length);
   message.set(structBytes, prefix.length + domainBytes.length);
-  console.log("c");
 
   return keccak256(message);
 }

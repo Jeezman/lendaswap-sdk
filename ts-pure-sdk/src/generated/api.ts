@@ -321,6 +321,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/swap/evm/arkade": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Create a chain-agnostic EVM-to-Arkade swap. */
+    post: operations["create_evm_to_arkade_swap_generic"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/swap/lightning/arbitrum": {
     parameters: {
       query?: never;
@@ -382,7 +399,7 @@ export interface paths {
     get?: never;
     put?: never;
     /** Create a new Polygon to Arkade swap request */
-    post: operations["create_evm_to_arkade_swap"];
+    post: operations["create_polygon_to_arkade_swap"];
     delete?: never;
     options?: never;
     head?: never;
@@ -494,6 +511,79 @@ export interface paths {
     put?: never;
     /** Submit signed transactions to Gelato for gasless execution */
     post: operations["submit_to_gelato"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/swap/{id}/redeem-and-swap-calldata": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Returns fresh 1inch DEX calldata for an Arkade-to-EVM swap.
+     * @description The calldata is generated with `receiver = destination` so that 1inch
+     *     sends the output tokens directly to the user's address, avoiding an
+     *     extra sweep transfer.
+     */
+    get: operations["get_dex_calldata"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/swap/{id}/refund-and-swap-calldata": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Returns calldata to refund an expired EVM-to-Arkade HTLC via the coordinator.
+     * @description Two modes:
+     *     - `mode=swap-back` (default): calls `refundAndExecute` — refund WBTC from
+     *       expired HTLC, swap WBTC → source token via 1inch, sweep to caller.
+     *     - `mode=direct`: calls `refundTo` — refund WBTC directly to caller (no DEX).
+     *
+     *     Both are permissionless after the timelock expires.
+     */
+    get: operations["get_refund_calldata"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/swap/{id}/swap-and-lock-calldata": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Returns the calldata needed to fund an EVM-to-Arkade swap via the HTLCCoordinator.
+     * @description The coordinator atomically:
+     *     1. Pulls source tokens from the user via `transferFrom`
+     *     2. Approves the 1inch router to spend the source tokens
+     *     3. Swaps source tokens to WBTC via 1inch
+     *     4. Locks the WBTC into an HTLC
+     *
+     *     The caller must first approve the source token to the **coordinator** address.
+     */
+    get: operations["get_coordinator_funding_calldata"];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
@@ -697,6 +787,8 @@ export interface components {
        *     Value is in the target token's smallest unit (e.g. for USDC with 6 decimals, 1000000 = 1 USDC).
        */
       amount_out?: number | null;
+      /** @description EVM address that will sign the HTLC claim (SDK-derived for gasless claims). */
+      claiming_address: string;
       /**
        * Format: int64
        * @description Numeric EVM chain ID: 1 (Ethereum), 137 (Polygon), 42161 (Arbitrum).
@@ -708,7 +800,7 @@ export interface components {
       referral_code?: string | null;
       /** @description Refund public key used to generate the Arkade VHTLC. */
       refund_pk: string;
-      /** @description Target EVM address to receive the tokens. */
+      /** @description EVM address where tokens are swept after the claim (user's final destination). */
       target_address: string;
       /** @description ERC-20 contract address of the desired token on the target chain. */
       token_address: string;
@@ -724,6 +816,7 @@ export interface components {
       btc_fund_txid?: string | null;
       btc_vhtlc_address: string;
       chain: string;
+      /** @description EVM address that will sign the HTLC claim (SDK-derived for gasless claims). */
       client_evm_address: string;
       /** Format: date-time */
       created_at: string;
@@ -748,6 +841,8 @@ export interface components {
       server_evm_address: string;
       source_token: components["schemas"]["TokenId"];
       status: components["schemas"]["SwapStatus"];
+      /** @description EVM address where tokens are swept after the claim (user's final destination). */
+      target_evm_address?: string | null;
       target_token: components["schemas"]["TokenId"];
       target_token_address: string;
       /** Format: int64 */
@@ -1153,6 +1248,126 @@ export interface components {
       /** @description User ID derived from wallet for recovery purposes */
       user_id: string;
     };
+    /**
+     * @description Request to create an EVM-to-Arkade swap.
+     *
+     *     User sends any ERC-20 token on EVM, receives BTC on Arkade.
+     */
+    EvmToArkadeGenericSwapRequest: {
+      /**
+       * Format: int64
+       * @description Source token amount in smallest units (mutually exclusive with `amount_out`).
+       */
+      amount_in?: number | null;
+      /**
+       * Format: int64
+       * @description Desired BTC output in sats (mutually exclusive with `amount_in`).
+       */
+      amount_out?: number | null;
+      /**
+       * Format: int64
+       * @description Numeric EVM chain ID: 1 (Ethereum), 137 (Polygon), 42161 (Arbitrum).
+       */
+      evm_chain_id: number;
+      /** @description Hash lock (0x-prefixed 32-byte hex). Client generates secret, computes SHA256(secret). */
+      hash_lock: string;
+      /** @description User's Arkade VHTLC claim key (receiver). */
+      receiver_pk: string;
+      /** @description Optional referral code for tracking. */
+      referral_code?: string | null;
+      /** @description Arkade address where the user wants to receive BTC. */
+      target_address: string;
+      /** @description ERC-20 contract address of the source token on the EVM chain. */
+      token_address: string;
+      /** @description User's EVM address (sender of the ERC-20 token). */
+      user_address: string;
+      /** @description User ID derived from wallet for recovery purposes. */
+      user_id: string;
+    };
+    /** @description Response after creating an EVM-to-Arkade swap. */
+    EvmToArkadeGenericSwapResponse: {
+      arkade_server_pk: string;
+      /** Format: int64 */
+      btc_expected_sats: number;
+      btc_vhtlc_address: string;
+      chain: string;
+      /** Format: int64 */
+      evm_chain_id: number;
+      /** Format: int64 */
+      evm_expected_sats: number;
+      evm_htlc_address: string;
+      /** Format: int64 */
+      evm_refund_locktime: number;
+      /** Format: int64 */
+      fee_sats: number;
+      hash_lock: string;
+      id: string;
+      network: string;
+      receiver_pk: string;
+      sender_pk: string;
+      server_evm_address: string;
+      source_token: components["schemas"]["TokenSummary"];
+      /** Format: int64 */
+      source_token_amount: number;
+      status: string;
+      target_token: components["schemas"]["TokenSummary"];
+      /** Format: int64 */
+      unilateral_claim_delay: number;
+      /** Format: int64 */
+      unilateral_refund_delay: number;
+      /** Format: int64 */
+      unilateral_refund_without_receiver_delay: number;
+      /** Format: int64 */
+      vhtlc_refund_locktime: number;
+    };
+    /** @description EVM → Arkade (generic) swap response */
+    EvmToArkadeSwapResponse: {
+      arkade_server_pk: string;
+      btc_claim_txid?: string | null;
+      /** Format: int64 */
+      btc_expected_sats: number;
+      btc_fund_txid?: string | null;
+      btc_vhtlc_address: string;
+      chain: string;
+      client_evm_address: string;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: int64 */
+      evm_chain_id: number;
+      evm_claim_txid?: string | null;
+      /** Format: int64 */
+      evm_expected_sats: number;
+      evm_fund_txid?: string | null;
+      evm_htlc_address: string;
+      /** Format: int64 */
+      evm_refund_locktime: number;
+      /** Format: int64 */
+      fee_sats: number;
+      hash_lock: string;
+      id: string;
+      network: string;
+      receiver_pk: string;
+      sender_pk: string;
+      server_evm_address: string;
+      source_token: components["schemas"]["TokenId"];
+      source_token_address: string;
+      /** Format: int64 */
+      source_token_amount: number;
+      /** Format: int64 */
+      source_token_decimals: number;
+      source_token_symbol: string;
+      status: components["schemas"]["SwapStatus"];
+      target_arkade_address: string;
+      target_token: components["schemas"]["TokenId"];
+      /** Format: int64 */
+      unilateral_claim_delay: number;
+      /** Format: int64 */
+      unilateral_refund_delay: number;
+      /** Format: int64 */
+      unilateral_refund_without_receiver_delay: number;
+      /** Format: int64 */
+      vhtlc_refund_locktime: number;
+    };
     /** @description EVM → BTC swap response */
     EvmToBtcSwapResponse: components["schemas"]["SwapCommonFields"] & {
       /** @description Token approval transaction hash */
@@ -1236,6 +1451,10 @@ export interface components {
       | (components["schemas"]["ArkadeToEvmSwapResponse"] & {
           /** @enum {string} */
           direction: "arkade_to_evm";
+        })
+      | (components["schemas"]["EvmToArkadeSwapResponse"] & {
+          /** @enum {string} */
+          direction: "evm_to_arkade";
         });
     LightningToArbitrumSwapRequest: {
       /**
@@ -1525,6 +1744,13 @@ export interface components {
       highest_index: number;
       /** @description List of recovered swaps with their derivation indices */
       swaps: components["schemas"]["RecoveredSwap"][];
+    };
+    /** @description Response containing refund calldata for an EVM-to-Arkade swap. */
+    RefundCalldataResponse: {
+      /** @description ABI-encoded calldata for the refund call on the coordinator */
+      calldata: string;
+      /** @description The HTLCCoordinator contract address */
+      coordinator_address: string;
     };
     /** @description Common fields shared across all swap directions */
     SwapCommonFields: {
@@ -2480,6 +2706,48 @@ export interface operations {
       };
     };
   };
+  create_evm_to_arkade_swap_generic: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["EvmToArkadeGenericSwapRequest"];
+      };
+    };
+    responses: {
+      /** @description Swap created successfully */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EvmToArkadeGenericSwapResponse"];
+        };
+      };
+      /** @description Bad request - invalid parameters */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal server error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
   create_lightning_to_arbitrum_swap: {
     parameters: {
       query?: never;
@@ -2606,7 +2874,7 @@ export interface operations {
       };
     };
   };
-  create_evm_to_arkade_swap: {
+  create_polygon_to_arkade_swap: {
     parameters: {
       query?: never;
       header?: never;
@@ -2889,6 +3157,135 @@ export interface operations {
         };
       };
       /** @description Bad request - swap not found or invalid request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal server error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  get_dex_calldata: {
+    parameters: {
+      query: {
+        /** @description EVM destination address for output tokens */
+        destination: string;
+      };
+      header?: never;
+      path: {
+        /** @description Swap ID */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Fresh DEX calldata */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DexCallData"];
+        };
+      };
+      /** @description Bad request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal server error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  get_refund_calldata: {
+    parameters: {
+      query: {
+        /** @description Refund mode: "swap-back" (default) or "direct" */
+        mode: string;
+      };
+      header?: never;
+      path: {
+        /** @description Swap ID */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Refund calldata */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RefundCalldataResponse"];
+        };
+      };
+      /** @description Bad request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal server error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  get_coordinator_funding_calldata: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Swap ID */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Coordinator funding calldata */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/plain": string;
+        };
+      };
+      /** @description Bad request */
       400: {
         headers: {
           [name: string]: unknown;

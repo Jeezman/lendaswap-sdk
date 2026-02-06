@@ -758,6 +758,51 @@
         }
       }
     },
+    "/swap/evm/arkade": {
+      "post": {
+        "tags": ["swap-evm-arkade"],
+        "summary": "Create a chain-agnostic EVM-to-Arkade swap.",
+        "operationId": "create_evm_to_arkade_swap_generic",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvmToArkadeGenericSwapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Swap created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvmToArkadeGenericSwapResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/swap/lightning/arbitrum": {
       "post": {
         "tags": ["swap-lightning-arbitrum"],
@@ -897,7 +942,7 @@
       "post": {
         "tags": ["swap-polygon-arkade"],
         "summary": "Create a new Polygon to Arkade swap request",
-        "operationId": "create_evm_to_arkade_swap",
+        "operationId": "create_polygon_to_arkade_swap",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1222,6 +1267,147 @@
         }
       }
     },
+    "/swap/{id}/redeem-and-swap-calldata": {
+      "get": {
+        "tags": ["redeem-and-swap-calldata"],
+        "summary": "Returns fresh 1inch DEX calldata for an Arkade-to-EVM swap.",
+        "description": "The calldata is generated with `receiver = destination` so that 1inch\nsends the output tokens directly to the user's address, avoiding an\nextra sweep transfer.",
+        "operationId": "get_dex_calldata",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Swap ID",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "destination",
+            "in": "query",
+            "description": "EVM destination address for output tokens",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Fresh DEX calldata",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DexCallData" }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/swap/{id}/refund-and-swap-calldata": {
+      "get": {
+        "tags": ["refund-and-swap-calldata"],
+        "summary": "Returns calldata to refund an expired EVM-to-Arkade HTLC via the coordinator.",
+        "description": "Two modes:\n- `mode=swap-back` (default): calls `refundAndExecute` — refund WBTC from\n  expired HTLC, swap WBTC → source token via 1inch, sweep to caller.\n- `mode=direct`: calls `refundTo` — refund WBTC directly to caller (no DEX).\n\nBoth are permissionless after the timelock expires.",
+        "operationId": "get_refund_calldata",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Swap ID",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "description": "Refund mode: \"swap-back\" (default) or \"direct\"",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Refund calldata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefundCalldataResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/swap/{id}/swap-and-lock-calldata": {
+      "get": {
+        "tags": ["swap-and-lock-calldata"],
+        "summary": "Returns the calldata needed to fund an EVM-to-Arkade swap via the HTLCCoordinator.",
+        "description": "The coordinator atomically:\n1. Pulls source tokens from the user via `transferFrom`\n2. Approves the 1inch router to spend the source tokens\n3. Swaps source tokens to WBTC via 1inch\n4. Locks the WBTC into an HTLC\n\nThe caller must first approve the source token to the **coordinator** address.",
+        "operationId": "get_coordinator_funding_calldata",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Swap ID",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Coordinator funding calldata",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/tokens": {
       "get": {
         "tags": ["tokens"],
@@ -1456,6 +1642,7 @@
         "type": "object",
         "description": "Chain-agnostic request for Arkade-to-EVM swaps.\n\nThe caller specifies the target chain via `evm_chain_id` and the token\nvia its ERC-20 contract `token_address`. This endpoint supports any token\nreachable through 1inch aggregation (which covers Uniswap, Curve, etc.).",
         "required": [
+          "claiming_address",
           "target_address",
           "evm_chain_id",
           "token_address",
@@ -1475,6 +1662,10 @@
             "format": "int64",
             "description": "How much target token the user wants to receive (mutually exclusive with `amount_in`).\nValue is in the target token's smallest unit (e.g. for USDC with 6 decimals, 1000000 = 1 USDC).",
             "minimum": 0
+          },
+          "claiming_address": {
+            "type": "string",
+            "description": "EVM address that will sign the HTLC claim (SDK-derived for gasless claims)."
           },
           "evm_chain_id": {
             "type": "integer",
@@ -1496,7 +1687,7 @@
           },
           "target_address": {
             "type": "string",
-            "description": "Target EVM address to receive the tokens."
+            "description": "EVM address where tokens are swept after the claim (user's final destination)."
           },
           "token_address": {
             "type": "string",
@@ -1549,7 +1740,10 @@
           "btc_fund_txid": { "type": ["string", "null"] },
           "btc_vhtlc_address": { "type": "string" },
           "chain": { "type": "string" },
-          "client_evm_address": { "type": "string" },
+          "client_evm_address": {
+            "type": "string",
+            "description": "EVM address that will sign the HTLC claim (SDK-derived for gasless claims)."
+          },
           "created_at": { "type": "string", "format": "date-time" },
           "dex_call_data": {
             "oneOf": [
@@ -1576,6 +1770,10 @@
           "server_evm_address": { "type": "string" },
           "source_token": { "$ref": "#/components/schemas/TokenId" },
           "status": { "$ref": "#/components/schemas/SwapStatus" },
+          "target_evm_address": {
+            "type": ["string", "null"],
+            "description": "EVM address where tokens are swept after the claim (user's final destination)."
+          },
           "target_token": { "$ref": "#/components/schemas/TokenId" },
           "target_token_address": { "type": "string" },
           "target_token_amount": {
@@ -2270,6 +2468,213 @@
           }
         }
       },
+      "EvmToArkadeGenericSwapRequest": {
+        "type": "object",
+        "description": "Request to create an EVM-to-Arkade swap.\n\nUser sends any ERC-20 token on EVM, receives BTC on Arkade.",
+        "required": [
+          "target_address",
+          "evm_chain_id",
+          "token_address",
+          "hash_lock",
+          "receiver_pk",
+          "user_address",
+          "user_id"
+        ],
+        "properties": {
+          "amount_in": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Source token amount in smallest units (mutually exclusive with `amount_out`).",
+            "minimum": 0
+          },
+          "amount_out": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Desired BTC output in sats (mutually exclusive with `amount_in`).",
+            "minimum": 0
+          },
+          "evm_chain_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Numeric EVM chain ID: 1 (Ethereum), 137 (Polygon), 42161 (Arbitrum).",
+            "minimum": 0
+          },
+          "hash_lock": {
+            "type": "string",
+            "description": "Hash lock (0x-prefixed 32-byte hex). Client generates secret, computes SHA256(secret)."
+          },
+          "receiver_pk": {
+            "type": "string",
+            "description": "User's Arkade VHTLC claim key (receiver)."
+          },
+          "referral_code": {
+            "type": ["string", "null"],
+            "description": "Optional referral code for tracking."
+          },
+          "target_address": {
+            "type": "string",
+            "description": "Arkade address where the user wants to receive BTC."
+          },
+          "token_address": {
+            "type": "string",
+            "description": "ERC-20 contract address of the source token on the EVM chain."
+          },
+          "user_address": {
+            "type": "string",
+            "description": "User's EVM address (sender of the ERC-20 token)."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User ID derived from wallet for recovery purposes."
+          }
+        }
+      },
+      "EvmToArkadeGenericSwapResponse": {
+        "type": "object",
+        "description": "Response after creating an EVM-to-Arkade swap.",
+        "required": [
+          "id",
+          "status",
+          "evm_chain_id",
+          "chain",
+          "source_token",
+          "target_token",
+          "source_token_amount",
+          "evm_expected_sats",
+          "btc_expected_sats",
+          "fee_sats",
+          "hash_lock",
+          "evm_htlc_address",
+          "server_evm_address",
+          "evm_refund_locktime",
+          "btc_vhtlc_address",
+          "sender_pk",
+          "receiver_pk",
+          "arkade_server_pk",
+          "vhtlc_refund_locktime",
+          "unilateral_claim_delay",
+          "unilateral_refund_delay",
+          "unilateral_refund_without_receiver_delay",
+          "network"
+        ],
+        "properties": {
+          "arkade_server_pk": { "type": "string" },
+          "btc_expected_sats": { "type": "integer", "format": "int64" },
+          "btc_vhtlc_address": { "type": "string" },
+          "chain": { "type": "string" },
+          "evm_chain_id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "evm_expected_sats": { "type": "integer", "format": "int64" },
+          "evm_htlc_address": { "type": "string" },
+          "evm_refund_locktime": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "fee_sats": { "type": "integer", "format": "int64" },
+          "hash_lock": { "type": "string" },
+          "id": { "type": "string" },
+          "network": { "type": "string" },
+          "receiver_pk": { "type": "string" },
+          "sender_pk": { "type": "string" },
+          "server_evm_address": { "type": "string" },
+          "source_token": { "$ref": "#/components/schemas/TokenSummary" },
+          "source_token_amount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "status": { "type": "string" },
+          "target_token": { "$ref": "#/components/schemas/TokenSummary" },
+          "unilateral_claim_delay": { "type": "integer", "format": "int64" },
+          "unilateral_refund_delay": { "type": "integer", "format": "int64" },
+          "unilateral_refund_without_receiver_delay": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "vhtlc_refund_locktime": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "EvmToArkadeSwapResponse": {
+        "type": "object",
+        "description": "EVM → Arkade (generic) swap response",
+        "required": [
+          "id",
+          "status",
+          "fee_sats",
+          "hash_lock",
+          "source_token",
+          "target_token",
+          "created_at",
+          "chain",
+          "evm_chain_id",
+          "source_token_address",
+          "source_token_symbol",
+          "source_token_decimals",
+          "source_token_amount",
+          "evm_expected_sats",
+          "btc_expected_sats",
+          "evm_htlc_address",
+          "client_evm_address",
+          "server_evm_address",
+          "evm_refund_locktime",
+          "btc_vhtlc_address",
+          "target_arkade_address",
+          "sender_pk",
+          "receiver_pk",
+          "arkade_server_pk",
+          "vhtlc_refund_locktime",
+          "unilateral_claim_delay",
+          "unilateral_refund_delay",
+          "unilateral_refund_without_receiver_delay",
+          "network"
+        ],
+        "properties": {
+          "arkade_server_pk": { "type": "string" },
+          "btc_claim_txid": { "type": ["string", "null"] },
+          "btc_expected_sats": { "type": "integer", "format": "int64" },
+          "btc_fund_txid": { "type": ["string", "null"] },
+          "btc_vhtlc_address": { "type": "string" },
+          "chain": { "type": "string" },
+          "client_evm_address": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "evm_chain_id": { "type": "integer", "format": "int64" },
+          "evm_claim_txid": { "type": ["string", "null"] },
+          "evm_expected_sats": { "type": "integer", "format": "int64" },
+          "evm_fund_txid": { "type": ["string", "null"] },
+          "evm_htlc_address": { "type": "string" },
+          "evm_refund_locktime": { "type": "integer", "format": "int64" },
+          "fee_sats": { "type": "integer", "format": "int64" },
+          "hash_lock": { "type": "string" },
+          "id": { "type": "string" },
+          "network": { "type": "string" },
+          "receiver_pk": { "type": "string" },
+          "sender_pk": { "type": "string" },
+          "server_evm_address": { "type": "string" },
+          "source_token": { "$ref": "#/components/schemas/TokenId" },
+          "source_token_address": { "type": "string" },
+          "source_token_amount": { "type": "integer", "format": "int64" },
+          "source_token_decimals": { "type": "integer", "format": "int64" },
+          "source_token_symbol": { "type": "string" },
+          "status": { "$ref": "#/components/schemas/SwapStatus" },
+          "target_arkade_address": { "type": "string" },
+          "target_token": { "$ref": "#/components/schemas/TokenId" },
+          "unilateral_claim_delay": { "type": "integer", "format": "int64" },
+          "unilateral_refund_delay": { "type": "integer", "format": "int64" },
+          "unilateral_refund_without_receiver_delay": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "vhtlc_refund_locktime": { "type": "integer", "format": "int64" }
+        }
+      },
       "EvmToBtcSwapResponse": {
         "allOf": [
           {
@@ -2457,6 +2862,18 @@
                 "required": ["direction"],
                 "properties": {
                   "direction": { "type": "string", "enum": ["arkade_to_evm"] }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              { "$ref": "#/components/schemas/EvmToArkadeSwapResponse" },
+              {
+                "type": "object",
+                "required": ["direction"],
+                "properties": {
+                  "direction": { "type": "string", "enum": ["evm_to_arkade"] }
                 }
               }
             ]
@@ -2939,6 +3356,21 @@
           }
         }
       },
+      "RefundCalldataResponse": {
+        "type": "object",
+        "description": "Response containing refund calldata for an EVM-to-Arkade swap.",
+        "required": ["coordinator_address", "calldata"],
+        "properties": {
+          "calldata": {
+            "type": "string",
+            "description": "ABI-encoded calldata for the refund call on the coordinator"
+          },
+          "coordinator_address": {
+            "type": "string",
+            "description": "The HTLCCoordinator contract address"
+          }
+        }
+      },
       "SwapCommonFields": {
         "type": "object",
         "description": "Common fields shared across all swap directions",
@@ -3271,6 +3703,10 @@
     {
       "name": "swap-arkade-evm",
       "description": "Create chain-agnostic Arkade to EVM swaps."
+    },
+    {
+      "name": "swap-evm-arkade",
+      "description": "Create chain-agnostic EVM to Arkade swaps."
     },
     {
       "name": "swap-arkade-arbitrum",

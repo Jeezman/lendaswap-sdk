@@ -139,11 +139,10 @@ export interface EvmToLightningSwapResult {
 /** Options for creating an Arkade-to-EVM swap via the generic endpoint */
 export interface ArkadeToEvmSwapOptions {
   /**
-   * EVM address used as the HTLC receiver.
-   * If omitted, the SDK derives an internal EVM key from the swap's HD wallet
-   * and uses its address. The SDK can then sign the gasless claim internally.
+   * EVM address where tokens are swept after the claim (user's final destination).
+   * This is required and will be stored on the server for use during redemption.
    */
-  targetAddress?: string;
+  targetAddress: string;
   /** ERC-20 contract address of the desired token on the target chain */
   tokenAddress: string;
   /** Numeric EVM chain ID: 1 (Ethereum), 137 (Polygon), 42161 (Arbitrum) */

@@ -139,17 +139,20 @@ export async function createArkadeToEvmSwapGeneric(
   const refundPk = bytesToHex(swapParams.publicKey);
   const userId = bytesToHex(swapParams.userId);
 
-  // Use provided targetAddress or derive one from the swap's secret key.
-  // When derived internally, the SDK can sign gasless claims without an external signer.
-  const targetAddress =
-    options.targetAddress ?? deriveEvmAddress(swapParams.secretKey);
+  // The claiming address is derived from the swap's secret key.
+  // This allows the SDK to sign gasless claims internally.
+  const claimingAddress = deriveEvmAddress(swapParams.secretKey);
+
+  // Target address is where tokens are swept after the claim (user's final destination).
+  // This is required and stored on the server for use during redemption.
 
   const { data, error } = await ctx.apiClient.POST("/swap/arkade/evm", {
     body: {
       hash_lock: hashLock,
       refund_pk: refundPk,
       user_id: userId,
-      target_address: targetAddress,
+      claiming_address: claimingAddress,
+      target_address: options.targetAddress,
       token_address: options.tokenAddress,
       evm_chain_id: options.evmChainId,
       amount_in: options.sourceAmount,
