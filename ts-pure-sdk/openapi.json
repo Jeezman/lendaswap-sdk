@@ -1287,6 +1287,13 @@
             "description": "EVM destination address for output tokens",
             "required": true,
             "schema": { "type": "string" }
+          },
+          {
+            "name": "slippage",
+            "in": "query",
+            "description": "Slippage tolerance percentage (default: 1.0)",
+            "required": false,
+            "schema": { "type": "number", "format": "double" }
           }
         ],
         "responses": {
@@ -2244,6 +2251,15 @@
             "type": "string",
             "description": "EVM address where tokens should be sent"
           },
+          "dex_calldata": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "$ref": "#/components/schemas/DexCalldata",
+                "description": "Optional DEX calldata from the client. If provided, the server uses this\ninstead of fetching from 1inch. Client should fetch via\n`GET /swap/{id}/redeem-and-swap-calldata?destination=...`"
+              }
+            ]
+          },
           "r": {
             "type": "string",
             "description": "EIP-712 signature r (32-byte hex string, with or without 0x prefix)"
@@ -2326,6 +2342,22 @@
           "data": { "type": "string" },
           "to": { "type": "string" },
           "value": { "type": "string" }
+        }
+      },
+      "DexCalldata": {
+        "type": "object",
+        "description": "DEX calldata for the swap (from 1inch or another aggregator)",
+        "required": ["to", "data"],
+        "properties": {
+          "data": {
+            "type": "string",
+            "description": "Encoded swap calldata (hex string, with or without 0x prefix)"
+          },
+          "to": { "type": "string", "description": "DEX router address" },
+          "value": {
+            "type": "string",
+            "description": "Native token value (usually \"0\")"
+          }
         }
       },
       "ErrorResponse": {

@@ -1118,6 +1118,7 @@ export interface components {
         ClaimGaslessRequest: {
             /** @description EVM address where tokens should be sent */
             destination: string;
+            dex_calldata?: null | components["schemas"]["DexCalldata"];
             /** @description EIP-712 signature r (32-byte hex string, with or without 0x prefix) */
             r: string;
             /** @description EIP-712 signature s (32-byte hex string, with or without 0x prefix) */
@@ -1171,6 +1172,15 @@ export interface components {
             data: string;
             to: string;
             value: string;
+        };
+        /** @description DEX calldata for the swap (from 1inch or another aggregator) */
+        DexCalldata: {
+            /** @description Encoded swap calldata (hex string, with or without 0x prefix) */
+            data: string;
+            /** @description DEX router address */
+            to: string;
+            /** @description Native token value (usually "0") */
+            value?: string;
         };
         ErrorResponse: {
             error: string;
@@ -3136,6 +3146,8 @@ export interface operations {
             query: {
                 /** @description EVM destination address for output tokens */
                 destination: string;
+                /** @description Slippage tolerance percentage (default: 1.0) */
+                slippage?: number;
             };
             header?: never;
             path: {

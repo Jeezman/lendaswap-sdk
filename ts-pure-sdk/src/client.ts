@@ -1033,6 +1033,7 @@ export class Client {
   async claimViaGasless(
     id: string,
     destination: string,
+    options?: { slippage?: number },
   ): Promise<ClaimGaslessResult> {
     // Get stored swap data (contains preimage and secret key)
     if (!this.#swapStorage) {
@@ -1072,11 +1073,43 @@ export class Client {
     const wbtcAddress = arkadeSwap.wbtc_address;
     const amount = BigInt(arkadeSwap.evm_expected_sats);
 
+    // Check if target token differs from WBTC (meaning a DEX swap is needed)
+    const needsDexSwap =
+      arkadeSwap.target_token_address !== arkadeSwap.wbtc_address;
+
     // sweepToken: if there's a DEX swap (target != wbtc), sweep the target token; otherwise sweep WBTC.
-    const sweepToken =
-      arkadeSwap.target_token_address !== arkadeSwap.wbtc_address
-        ? arkadeSwap.target_token_address
-        : arkadeSwap.wbtc_address;
+    const sweepToken = needsDexSwap
+      ? arkadeSwap.target_token_address
+      : arkadeSwap.wbtc_address;
+
+    // Fetch DEX calldata from server if needed
+    let dexCalldata: { to: string; data: string; value: string } | undefined;
+    if (needsDexSwap) {
+      const slippage = options?.slippage ?? 1.0;
+      const calldataResponse = await this.#apiClient.GET(
+        "/swap/{id}/redeem-and-swap-calldata",
+        {
+          params: {
+            path: { id },
+            query: { destination, slippage },
+          },
+        },
+      );
+
+      if (calldataResponse.error) {
+        throw new Error(
+          `Failed to fetch DEX calldata: ${calldataResponse.error.error}`,
+        );
+      }
+
+      if (calldataResponse.data) {
+        dexCalldata = {
+          to: calldataResponse.data.to,
+          data: calldataResponse.data.data,
+          value: calldataResponse.data.value,
+        };
+      }
+    }
 
     // Build EIP-712 digest
     const digest = buildRedeemDigest({
@@ -1096,8 +1129,7 @@ export class Client {
     // Sign with the swap's internally derived EVM key
     const sig = signEvmDigest(storedSwap.secretKey, digest);
 
-    // Send to server
-
+    // Send to server with DEX calldata if applicable
     const response = await fetch(
       `${this.#config.baseUrl}/swap/${id}/claim-gasless`,
       {
@@ -1109,6 +1141,7 @@ export class Client {
           v: sig.v,
           r: sig.r,
           s: sig.s,
+          dex_calldata: dexCalldata,
         }),
       },
     );
