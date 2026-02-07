@@ -5,6 +5,7 @@ import {
   type BtcToArkadeSwapResponse,
   type BtcToEvmSwapResponse,
   createApiClient,
+  type EvmToArkadeSwapResponse,
   type EvmToBtcSwapResponse,
   type GetSwapResponse,
   type OnchainToEvmSwapResponse,
@@ -130,6 +131,17 @@ export interface RefundResult {
   htlcAddress?: string;
   /** The HTLC address reported by the server (for debugging) */
   serverHtlcAddress?: string;
+  /** EVM refund data (for evm_to_arkade and evm_to_btc swaps) */
+  evmRefundData?: {
+    /** Address to send the refund transaction to (coordinator or HTLC) */
+    to: string;
+    /** ABI-encoded calldata for the refund call */
+    data: string;
+    /** Whether the timelock has already expired (refund is available) */
+    timelockExpired: boolean;
+    /** Unix timestamp when the timelock expires */
+    timelockExpiry: number;
+  };
 }
 
 /** Options for on-chain refund */
@@ -1410,7 +1422,15 @@ export class Client {
       return this.#buildOnchainRefund(id, swap, options);
     }
 
-    // EVM-sourced swaps (evm_to_btc, evm_to_arkade) - not yet supported
+    // EVM-sourced swaps return calldata for manual execution
+    if (direction === "evm_to_arkade") {
+      return this.#buildEvmToArkadeRefund(id, swap);
+    }
+
+    if (direction === "evm_to_btc") {
+      return this.#buildEvmToBtcRefund(id, swap);
+    }
+
     return {
       success: false,
       message: `Refund not supported for direction: ${direction}.`,
@@ -1811,6 +1831,92 @@ export class Client {
         message: `Failed to execute Arkade refund: ${message}`,
       };
     }
+  }
+
+  /**
+   * Builds refund data for an EVM-to-Arkade swap via the coordinator.
+   *
+   * Calls the server's refund-calldata endpoint which builds coordinator
+   * calldata for `refundAndExecute` (swap WBTC back to source token) or
+   * `refundTo` (return WBTC directly).
+   *
+   * @internal
+   */
+  async #buildEvmToArkadeRefund(
+    id: string,
+    swap: GetSwapResponse,
+  ): Promise<RefundResult> {
+    const evmSwap = swap as EvmToArkadeSwapResponse & {
+      direction: "evm_to_arkade";
+    };
+
+    const timelock = evmSwap.evm_refund_locktime;
+    const now = Math.floor(Date.now() / 1000);
+    const timelockExpired = now >= timelock;
+
+    // Fetch coordinator refund calldata from server (default mode: swap-back)
+    const response = await this.#apiClient.GET(
+      "/swap/{id}/refund-and-swap-calldata",
+      {
+        params: {
+          path: { id },
+          query: { mode: "swap-back" },
+        },
+      },
+    );
+
+    if (response.error) {
+      return {
+        success: false,
+        message: `Failed to fetch refund calldata: ${response.error.error || "Unknown error"}`,
+      };
+    }
+
+    const { coordinator_address, calldata } = response.data;
+
+    return {
+      success: true,
+      message: timelockExpired
+        ? "EVM refund calldata ready. Submit this transaction with your EVM wallet."
+        : `Timelock has not expired yet. Refund will be available at ${new Date(timelock * 1000).toISOString()}.`,
+      evmRefundData: {
+        to: coordinator_address,
+        data: calldata,
+        timelockExpired,
+        timelockExpiry: timelock,
+      },
+    };
+  }
+
+  /**
+   * Builds refund data for an EVM-to-BTC swap (direct HTLC refund).
+   * @internal
+   */
+  async #buildEvmToBtcRefund(
+    id: string,
+    swap: GetSwapResponse,
+  ): Promise<RefundResult> {
+    const evmSwap = swap as EvmToBtcSwapResponse;
+    const htlcAddress = evmSwap.htlc_address_evm;
+    const timelock = evmSwap.evm_refund_locktime;
+
+    const now = Math.floor(Date.now() / 1000);
+    const timelockExpired = now >= timelock;
+
+    const refundData = encodeRefundSwapCallData(htlcAddress, id);
+
+    return {
+      success: true,
+      message: timelockExpired
+        ? "EVM refund calldata ready. Submit this transaction with your EVM wallet."
+        : `Timelock has not expired yet. Refund will be available at ${new Date(timelock * 1000).toISOString()}.`,
+      evmRefundData: {
+        to: refundData.to,
+        data: refundData.data,
+        timelockExpired,
+        timelockExpiry: timelock,
+      },
+    };
   }
 
   // =========================================================================

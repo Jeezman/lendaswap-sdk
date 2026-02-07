@@ -71,8 +71,9 @@ export async function refundSwap(
   // Check which type of swap this is based on direction
   const isOnchainSwap = swap.direction === "onchain_to_evm";
   const isArkadeSwap = swap.direction === "arkade_to_evm";
+  const isEvmSwap = swap.direction === "evm_to_arkade" || swap.direction === "evm_to_btc";
 
-  // Require destination address for refundable swaps
+  // Require destination address for refundable swaps (not EVM swaps)
   if ((isOnchainSwap || isArkadeSwap) && !actualDestination) {
     console.error("=".repeat(60));
     console.error("DESTINATION ADDRESS REQUIRED");
@@ -117,20 +118,24 @@ export async function refundSwap(
   } else if (isArkadeSwap) {
     console.log(`  Destination: ${actualDestination}`);
     console.log("  Type:        Arkade off-chain refund");
+  } else if (isEvmSwap) {
+    console.log("  Type:        EVM HTLC refund");
   }
   console.log("");
 
   try {
-    // Build options based on swap type
-    const options = isOnchainSwap
-      ? {
-          destinationAddress: actualDestination ?? "",
-          feeRateSatPerVb,
-          dryRun,
-        }
-      : {
-          destinationAddress: actualDestination ?? "",
-        };
+    // Build options based on swap type (EVM swaps don't need options)
+    const options = isEvmSwap
+      ? undefined
+      : isOnchainSwap
+        ? {
+            destinationAddress: actualDestination ?? "",
+            feeRateSatPerVb,
+            dryRun,
+          }
+        : {
+            destinationAddress: actualDestination ?? "",
+          };
 
     const result = await client.refundSwap(swapId, options);
 
@@ -167,6 +172,27 @@ export async function refundSwap(
         console.log("  - https://mempool.space/tx/push");
         console.log("  - bitcoin-cli sendrawtransaction <txhex>");
         console.log("  - Any Bitcoin wallet that supports raw transaction broadcast");
+      }
+      if (result.evmRefundData) {
+        const { to, data, timelockExpired, timelockExpiry } = result.evmRefundData;
+        console.log(`  Contract:       ${to}`);
+        console.log(`  Timelock:       ${new Date(timelockExpiry * 1000).toISOString()}`);
+        console.log(`  Timelock expired: ${timelockExpired}`);
+        console.log("");
+        if (!timelockExpired) {
+          const remaining = timelockExpiry - Math.floor(Date.now() / 1000);
+          const hours = Math.floor(remaining / 3600);
+          const minutes = Math.floor((remaining % 3600) / 60);
+          console.log(`  WARNING: Timelock has not expired yet. ${hours}h ${minutes}m remaining.`);
+          console.log("  You must wait for the timelock to expire before submitting.");
+        } else {
+          console.log("  Submit this transaction with your EVM wallet:");
+          console.log(`    to:   ${to}`);
+          console.log(`    data: ${data}`);
+        }
+        console.log("");
+        console.log("  Use the 'evm-refund' command for automatic submission:");
+        console.log(`    npm run evm-refund -- ${swapId}`);
       }
       console.log("");
       console.log("=".repeat(60));

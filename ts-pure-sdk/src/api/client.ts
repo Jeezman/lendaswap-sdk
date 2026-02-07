@@ -20,6 +20,8 @@ export type EvmToBtcSwapResponse =
   components["schemas"]["EvmToBtcSwapResponse"];
 export type BtcToArkadeSwapResponse =
   components["schemas"]["BtcToArkadeSwapResponse"];
+export type EvmToArkadeSwapResponse =
+  components["schemas"]["EvmToArkadeSwapResponse"];
 
 // Request types for btc_to_evm
 export type ArkadeToPolygonSwapRequest =

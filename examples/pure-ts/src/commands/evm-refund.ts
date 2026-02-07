@@ -62,27 +62,58 @@ export async function evmRefundSwap(
 
   const swap = storedSwap.response;
 
-  if (swap.direction !== "evm_to_btc") {
-    console.error(`This command is for EVM-to-BTC swaps, got: ${swap.direction}`);
+  if (swap.direction !== "evm_to_btc" && swap.direction !== "evm_to_arkade") {
+    console.error(`This command is for EVM-sourced swaps (evm_to_btc, evm_to_arkade), got: ${swap.direction}`);
     process.exit(1);
   }
 
-  // Determine chain from source token
-  const chainName = getChainFromToken(swap.source_token);
+  // Determine chain from source token or chain ID
+  let chainName: ReturnType<typeof getChainFromToken>;
+  let sourceTokenDisplay: string;
+
+  if (swap.direction === "evm_to_arkade") {
+    // evm_to_arkade has evm_chain_id and source_token as TokenSummary
+    const evmSwap = swap as typeof swap & {
+      evm_chain_id: number;
+      source_token: { address: string; symbol: string; decimals: number };
+    };
+    const chainIdToName: Record<number, ReturnType<typeof getChainFromToken>> = {
+      1: "ethereum",
+      137: "polygon",
+      42161: "arbitrum",
+    };
+    chainName = chainIdToName[evmSwap.evm_chain_id];
+    sourceTokenDisplay = `${evmSwap.source_token.symbol} (${evmSwap.source_token.address})`;
+  } else {
+    // evm_to_btc uses TokenId strings
+    const tokenId = typeof swap.source_token === "string"
+      ? swap.source_token
+      : swap.source_token.address;
+    chainName = getChainFromToken(tokenId);
+    sourceTokenDisplay = tokenId;
+  }
+
   if (!chainName) {
-    console.error(`Could not determine chain from token: ${swap.source_token}`);
+    console.error(`Could not determine chain for swap direction: ${swap.direction}`);
     process.exit(1);
   }
 
   console.log(`Chain: ${chainName}`);
-  console.log(`Source Token: ${swap.source_token}`);
+  console.log(`Source Token: ${sourceTokenDisplay}`);
   console.log(`Status: ${swap.status}`);
   console.log("");
 
-  // Get refund call data
-  const refund = await client.getEvmRefundCallData(swapId);
+  // Get refund call data via refundSwap (handles both direct HTLC and coordinator refunds)
+  const result = await client.refundSwap(swapId);
 
-  console.log(`HTLC Address: ${refund.to}`);
+  if (!result.success || !result.evmRefundData) {
+    console.error(`Refund not available: ${result.message}`);
+    process.exit(1);
+  }
+
+  const refund = result.evmRefundData;
+
+  console.log(`Contract: ${refund.to}`);
   console.log(`Timelock Expiry: ${new Date(refund.timelockExpiry * 1000).toISOString()}`);
   console.log(`Timelock Expired: ${refund.timelockExpired}`);
   console.log("");
