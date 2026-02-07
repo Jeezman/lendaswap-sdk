@@ -1067,20 +1067,26 @@ export class Client {
     const secret = storedSwap.preimage;
     const secretHex = secret.startsWith("0x") ? secret : `0x${secret}`;
 
-    // token = WBTC address (what's locked in the HTLC)
-    // The server now returns the actual WBTC address explicitly.
-    // target_token_address is the final token the user wants (e.g. USDC).
-    const wbtcAddress = arkadeSwap.wbtc_address;
+    // source_token is a TokenSummary with the WBTC address (what's locked in the HTLC)
+    // target_token is a TokenSummary with the final token the user wants (e.g. USDC)
+    const sourceToken = arkadeSwap.source_token as {
+      address: string;
+      symbol: string;
+      decimals: number;
+    };
+    const targetToken = arkadeSwap.target_token as {
+      address: string;
+      symbol: string;
+      decimals: number;
+    };
+    const wbtcAddress = sourceToken.address;
     const amount = BigInt(arkadeSwap.evm_expected_sats);
 
     // Check if target token differs from WBTC (meaning a DEX swap is needed)
-    const needsDexSwap =
-      arkadeSwap.target_token_address !== arkadeSwap.wbtc_address;
+    const needsDexSwap = targetToken.address !== sourceToken.address;
 
     // sweepToken: if there's a DEX swap (target != wbtc), sweep the target token; otherwise sweep WBTC.
-    const sweepToken = needsDexSwap
-      ? arkadeSwap.target_token_address
-      : arkadeSwap.wbtc_address;
+    const sweepToken = needsDexSwap ? targetToken.address : sourceToken.address;
 
     // Fetch DEX calldata from server if needed
     let dexCalldata: { to: string; data: string; value: string } | undefined;
@@ -1381,11 +1387,11 @@ export class Client {
     }
     const swap = storedSwap.response;
 
-    // Determine the source token to identify swap type
-    const sourceToken = swap.source_token;
+    // Use direction to determine refund method (source_token may be a TokenSummary object)
+    const direction = swap.direction;
 
-    // Lightning swaps cannot be refunded - they auto-expire
-    if (sourceToken === "btc_lightning") {
+    // Lightning (btc_to_evm) swaps cannot be refunded - they auto-expire
+    if (direction === "btc_to_evm") {
       return {
         success: false,
         message:
@@ -1395,19 +1401,19 @@ export class Client {
     }
 
     // Arkade swaps require off-chain refund
-    if (sourceToken === "btc_arkade") {
+    if (direction === "arkade_to_evm") {
       return this.#buildArkadeRefund(id, swap, options as ArkadeRefundOptions);
     }
 
     // Bitcoin on-chain swaps require on-chain refund transaction
-    if (sourceToken === "btc_onchain") {
+    if (direction === "onchain_to_evm") {
       return this.#buildOnchainRefund(id, swap, options);
     }
 
-    // Unknown source token
+    // EVM-sourced swaps (evm_to_btc, evm_to_arkade) - not yet supported
     return {
       success: false,
-      message: `Unknown source token type: ${sourceToken}. Cannot determine refund method.`,
+      message: `Refund not supported for direction: ${direction}.`,
     };
   }
 

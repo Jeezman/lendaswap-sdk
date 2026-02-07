@@ -65,13 +65,12 @@ export async function refundSwap(
   const swap = await client.getSwap(swapId);
 
   console.log(`Current status: ${swap.status}`);
-  console.log(`Source token:   ${swap.source_token}`);
-  console.log(`Target token:   ${swap.target_token}`);
+  console.log(`Direction:      ${swap.direction}`);
   console.log("");
 
-  // Check which type of swap this is
-  const isOnchainSwap = swap.source_token === "btc_onchain";
-  const isArkadeSwap = swap.source_token === "btc_arkade";
+  // Check which type of swap this is based on direction
+  const isOnchainSwap = swap.direction === "onchain_to_evm";
+  const isArkadeSwap = swap.direction === "arkade_to_evm";
 
   // Require destination address for refundable swaps
   if ((isOnchainSwap || isArkadeSwap) && !actualDestination) {

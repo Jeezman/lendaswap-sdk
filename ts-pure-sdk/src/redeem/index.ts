@@ -95,7 +95,11 @@ export async function claim(
     );
   }
 
-  const targetToken = swap.target_token;
+  // target_token may be a string (TokenId) or object (TokenSummary)
+  const targetToken =
+    typeof swap.target_token === "string"
+      ? swap.target_token
+      : swap.target_token.address;
   const chain = getChainFromTokenId(targetToken);
 
   if (!chain) {
@@ -151,8 +155,20 @@ async function buildCoordinatorClaimData(
   ctx: RedeemContext,
   destination?: string,
 ): Promise<ClaimResult> {
+  // source_token and target_token are TokenSummary objects
+  const sourceToken = swap.source_token as {
+    address: string;
+    symbol: string;
+    decimals: number;
+  };
+  const targetToken = swap.target_token as {
+    address: string;
+    symbol: string;
+    decimals: number;
+  };
+
   // Check if this swap involves a DEX swap (target token is different from WBTC)
-  const needsDexSwap = swap.target_token_address !== swap.wbtc_address;
+  const needsDexSwap = targetToken.address !== sourceToken.address;
 
   let dexCallData: { to: string; data: string; value: string } | undefined;
 
@@ -189,11 +205,11 @@ async function buildCoordinatorClaimData(
     coordinatorAddress: swap.evm_coordinator_address,
     chainId: swap.evm_chain_id,
     amount: swap.evm_expected_sats,
-    wbtcAddress: swap.wbtc_address,
+    wbtcAddress: sourceToken.address,
     sender: swap.server_evm_address,
     timelock: swap.evm_refund_locktime,
     dexCallData,
-    targetTokenAddress: swap.target_token_address,
+    targetTokenAddress: targetToken.address,
     network: swap.network,
   };
 

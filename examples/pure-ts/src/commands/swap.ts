@@ -339,11 +339,13 @@ export async function createSwap(
       sourceAmount = result.response.btc_expected_sats;
       sourceDecimals = 0; // sats
       sourceSymbol = "sats";
+      const srcToken = result.response.source_token as { address: string; symbol: string; decimals: number };
+      const tgtToken = result.response.target_token as { address: string; symbol: string; decimals: number };
       targetAmount = result.response.target_token_amount ?? 0;
-      targetDecimals = result.response.target_token_decimals ?? 6;
-      targetSymbol = result.response.target_token_symbol ?? "tokens";
-      sourceToken = result.response.source_token;
-      targetToken = `${result.response.target_token_symbol} (chain ${result.response.evm_chain_id})`;
+      targetDecimals = tgtToken.decimals ?? 6;
+      targetSymbol = tgtToken.symbol ?? "tokens";
+      sourceToken = srcToken.symbol;
+      targetToken = `${tgtToken.symbol} (chain ${result.response.evm_chain_id})`;
       paymentInfo = [
         `Fund this Arkade VHTLC Address:`,
         `  ${result.response.btc_vhtlc_address}`,
