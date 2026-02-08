@@ -103,6 +103,7 @@ export async function evmRefundSwap(
   console.log(`Status: ${swap.status}`);
   console.log("");
 
+  // #region check-evm-htlc
   // Get refund call data via refundSwap (handles both direct HTLC and coordinator refunds)
   const result = await client.refundSwap(swapId);
 
@@ -161,6 +162,7 @@ export async function evmRefundSwap(
     if (receipt.status !== "success") {
       throw new Error("Refund transaction failed");
     }
+    // #endregion refund-evm-htlc
 
     console.log("");
     console.log("=".repeat(60));

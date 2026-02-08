@@ -168,6 +168,7 @@ export async function createSwap(
       console.log(`  EVM User Address: ${evmUserAddress}`);
       console.log("");
 
+      // #region evm-to-arkade
       const result = await client.createEvmToArkadeSwapGeneric({
         targetAddress: address!, // Arkade address (validated above)
         tokenAddress: tokenInfo.tokenAddress,
@@ -175,6 +176,14 @@ export async function createSwap(
         userAddress: evmUserAddress,
         sourceAmount: amountNum,
       });
+
+      console.log("Approve token:", result.response.source_token_address);
+      // ... "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
+      console.log("HTLC contract:", result.response.htlc_address_evm);
+      // ... "0x1234...abcd"
+      console.log("Swap ID:", result.response.id);
+      // ... "550e8400-e29b-41d4-a716-446655440000"
+      // #endregion evm-to-arkade
 
       swapId = result.response.id;
       status = result.response.status;
@@ -228,12 +237,19 @@ export async function createSwap(
       console.log(`  Source Chain: ${sourceChain}`);
       console.log("");
 
+      // #region evm-to-lightning
       const result = await client.createEvmToLightningSwap({
         sourceChain,
         sourceToken: from,
         bolt11Invoice,
         userAddress: evmUserAddress,
       });
+
+      console.log("HTLC contract:", result.response.htlc_address_evm);
+      // ... "0x1234...abcd"
+      console.log("Swap ID:", result.response.id);
+      // ... "550e8400-e29b-41d4-a716-446655440000"
+      // #endregion evm-to-lightning
 
       swapId = result.response.id;
       status = result.response.status;
@@ -258,10 +274,19 @@ export async function createSwap(
       ].join("\n");
 
     } else if (swapType === "bitcoin-to-arkade") {
+      // #region create-swap
       const result = await client.createBitcoinToArkadeSwap({
         satsReceive: Math.floor(amountNum),
         targetAddress: address!,
       });
+
+      console.log("Send BTC to:", result.response.btc_htlc_address);
+      // ... "bc1q..."
+      console.log("Amount:", result.response.source_amount, "sats");
+      // ... 101500 "sats"
+      console.log("Swap ID:", result.response.id);
+      // ... "550e8400-e29b-41d4-a716-446655440000"
+      // #endregion create-swap
 
       swapId = result.response.id;
       status = result.response.status;
@@ -289,12 +314,19 @@ export async function createSwap(
         process.exit(1);
       }
 
+      // #region lightning-to-evm-by-source
       const result = await client.createLightningToEvmSwap({
         targetAddress: address!,
         targetToken: to,
         targetChain,
         sourceAmount: Math.floor(amountNum),
       });
+
+      console.log("Pay invoice:", result.response.ln_invoice);
+      // ... "lnbc1m1p..."
+      console.log("You will receive:", result.response.target_amount, "USDC");
+      // ... 48.25 "USDC"
+      // #endregion lightning-to-evm-by-source
 
       swapId = result.response.id;
       status = result.response.status;
@@ -436,6 +468,7 @@ export async function createSwap(
     console.log(`Once the swap is in 'serverfunded' status, redeem with:`);
     console.log(`  npm run redeem -- ${swapId}`);
 
+    // #region error-handling
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`Error creating swap: ${message}`);

@@ -25,12 +25,29 @@ export async function watchSwap(
 
   let lastStatus: string | null = null;
 
+  // #region poll-swap
+  const terminalStates = [
+    "clientredeemed",
+    "expired",
+    "clientrefunded",
+    "clientfundedserverrefunded",
+  ];
+
   // Poll until terminal state or user cancels
   while (true) {
     try {
+      // #region get-swap
       const swap = await client.getSwap(swapId);
 
-      // Only print if status changed
+      console.log("Status:", swap.status);
+      // ... "serverfunded"
+      console.log("Source:", swap.source_amount, swap.source_token);
+      // ... 100000 "btc_lightning"
+      console.log("Target:", swap.target_amount, swap.target_token);
+      // ... 48.25 "usdc_pol"
+      // #endregion get-swap
+
+      // Only print full details if status changed
       if (swap.status !== lastStatus) {
         lastStatus = swap.status;
         printSwapStatus(swap);
@@ -40,7 +57,7 @@ export async function watchSwap(
       }
 
       // Check if we've reached a terminal state
-      if (isTerminalState(swap.status)) {
+      if (terminalStates.includes(swap.status)) {
         console.log("");
         console.log("Swap reached terminal state. Stopping watch.");
         break;
@@ -55,7 +72,20 @@ export async function watchSwap(
       await sleep(POLL_INTERVAL_MS);
     }
   }
+  // #endregion poll-swap
 }
+
+// #region monitor-swap
+// To check a swap's final status:
+//
+// const finalSwap = await client.getSwap(swapId);
+// console.log("Status:", finalSwap.status);
+// // ... "clientredeemed"
+// console.log("Source amount:", finalSwap.source_amount, "sats");
+// // ... 101500 "sats"
+// console.log("Target amount:", finalSwap.target_amount, "sats");
+// // ... 100000 "sats"
+// #endregion monitor-swap
 
 function printSwapStatus(swap: GetSwapResponse): void {
   console.log("");
@@ -173,20 +203,6 @@ function printRedeemDetails(swap: GetSwapResponse): void {
   } else if (swap.direction === "onchain_to_evm" && "evm_claim_txid" in swap && swap.evm_claim_txid) {
     console.log(`Redeem TX: ${swap.evm_claim_txid}`);
   }
-}
-
-function isTerminalState(status: string): boolean {
-  const terminalStates = [
-    "clientredeemed",
-    "serverredeemed",
-    "clientrefunded",
-    "expired",
-    "clientfundedserverrefunded",
-    "clientrefundedserverfunded",
-    "clientrefundedserverrefunded",
-    "clientredeemedandclientrefunded",
-  ];
-  return terminalStates.includes(status);
 }
 
 function sleep(ms: number): Promise<void> {

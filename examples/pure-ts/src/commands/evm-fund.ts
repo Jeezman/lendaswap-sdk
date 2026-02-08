@@ -351,6 +351,7 @@ export async function evmFundSwap(
       }
 
       console.log("  CreateSwap confirmed!");
+      // #endregion fund-evm-htlc
       console.log("");
 
       console.log("=".repeat(60));

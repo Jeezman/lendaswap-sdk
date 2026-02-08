@@ -43,7 +43,16 @@ export async function redeemSwap(
   console.log("");
 
   try {
+    // #region claim-gelato
     const result = await client.claim(swapId, destination ? { destination } : undefined);
+
+    if (result.success) {
+      console.log("Claimed! TX:", result.txHash);
+      // ... "0xabc123..."
+    } else {
+      console.error("Claim failed:", result.message);
+    }
+    // #endregion claim-gelato
 
     if (!result.success) {
       console.error("=".repeat(60));
@@ -80,15 +89,20 @@ export async function redeemSwap(
       console.log("Example using cast:");
       console.log(`  cast send ${result.ethereumClaimData.contractAddress} ${result.ethereumClaimData.callData} --private-key <YOUR_KEY>`);
     } else if (result.chain === "arkade") {
-      // Arkade swap - claimed via Arkade protocol
-      console.log(`  Chain:        arkade`);
-      console.log(`  TX ID:        ${result.txHash}`);
-      console.log("");
-      console.log(`  Message:      ${result.message}`);
-      console.log("");
-      console.log("=".repeat(60));
-      console.log("");
-      console.log("Your BTC has been claimed on Arkade.");
+      // #region claim-vhtlc
+      const arkadeResult = await client.claimArkade(swapId, {
+        destinationAddress: "ark1q...", // Your Arkade address
+      });
+
+      if (arkadeResult.success) {
+        console.log("Claimed! TX:", arkadeResult.txId);
+        // ... "ark1tx..."
+        console.log("Amount:", arkadeResult.claimAmount, "sats");
+        // ... 100000 "sats"
+      } else {
+        console.error("Claim failed:", arkadeResult.message);
+      }
+      // #endregion claim-vhtlc
 
     } else if (swap.direction === "arkade_to_evm") {
       // Arkade-to-EVM - gasless claim via server
@@ -119,6 +133,17 @@ export async function redeemSwap(
       console.log("Use 'npm run watch -- " + swapId + "' to monitor until completion.");
 
     }
+
+    // #region check-vhtlc-amounts
+    const amounts = await client.amountsForSwap(swapId);
+
+    console.log("Spendable:", amounts.spendable, "sats");
+    // ... 100000 "sats"
+    console.log("Spent:", amounts.spent, "sats");
+    // ... 0 "sats"
+    console.log("Recoverable:", amounts.recoverable, "sats");
+    // ... 0 "sats"
+    // #endregion check-vhtlc-amounts
 
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

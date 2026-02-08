@@ -83,6 +83,43 @@ MNEMONIC="your twelve word mnemonic phrase here" npm run pairs
 EVM_MNEMONIC="your twelve word mnemonic phrase here" npm run evm-balances
 ```
 
+## Website Documentation Examples
+
+Standalone scripts mirroring the code snippets from the [LendaSwap docs](https://lendasat.com/docs/lendaswap). Each file is runnable individually and uses SQLite storage instead of the browser-specific `IdbWalletStorage`/`IdbSwapStorage` shown in the docs.
+
+```bash
+# Setup & initialization (version check, mnemonic, xpub)
+npm run docs:setup
+
+# Quotes, price feed, price calculations, asset pairs
+npm run docs:quotes
+
+# BTC -> EVM swaps (Lightning & Arkade to Polygon/Ethereum)
+npm run docs:create-btc-to-evm
+
+# EVM -> BTC swaps (Polygon/Ethereum to Arkade/Lightning)
+npm run docs:create-evm-to-btc
+
+# On-chain BTC -> Arkade swaps
+npm run docs:create-onchain-to-arkade
+
+# Monitor swaps (get by ID, poll, list, filter, delete)
+npm run docs:monitor-swaps
+npm run docs:monitor-swaps -- <swap-id>
+
+# Claim swaps (Gelato, VHTLC, manual EVM)
+npm run docs:claim -- <swap-id>
+
+# Refund swaps (VHTLC, EVM HTLC, on-chain)
+npm run docs:refund -- <swap-id>
+
+# Error handling patterns
+npm run docs:error-handling
+
+# Recovery from seed + state machine
+npm run docs:recovery
+```
+
 ## Notes
 
 - This example uses SQLite storage for persistent data (wallet mnemonic, key index, and swaps)

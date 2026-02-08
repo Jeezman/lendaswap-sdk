@@ -16,7 +16,8 @@
     "evm-claim": "tsx src/index.ts evm-claim",
     "evm-balances": "tsx src/index.ts evm-balances",
     "swaps": "tsx src/index.ts swaps",
-    "info": "tsx src/index.ts info"
+    "info": "tsx src/index.ts info",
+    "recover": "tsx src/index.ts recover"
   },
   "dependencies": {
     "@lendasat/lendaswap-sdk-pure": "file:../../ts-pure-sdk",

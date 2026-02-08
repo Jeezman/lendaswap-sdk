@@ -137,6 +137,7 @@ export async function refundSwap(
             destinationAddress: actualDestination ?? "",
           };
 
+    // #region refund-onchain
     const result = await client.refundSwap(swapId, options);
 
     if (result.success) {
@@ -194,6 +195,7 @@ export async function refundSwap(
         console.log("  Use the 'evm-refund' command for automatic submission:");
         console.log(`    npm run evm-refund -- ${swapId}`);
       }
+      // #endregion refund-onchain
       console.log("");
       console.log("=".repeat(60));
 
@@ -203,13 +205,22 @@ export async function refundSwap(
         await swapStorage.update(swapId, updatedSwap);
       }
     } else {
-      console.log("=".repeat(60));
-      console.log("REFUND NOT AVAILABLE");
-      console.log("=".repeat(60));
-      console.log("");
-      console.log(`  ${result.message}`);
-      console.log("");
-      console.log("=".repeat(60));
+      // #region check-locktime
+      const lockSwap = await client.getSwap(swapId);
+      console.log("Status:", lockSwap.status);
+      // ... "clientfundedserverrefunded"
+
+      // Attempt refund — the SDK checks locktime automatically
+      const lockResult = await client.refundSwap(swapId, {
+        destinationAddress: actualDestination ?? "",
+      });
+
+      if (!lockResult.success) {
+        // If locktime hasn't expired, message tells you when it does
+        console.log(lockResult.message);
+        // ... "Locktime expires in 45 minutes"
+      }
+      // #endregion check-locktime
       process.exit(1);
     }
   } catch (error) {
