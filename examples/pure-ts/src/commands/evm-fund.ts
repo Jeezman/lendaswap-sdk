@@ -108,7 +108,7 @@ export async function evmFundSwap(
       evm_htlc_address: string;
       evm_chain_id: number;
       source_token: { address: string; symbol: string; decimals: number };
-      source_token_amount: number;
+      source_amount: number;
     };
 
     // Determine chain from chain ID
@@ -120,10 +120,10 @@ export async function evmFundSwap(
     chainName = chainIdToName[evmSwap.evm_chain_id];
     tokenAddress = evmSwap.source_token.address as `0x${string}`;
     tokenDecimals = evmSwap.source_token.decimals;
-    amountNeeded = BigInt(evmSwap.source_token_amount);
+    amountNeeded = BigInt(evmSwap.source_amount);
     htlcAddress = evmSwap.evm_htlc_address;
     sourceTokenDisplay = evmSwap.source_token.symbol;
-    sourceAmountDisplay = evmSwap.source_token_amount / (10 ** tokenDecimals);
+    sourceAmountDisplay = evmSwap.source_amount / (10 ** tokenDecimals);
   } else {
     // Old chain-specific endpoint - source_token is a string like "usdc_pol"
     const evmSwap = swap as typeof swap & {

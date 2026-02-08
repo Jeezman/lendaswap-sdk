@@ -155,6 +155,40 @@
         }
       }
     },
+    "/evm-tokens": {
+      "get": {
+        "tags": ["evm-tokens"],
+        "summary": "Get available EVM tokens from 1inch for supported chains",
+        "operationId": "get_evm_tokens",
+        "parameters": [
+          {
+            "name": "chain_id",
+            "in": "query",
+            "description": "Filter by EVM chain ID (1=Ethereum, 137=Polygon, 42161=Arbitrum). Omit for all chains.",
+            "required": false,
+            "schema": { "type": "integer", "format": "int64", "minimum": 0 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "EVM tokens grouped by chain ID",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EvmTokensResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid chain ID",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": ["health"],
@@ -1764,15 +1798,12 @@
           "server_evm_address": { "type": "string" },
           "source_token": { "$ref": "#/components/schemas/TokenSummary" },
           "status": { "$ref": "#/components/schemas/SwapStatus" },
+          "target_amount": { "type": ["integer", "null"], "format": "int64" },
           "target_evm_address": {
             "type": ["string", "null"],
             "description": "EVM address where tokens are swept after the claim (user's final destination)."
           },
           "target_token": { "$ref": "#/components/schemas/TokenSummary" },
-          "target_token_amount": {
-            "type": ["integer", "null"],
-            "format": "int64"
-          },
           "unilateral_claim_delay": { "type": "integer", "format": "int64" },
           "unilateral_refund_delay": { "type": "integer", "format": "int64" },
           "unilateral_refund_without_receiver_delay": {
@@ -2551,7 +2582,7 @@
           "chain",
           "source_token",
           "target_token",
-          "source_token_amount",
+          "source_amount",
           "evm_expected_sats",
           "btc_expected_sats",
           "fee_sats",
@@ -2593,12 +2624,12 @@
           "receiver_pk": { "type": "string" },
           "sender_pk": { "type": "string" },
           "server_evm_address": { "type": "string" },
-          "source_token": { "$ref": "#/components/schemas/TokenSummary" },
-          "source_token_amount": {
+          "source_amount": {
             "type": "integer",
             "format": "int64",
             "minimum": 0
           },
+          "source_token": { "$ref": "#/components/schemas/TokenSummary" },
           "status": { "type": "string" },
           "target_token": { "$ref": "#/components/schemas/TokenSummary" },
           "unilateral_claim_delay": { "type": "integer", "format": "int64" },
@@ -2627,7 +2658,7 @@
           "created_at",
           "chain",
           "evm_chain_id",
-          "source_token_amount",
+          "source_amount",
           "evm_expected_sats",
           "btc_expected_sats",
           "evm_htlc_address",
@@ -2667,8 +2698,8 @@
           "receiver_pk": { "type": "string" },
           "sender_pk": { "type": "string" },
           "server_evm_address": { "type": "string" },
+          "source_amount": { "type": "integer", "format": "int64" },
           "source_token": { "$ref": "#/components/schemas/TokenSummary" },
-          "source_token_amount": { "type": "integer", "format": "int64" },
           "status": { "$ref": "#/components/schemas/SwapStatus" },
           "target_arkade_address": { "type": "string" },
           "target_token": { "$ref": "#/components/schemas/TokenSummary" },
@@ -2780,6 +2811,36 @@
           }
         ],
         "description": "EVM → BTC swap response"
+      },
+      "EvmTokenInfo": {
+        "type": "object",
+        "required": ["address", "symbol", "name", "decimals"],
+        "properties": {
+          "address": { "type": "string" },
+          "decimals": { "type": "integer", "format": "int32", "minimum": 0 },
+          "logo_uri": { "type": ["string", "null"] },
+          "name": { "type": "string" },
+          "symbol": { "type": "string" }
+        }
+      },
+      "EvmTokensResponse": {
+        "type": "object",
+        "required": ["chains"],
+        "properties": {
+          "chains": {
+            "type": "object",
+            "description": "chain_id -> tokens",
+            "additionalProperties": {
+              "type": "array",
+              "items": { "$ref": "#/components/schemas/EvmTokenInfo" }
+            },
+            "propertyNames": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        }
       },
       "GelatoSubmitRequest": {
         "type": "object",
@@ -3742,6 +3803,10 @@
     {
       "name": "recovery",
       "description": "Recover swaps from extended public key."
+    },
+    {
+      "name": "evm-tokens",
+      "description": "Get available EVM tokens from 1inch."
     },
     { "name": "health", "description": "Health check endpoint." },
     {

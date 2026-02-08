@@ -2378,15 +2378,15 @@ export class Client {
     }
 
     // Get source amount based on swap direction
-    // For evm_to_arkade: source_token_amount is already in smallest units (integer)
+    // For evm_to_arkade: source_amount is already in smallest units (integer)
     // For evm_to_btc: source_amount is in human-readable units (decimal)
     let exactAmount: bigint;
     if (swap.direction === "evm_to_arkade") {
       const evmSwap = swap as GetSwapResponse & {
         direction: "evm_to_arkade";
-        source_token_amount: number;
+        source_amount: number;
       };
-      exactAmount = BigInt(evmSwap.source_token_amount);
+      exactAmount = BigInt(evmSwap.source_amount);
     } else {
       const evmSwap = swap as EvmToBtcSwapResponse & {
         direction: "evm_to_btc";

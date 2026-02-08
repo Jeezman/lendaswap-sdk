@@ -183,7 +183,7 @@ export async function createSwap(
       swapId = result.response.id;
       status = result.response.status;
       keyIndex = result.swapParams.keyIndex;
-      sourceAmount = result.response.source_token_amount;
+      sourceAmount = result.response.source_amount;
       sourceDecimals = result.response.source_token.decimals;
       sourceSymbol = result.response.source_token.symbol;
       targetAmount = result.response.btc_expected_sats;
@@ -360,7 +360,7 @@ export async function createSwap(
       sourceDecimals = 0; // sats
       sourceSymbol = "sats";
       const tgtToken = result.response.target_token as { address: string; symbol: string; decimals: number };
-      targetAmount = result.response.target_token_amount ?? 0;
+      targetAmount = result.response.target_amount ?? 0;
       targetDecimals = tgtToken.decimals ?? 6;
       targetSymbol = tgtToken.symbol ?? "tokens";
       paymentInfo = [

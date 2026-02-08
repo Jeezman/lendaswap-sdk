@@ -72,6 +72,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/evm-tokens": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get available EVM tokens from 1inch for supported chains */
+    get: operations["get_evm_tokens"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/health": {
     parameters: {
       query?: never;
@@ -840,11 +857,11 @@ export interface components {
       server_evm_address: string;
       source_token: components["schemas"]["TokenSummary"];
       status: components["schemas"]["SwapStatus"];
+      /** Format: int64 */
+      target_amount?: number | null;
       /** @description EVM address where tokens are swept after the claim (user's final destination). */
       target_evm_address?: string | null;
       target_token: components["schemas"]["TokenSummary"];
-      /** Format: int64 */
-      target_token_amount?: number | null;
       /** Format: int64 */
       unilateral_claim_delay: number;
       /** Format: int64 */
@@ -1309,9 +1326,9 @@ export interface components {
       receiver_pk: string;
       sender_pk: string;
       server_evm_address: string;
-      source_token: components["schemas"]["TokenSummary"];
       /** Format: int64 */
-      source_token_amount: number;
+      source_amount: number;
+      source_token: components["schemas"]["TokenSummary"];
       status: string;
       target_token: components["schemas"]["TokenSummary"];
       /** Format: int64 */
@@ -1352,9 +1369,9 @@ export interface components {
       receiver_pk: string;
       sender_pk: string;
       server_evm_address: string;
-      source_token: components["schemas"]["TokenSummary"];
       /** Format: int64 */
-      source_token_amount: number;
+      source_amount: number;
+      source_token: components["schemas"]["TokenSummary"];
       status: components["schemas"]["SwapStatus"];
       target_arkade_address: string;
       target_token: components["schemas"]["TokenSummary"];
@@ -1415,6 +1432,20 @@ export interface components {
       user_address_arkade?: string | null;
       /** @description User's EVM address sending tokens */
       user_address_evm: string;
+    };
+    EvmTokenInfo: {
+      address: string;
+      /** Format: int32 */
+      decimals: number;
+      logo_uri?: string | null;
+      name: string;
+      symbol: string;
+    };
+    EvmTokensResponse: {
+      /** @description chain_id -> tokens */
+      chains: {
+        [key: string]: components["schemas"]["EvmTokenInfo"][];
+      };
     };
     GelatoSubmitRequest: {
       /** @description EIP-712 signature for createSwap transaction (required) */
@@ -2141,6 +2172,38 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["AssetPair"][];
+        };
+      };
+    };
+  };
+  get_evm_tokens: {
+    parameters: {
+      query?: {
+        /** @description Filter by EVM chain ID (1=Ethereum, 137=Polygon, 42161=Arbitrum). Omit for all chains. */
+        chain_id?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description EVM tokens grouped by chain ID */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EvmTokensResponse"];
+        };
+      };
+      /** @description Invalid chain ID */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
         };
       };
     };

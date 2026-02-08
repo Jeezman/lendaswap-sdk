@@ -447,7 +447,7 @@ impl SqliteStorage {
             INSERT OR REPLACE INTO arkade_to_evm_swaps (
                 swap_id, status, fee_sats, hash_lock, source_token, target_token,
                 created_at, chain, evm_chain_id, target_token_address, target_token_symbol,
-                target_token_decimals, btc_expected_sats, evm_expected_sats, target_token_amount,
+                target_token_decimals, btc_expected_sats, evm_expected_sats, target_amount,
                 btc_vhtlc_address, btc_fund_txid, btc_claim_txid, evm_htlc_address,
                 evm_coordinator_address, client_evm_address, server_evm_address, evm_fund_txid,
                 evm_claim_txid, evm_refund_locktime, sender_pk, receiver_pk, arkade_server_pk,
@@ -476,7 +476,7 @@ impl SqliteStorage {
         .bind(r.target_token_decimals)
         .bind(r.btc_expected_sats)
         .bind(r.evm_expected_sats)
-        .bind(r.target_token_amount)
+        .bind(r.target_amount)
         .bind(&r.btc_vhtlc_address)
         .bind(&r.btc_fund_txid)
         .bind(&r.btc_claim_txid)
@@ -946,7 +946,7 @@ impl SqliteStorage {
             target_token_decimals: row.get("target_token_decimals"),
             btc_expected_sats: row.get("btc_expected_sats"),
             evm_expected_sats: row.get("evm_expected_sats"),
-            target_token_amount: row.get("target_token_amount"),
+            target_amount: row.get("target_amount"),
             btc_vhtlc_address: row.get("btc_vhtlc_address"),
             btc_fund_txid: row.get("btc_fund_txid"),
             btc_claim_txid: row.get("btc_claim_txid"),
