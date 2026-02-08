@@ -142,5 +142,6 @@ export {
   isPolygonToken,
   type NetworkName,
   networkName,
+  type TokenInput,
 } from "./tokens.js";
 export { getUsdPrices } from "./usd-price";

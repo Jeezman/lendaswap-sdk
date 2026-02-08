@@ -127,8 +127,6 @@ export async function createSwap(
     let targetAmount: number;
     let targetDecimals: number;
     let targetSymbol: string;
-    let sourceToken: string;
-    let targetToken: string;
     let paymentInfo: string;
 
     // Use the appropriate helper method based on swap type
@@ -169,18 +167,15 @@ export async function createSwap(
       console.log("");
 
       // #region evm-to-arkade
+      const amountBigInt = BigInt(amount);
       const result = await client.createEvmToArkadeSwapGeneric({
         targetAddress: address!, // Arkade address (validated above)
         tokenAddress: tokenInfo.tokenAddress,
         evmChainId: tokenInfo.evmChainId,
         userAddress: evmUserAddress,
-        sourceAmount: amountNum,
+        sourceAmount: amountBigInt,
       });
 
-      console.log("Approve token:", result.response.source_token_address);
-      // ... "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
-      console.log("HTLC contract:", result.response.htlc_address_evm);
-      // ... "0x1234...abcd"
       console.log("Swap ID:", result.response.id);
       // ... "550e8400-e29b-41d4-a716-446655440000"
       // #endregion evm-to-arkade
@@ -194,8 +189,6 @@ export async function createSwap(
       targetAmount = result.response.btc_expected_sats;
       targetDecimals = 0; // sats
       targetSymbol = "sats";
-      sourceToken = `${result.response.source_token.symbol} (chain ${result.response.evm_chain_id})`;
-      targetToken = "btc_arkade";
       paymentInfo = [
         `1. Approve token spend to coordinator:`,
         `   Token contract: ${result.response.source_token.address}`,
@@ -260,8 +253,6 @@ export async function createSwap(
       targetAmount = result.response.target_amount;
       targetDecimals = 0; // sats
       targetSymbol = "sats";
-      sourceToken = result.response.source_token;
-      targetToken = result.response.target_token;
       paymentInfo = [
         `1. Approve token spend:`,
         `   Token contract: ${result.response.source_token_address}`,
@@ -297,8 +288,6 @@ export async function createSwap(
       targetAmount = result.response.target_amount;
       targetDecimals = 0; // sats
       targetSymbol = "sats";
-      sourceToken = result.response.source_token;
-      targetToken = result.response.target_token;
       paymentInfo = [
         `Send BTC to this on-chain address:`,
         `  ${result.response.btc_htlc_address}`,
@@ -337,8 +326,6 @@ export async function createSwap(
       targetAmount = result.response.target_amount;
       targetDecimals = 6; // USDC/USDT have 6 decimals
       targetSymbol = to.replace(/_.*$/, "").toUpperCase();
-      sourceToken = from;
-      targetToken = to;
       paymentInfo = `Pay this Lightning Invoice:\n  ${result.response.ln_invoice}`;
 
     } else if (swapType === "arkade") {
@@ -358,10 +345,11 @@ export async function createSwap(
         process.exit(1);
       }
 
+      const amountBigInt = BigInt(amount);
       const result = await client.createArkadeToEvmSwapGeneric({
         tokenAddress: tokenInfo.tokenAddress,
         evmChainId: tokenInfo.evmChainId,
-        sourceAmount: Math.floor(amountNum),
+        sourceAmount: amountBigInt,
         targetAddress: address,
       });
 
@@ -371,13 +359,10 @@ export async function createSwap(
       sourceAmount = result.response.btc_expected_sats;
       sourceDecimals = 0; // sats
       sourceSymbol = "sats";
-      const srcToken = result.response.source_token as { address: string; symbol: string; decimals: number };
       const tgtToken = result.response.target_token as { address: string; symbol: string; decimals: number };
       targetAmount = result.response.target_token_amount ?? 0;
       targetDecimals = tgtToken.decimals ?? 6;
       targetSymbol = tgtToken.symbol ?? "tokens";
-      sourceToken = srcToken.symbol;
-      targetToken = `${tgtToken.symbol} (chain ${result.response.evm_chain_id})`;
       paymentInfo = [
         `Fund this Arkade VHTLC Address:`,
         `  ${result.response.btc_vhtlc_address}`,
@@ -416,8 +401,6 @@ export async function createSwap(
         targetAmount = result.response.target_amount;
         targetDecimals = 6; // USDC/USDT
         targetSymbol = to.replace(/_.*$/, "").toUpperCase();
-        sourceToken = result.response.source_token;
-        targetToken = result.response.target_token;
         paymentInfo = `Send BTC to this address:\n  ${result.response.btc_htlc_address}`;
       } else if ("source_amount" in result.response) {
         sourceAmount = result.response.source_amount;
@@ -426,8 +409,6 @@ export async function createSwap(
         targetAmount = result.response.target_amount;
         targetDecimals = 6; // USDC/USDT
         targetSymbol = to.replace(/_.*$/, "").toUpperCase();
-        sourceToken = from;
-        targetToken = to;
         paymentInfo = `Fund this address:\n  ${result.response.htlc_address_arkade}`;
       } else {
         sourceAmount = amountNum;
@@ -436,8 +417,6 @@ export async function createSwap(
         targetAmount = 0;
         targetDecimals = 0;
         targetSymbol = "units";
-        sourceToken = from;
-        targetToken = to;
         paymentInfo = "Check swap response for payment details";
       }
     }
