@@ -148,7 +148,7 @@ export interface EvmToArkadeSwapGenericOptions {
   /** User's EVM wallet address (sender of the ERC-20 token) */
   userAddress: string;
   /** Amount of source token to send in smallest units (mutually exclusive with targetAmount) */
-  sourceAmount?: number;
+  sourceAmount?: bigint;
   /** Desired BTC output in sats (mutually exclusive with sourceAmount) */
   targetAmount?: number;
   /** Optional referral code */
@@ -175,9 +175,9 @@ export interface ArkadeToEvmSwapOptions {
   /** Numeric EVM chain ID: 1 (Ethereum), 137 (Polygon), 42161 (Arbitrum) */
   evmChainId: number;
   /** Amount in satoshis to send (mutually exclusive with targetAmount) */
-  sourceAmount?: number;
+  sourceAmount?: bigint;
   /** Amount of target token to receive in smallest unit (mutually exclusive with sourceAmount) */
-  targetAmount?: number;
+  targetAmount?: bigint;
   /** Optional referral code */
   referralCode?: string;
 }

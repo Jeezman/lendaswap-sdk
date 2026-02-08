@@ -155,8 +155,12 @@ export async function createArkadeToEvmSwapGeneric(
       target_address: options.targetAddress,
       token_address: options.tokenAddress,
       evm_chain_id: options.evmChainId,
-      amount_in: options.sourceAmount,
-      amount_out: options.targetAmount,
+      amount_in: options.sourceAmount
+        ? Number(options.sourceAmount)
+        : undefined,
+      amount_out: options.targetAmount
+        ? Number(options.targetAmount)
+        : undefined,
       referral_code: options.referralCode,
     },
   });

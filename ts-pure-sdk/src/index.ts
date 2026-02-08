@@ -50,6 +50,7 @@ export type {
   ClaimGaslessResult,
   ClaimResult,
   ClientConfig,
+  CoordinatorFundingCallData,
   EthereumClaimData,
   EvmChain,
   EvmFundingCallData,
