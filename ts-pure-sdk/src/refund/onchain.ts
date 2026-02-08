@@ -11,8 +11,8 @@
  * - Timelock script path: user refunds after locktime
  */
 
-import { ripemd160 } from "@noble/hashes/legacy";
-import { sha256 } from "@noble/hashes/sha2";
+import { ripemd160 } from "@noble/hashes/ripemd160";
+import { sha256 } from "@noble/hashes/sha256";
 import { hex } from "@scure/base";
 import * as btc from "@scure/btc-signer";
 

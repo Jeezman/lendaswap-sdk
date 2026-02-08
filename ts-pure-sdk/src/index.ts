@@ -76,14 +76,14 @@ export {
   calculateTargetAmount,
   computeExchangeRate,
   selectTierRate,
-} from "./price-calculations";
+} from "./price-calculations.js";
 export {
   PriceFeedService,
   type PriceTiers,
   type PriceUpdateCallback,
   type PriceUpdateMessage,
   type TradingPairPrices,
-} from "./price-feed";
+} from "./price-feed.js";
 // Redeem module (Arkade claim)
 export {
   type ArkadeClaimParams,
@@ -137,4 +137,4 @@ export {
   type NetworkName,
   networkName,
 } from "./tokens.js";
-export { getUsdPrices } from "./usd-price";
+export { getUsdPrices } from "./usd-price.js";

@@ -5,7 +5,7 @@
  * Arkade VTXOs after the server funds the Arkade VHTLC.
  */
 
-import { ripemd160 } from "@noble/hashes/legacy";
+import { ripemd160 } from "@noble/hashes/ripemd160";
 import type { GetSwapResponse } from "../api/client.js";
 import { bytesToHex } from "../signer/index.js";
 import type {
