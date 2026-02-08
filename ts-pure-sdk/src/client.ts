@@ -148,6 +148,7 @@ const DEFAULT_BASE_URL = "https://apilendaswap.lendasat.com/";
 const DEFAULT_ESPLORA_URLS: Record<string, string> = {
   mainnet: "https://mempool.space/api",
   signet: "https://mutinynet.com/api",
+  regtest: "http://localhost:3000",
 };
 
 /** Configuration options for the Lendaswap client. */
