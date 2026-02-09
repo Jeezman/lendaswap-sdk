@@ -138,7 +138,7 @@
     "/asset-pairs": {
       "get": {
         "tags": ["asset-pairs"],
-        "summary": "Get list of supported asset pair combinations for swaps",
+        "summary": "Get list of special asset pair combinations for swaps.",
         "operationId": "get_asset_pairs",
         "responses": {
           "200": {
@@ -183,6 +183,23 @@
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/evm-tokens/chains": {
+      "get": {
+        "tags": ["evm-tokens"],
+        "summary": "Get supported EVM chains",
+        "operationId": "get_evm_chains",
+        "responses": {
+          "200": {
+            "description": "List of supported EVM chains",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EvmChainsResponse" }
               }
             }
           }
@@ -2508,6 +2525,24 @@
           "user_id": {
             "type": "string",
             "description": "User ID derived from wallet for recovery purposes"
+          }
+        }
+      },
+      "EvmChainInfo": {
+        "type": "object",
+        "required": ["chain_id", "name"],
+        "properties": {
+          "chain_id": { "type": "integer", "format": "int64", "minimum": 0 },
+          "name": { "type": "string" }
+        }
+      },
+      "EvmChainsResponse": {
+        "type": "object",
+        "required": ["chains"],
+        "properties": {
+          "chains": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/EvmChainInfo" }
           }
         }
       },
