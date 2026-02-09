@@ -135,26 +135,6 @@
         }
       }
     },
-    "/asset-pairs": {
-      "get": {
-        "tags": ["asset-pairs"],
-        "summary": "Get list of special asset pair combinations for swaps.",
-        "operationId": "get_asset_pairs",
-        "responses": {
-          "200": {
-            "description": "Return list of supported asset pair combinations for swaps",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": { "$ref": "#/components/schemas/AssetPair" }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/evm-tokens": {
       "get": {
         "tags": ["evm-tokens"],
@@ -1469,17 +1449,55 @@
     "/tokens": {
       "get": {
         "tags": ["tokens"],
-        "summary": "Get list of available tokens for swaps",
+        "summary": "Get list of available tokens for swaps.",
+        "description": "Optionally pass `source_chain` + `source_token` **or** `target_chain` + `target_token`\nto filter the response to valid counterparty tokens.",
         "operationId": "get_tokens",
+        "parameters": [
+          {
+            "name": "source_chain",
+            "in": "query",
+            "description": "If set together with `source_token`, return only valid target tokens.",
+            "required": false,
+            "schema": {
+              "oneOf": [
+                { "type": "null" },
+                { "$ref": "#/components/schemas/Chain" }
+              ]
+            }
+          },
+          {
+            "name": "source_token",
+            "in": "query",
+            "description": "Source token identifier (e.g. \"btc\" or a contract address).",
+            "required": false,
+            "schema": { "type": ["string", "null"] }
+          },
+          {
+            "name": "target_chain",
+            "in": "query",
+            "description": "If set together with `target_token`, return only valid source tokens.",
+            "required": false,
+            "schema": {
+              "oneOf": [
+                { "type": "null" },
+                { "$ref": "#/components/schemas/Chain" }
+              ]
+            }
+          },
+          {
+            "name": "target_token",
+            "in": "query",
+            "description": "Target token identifier (e.g. \"btc\" or a contract address).",
+            "required": false,
+            "schema": { "type": ["string", "null"] }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Return list of available tokens for swaps",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": { "$ref": "#/components/schemas/TokenInfo" }
-                }
+                "schema": { "$ref": "#/components/schemas/TokenInfos" }
               }
             }
           }
@@ -1875,14 +1893,6 @@
             "type": "string",
             "description": "User ID derived from wallet for recovery purposes"
           }
-        }
-      },
-      "AssetPair": {
-        "type": "object",
-        "required": ["source", "target"],
-        "properties": {
-          "source": { "$ref": "#/components/schemas/TokenInfo" },
-          "target": { "$ref": "#/components/schemas/TokenInfo" }
         }
       },
       "BitcoinToArbitrumSwapRequest": {
@@ -3620,6 +3630,20 @@
           "name": { "type": "string" },
           "symbol": { "type": "string" },
           "token_id": { "$ref": "#/components/schemas/TokenId" }
+        }
+      },
+      "TokenInfos": {
+        "type": "object",
+        "required": ["btc_tokens", "evm_tokens"],
+        "properties": {
+          "btc_tokens": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/TokenInfo" }
+          },
+          "evm_tokens": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/TokenInfo" }
+          }
         }
       },
       "TokenSummary": {

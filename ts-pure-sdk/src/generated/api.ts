@@ -55,23 +55,6 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/asset-pairs": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /** Get list of special asset pair combinations for swaps. */
-    get: operations["get_asset_pairs"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
   "/evm-tokens": {
     parameters: {
       query?: never;
@@ -631,7 +614,11 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Get list of available tokens for swaps */
+    /**
+     * Get list of available tokens for swaps.
+     * @description Optionally pass `source_chain` + `source_token` **or** `target_chain` + `target_token`
+     *     to filter the response to valid counterparty tokens.
+     */
     get: operations["get_tokens"];
     put?: never;
     post?: never;
@@ -916,10 +903,6 @@ export interface components {
       target_token: components["schemas"]["TokenId"];
       /** @description User ID derived from wallet for recovery purposes */
       user_id: string;
-    };
-    AssetPair: {
-      source: components["schemas"]["TokenInfo"];
-      target: components["schemas"]["TokenInfo"];
     };
     BitcoinToArbitrumSwapRequest: {
       /**
@@ -1944,6 +1927,10 @@ export interface components {
       symbol: string;
       token_id: components["schemas"]["TokenId"];
     };
+    TokenInfos: {
+      btc_tokens: components["schemas"]["TokenInfo"][];
+      evm_tokens: components["schemas"]["TokenInfo"][];
+    };
     /** @description Token summary returned in the response. */
     TokenSummary: {
       address: string;
@@ -2177,26 +2164,6 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-    };
-  };
-  get_asset_pairs: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Return list of supported asset pair combinations for swaps */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["AssetPair"][];
         };
       };
     };
@@ -3416,7 +3383,16 @@ export interface operations {
   };
   get_tokens: {
     parameters: {
-      query?: never;
+      query?: {
+        /** @description If set together with `source_token`, return only valid target tokens. */
+        source_chain?: null | components["schemas"]["Chain"];
+        /** @description Source token identifier (e.g. "btc" or a contract address). */
+        source_token?: string | null;
+        /** @description If set together with `target_token`, return only valid source tokens. */
+        target_chain?: null | components["schemas"]["Chain"];
+        /** @description Target token identifier (e.g. "btc" or a contract address). */
+        target_token?: string | null;
+      };
       header?: never;
       path?: never;
       cookie?: never;
@@ -3429,7 +3405,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": components["schemas"]["TokenInfo"][];
+          "application/json": components["schemas"]["TokenInfos"];
         };
       };
     };
