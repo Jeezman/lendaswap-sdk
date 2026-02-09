@@ -234,22 +234,6 @@ async fn test_get_tokens() {
 
 #[tokio::test]
 #[ignore]
-async fn test_get_asset_pairs() {
-    let client = ApiClient::new(API_URL);
-
-    match client.get_asset_pairs().await {
-        Ok(pairs) => {
-            println!("Available asset pairs:");
-            for pair in pairs {
-                println!("  - {} -> {}", pair.source.symbol, pair.target.symbol);
-            }
-        }
-        Err(e) => println!("Failed to get asset pairs: {:#}", e),
-    }
-}
-
-#[tokio::test]
-#[ignore]
 async fn test_get_quote() {
     use lendaswap_core::api::QuoteRequest;
 

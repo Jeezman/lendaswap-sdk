@@ -8,7 +8,7 @@ export type { paths, components };
 // Re-export commonly used types for convenience
 export type TokenId = components["schemas"]["TokenId"];
 export type TokenInfo = components["schemas"]["TokenInfo"];
-export type AssetPair = components["schemas"]["AssetPair"];
+export type TokenInfos = components["schemas"]["TokenInfos"];
 export type SwapStatus = components["schemas"]["SwapStatus"];
 export type QuoteResponse = components["schemas"]["QuoteResponse"];
 export type GetSwapResponse = components["schemas"]["GetSwapResponse"];

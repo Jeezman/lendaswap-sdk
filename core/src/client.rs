@@ -1,5 +1,5 @@
 use crate::api::{
-    ArkadeToEvmSwapCreateResponse, ArkadeToEvmSwapRequest, AssetPair, BtcToArkadeSwapRequest,
+    ArkadeToEvmSwapCreateResponse, ArkadeToEvmSwapRequest, BtcToArkadeSwapRequest,
     BtcToArkadeSwapResponse, BtcToEvmSwapRequest, BtcToEvmSwapResponse, CreateVtxoSwapRequest,
     EstimateVtxoSwapResponse, EvmChain, EvmToArkadeSwapRequest, EvmToBtcSwapResponse,
     EvmToLightningSwapRequest, GetSwapResponse, OnchainToEvmSwapRequest, OnchainToEvmSwapResponse,
@@ -559,11 +559,6 @@ impl<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> Client<S, SS, VSS>
         self.swap_storage.store(&swap_id, &swap_data).await?;
 
         Ok(response)
-    }
-
-    pub async fn get_asset_pairs(&self) -> crate::Result<Vec<AssetPair>> {
-        let asset_pairs = self.api_client.get_asset_pairs().await?;
-        Ok(asset_pairs)
     }
 
     pub async fn get_tokens(&self) -> crate::Result<Vec<TokenInfo>> {

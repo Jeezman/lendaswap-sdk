@@ -58,11 +58,11 @@ pub struct TokenInfo {
     pub decimals: u8,
 }
 
-/// Asset pair for trading.
+/// Response from the /tokens endpoint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AssetPair {
-    pub source: TokenInfo,
-    pub target: TokenInfo,
+pub struct TokenInfos {
+    pub btc_tokens: Vec<TokenInfo>,
+    pub evm_tokens: Vec<TokenInfo>,
 }
 
 /// Price response (legacy).

@@ -114,8 +114,9 @@ export interface paths {
       cookie?: never;
     };
     /**
-     * Get a quote for swapping BTC to/from fiat tokens
-     * @description The base_amount is always in satoshis and represents the BTC amount being bought or sold
+     * Get a quote for swapping BTC to/from EVM tokens
+     * @description Specify exactly one of source_amount or target_amount.
+     *     Amounts are in the smallest unit of the respective token (satoshis for BTC, raw units for EVM tokens).
      */
     get: operations["get_quote"];
     put?: never;
@@ -1729,7 +1730,7 @@ export interface components {
       timestamp: number;
     };
     QuoteResponse: {
-      /** @description Exchange rate: how much fiat you get/pay per BTC */
+      /** @description Exchange rate: how much of the EVM token you get/pay per BTC */
       exchange_rate: string;
       /**
        * Format: int64
@@ -1756,6 +1757,10 @@ export interface components {
        * @description Protocol fee rate (as decimal, e.g., 0.0025 = 0.25%)
        */
       protocol_fee_rate: number;
+      /** @description Pre-calculated source amount in smallest unit of source token */
+      source_amount: string;
+      /** @description Pre-calculated target amount in smallest unit of target token */
+      target_amount: string;
     };
     RecoveredSwap: components["schemas"]["GetSwapResponse"] & {
       /**
@@ -2243,12 +2248,18 @@ export interface operations {
   get_quote: {
     parameters: {
       query: {
-        /** @description Token to swap from (e.g., "btc_arkade", "usdc_pol", "usdc_eth") */
-        from: components["schemas"]["TokenId"];
-        /** @description Token to swap to (e.g., "usdc_pol", "btc_arkade", "usdc_eth") */
-        to: components["schemas"]["TokenId"];
-        /** @description This is always the BTC amount to be either sold or received (in satoshis) */
-        base_amount: number;
+        /** @description Source blockchain (e.g., "Arkade", "Lightning", "Bitcoin", "Polygon", "Ethereum", "Arbitrum") */
+        source_chain: components["schemas"]["Chain"];
+        /** @description Source token: contract address for EVM tokens, or "btc" for BTC */
+        source_token: string;
+        /** @description Target blockchain */
+        target_chain: components["schemas"]["Chain"];
+        /** @description Target token: contract address for EVM tokens, or "btc" for BTC */
+        target_token: string;
+        /** @description Amount in smallest unit of source token (mutually exclusive with target_amount) */
+        source_amount?: number | null;
+        /** @description Amount in smallest unit of target token (mutually exclusive with source_amount) */
+        target_amount?: number | null;
       };
       header?: never;
       path?: never;
@@ -2256,7 +2267,7 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Return a quote for swapping BTC to/from fiat tokens */
+      /** @description Return a quote for swapping BTC to/from EVM tokens */
       200: {
         headers: {
           [name: string]: unknown;

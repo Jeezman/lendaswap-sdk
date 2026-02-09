@@ -1,7 +1,6 @@
 import {
   type ApiClient,
   type ArkadeToEvmSwapResponse,
-  type AssetPair,
   type BtcToArkadeSwapResponse,
   type BtcToEvmSwapResponse,
   createApiClient,
@@ -642,20 +641,8 @@ export class Client {
     if (error) {
       throw new Error(`Failed to get tokens: ${JSON.stringify(error)}`);
     }
-    return data ?? [];
-  }
-
-  /**
-   * Gets the list of available asset pairs for swapping.
-   * @returns A promise that resolves to an array of asset pairs.
-   * @throws Error if the request fails.
-   */
-  async getAssetPairs(): Promise<AssetPair[]> {
-    const { data, error } = await this.#apiClient.GET("/asset-pairs");
-    if (error) {
-      throw new Error(`Failed to get asset pairs: ${JSON.stringify(error)}`);
-    }
-    return data ?? [];
+    if (!data) return [];
+    return [...data.btc_tokens, ...data.evm_tokens];
   }
 
   // =========================================================================

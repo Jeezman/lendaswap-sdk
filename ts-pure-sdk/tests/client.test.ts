@@ -23,7 +23,6 @@ describe("Client", () => {
     expect(client.healthCheck).toBeDefined();
     expect(client.getVersion).toBeDefined();
     expect(client.getTokens).toBeDefined();
-    expect(client.getAssetPairs).toBeDefined();
     expect(client.getQuote).toBeDefined();
     expect(client.getSwap).toBeDefined();
   });

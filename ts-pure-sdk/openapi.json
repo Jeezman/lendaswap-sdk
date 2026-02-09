@@ -202,35 +202,64 @@
     "/quote": {
       "get": {
         "tags": ["quote"],
-        "summary": "Get a quote for swapping BTC to/from fiat tokens",
-        "description": "The base_amount is always in satoshis and represents the BTC amount being bought or sold",
+        "summary": "Get a quote for swapping BTC to/from EVM tokens",
+        "description": "Specify exactly one of source_amount or target_amount.\nAmounts are in the smallest unit of the respective token (satoshis for BTC, raw units for EVM tokens).",
         "operationId": "get_quote",
         "parameters": [
           {
-            "name": "from",
+            "name": "source_chain",
             "in": "query",
-            "description": "Token to swap from (e.g., \"btc_arkade\", \"usdc_pol\", \"usdc_eth\")",
+            "description": "Source blockchain (e.g., \"Arkade\", \"Lightning\", \"Bitcoin\", \"Polygon\", \"Ethereum\", \"Arbitrum\")",
             "required": true,
-            "schema": { "$ref": "#/components/schemas/TokenId" }
+            "schema": { "$ref": "#/components/schemas/Chain" }
           },
           {
-            "name": "to",
+            "name": "source_token",
             "in": "query",
-            "description": "Token to swap to (e.g., \"usdc_pol\", \"btc_arkade\", \"usdc_eth\")",
+            "description": "Source token: contract address for EVM tokens, or \"btc\" for BTC",
             "required": true,
-            "schema": { "$ref": "#/components/schemas/TokenId" }
+            "schema": { "type": "string" }
           },
           {
-            "name": "base_amount",
+            "name": "target_chain",
             "in": "query",
-            "description": "This is always the BTC amount to be either sold or received (in satoshis)",
+            "description": "Target blockchain",
             "required": true,
-            "schema": { "type": "integer", "format": "int64", "minimum": 0 }
+            "schema": { "$ref": "#/components/schemas/Chain" }
+          },
+          {
+            "name": "target_token",
+            "in": "query",
+            "description": "Target token: contract address for EVM tokens, or \"btc\" for BTC",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "source_amount",
+            "in": "query",
+            "description": "Amount in smallest unit of source token (mutually exclusive with target_amount)",
+            "required": false,
+            "schema": {
+              "type": ["integer", "null"],
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "target_amount",
+            "in": "query",
+            "description": "Amount in smallest unit of target token (mutually exclusive with source_amount)",
+            "required": false,
+            "schema": {
+              "type": ["integer", "null"],
+              "format": "int64",
+              "minimum": 0
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Return a quote for swapping BTC to/from fiat tokens",
+            "description": "Return a quote for swapping BTC to/from EVM tokens",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/QuoteResponse" }
@@ -3383,12 +3412,14 @@
           "protocol_fee",
           "protocol_fee_rate",
           "min_amount",
-          "max_amount"
+          "max_amount",
+          "source_amount",
+          "target_amount"
         ],
         "properties": {
           "exchange_rate": {
             "type": "string",
-            "description": "Exchange rate: how much fiat you get/pay per BTC"
+            "description": "Exchange rate: how much of the EVM token you get/pay per BTC"
           },
           "max_amount": {
             "type": "integer",
@@ -3418,6 +3449,14 @@
             "type": "number",
             "format": "double",
             "description": "Protocol fee rate (as decimal, e.g., 0.0025 = 0.25%)"
+          },
+          "source_amount": {
+            "type": "string",
+            "description": "Pre-calculated source amount in smallest unit of source token"
+          },
+          "target_amount": {
+            "type": "string",
+            "description": "Pre-calculated target amount in smallest unit of target token"
           }
         }
       },

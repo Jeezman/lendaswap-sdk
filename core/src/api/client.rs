@@ -3,12 +3,12 @@
 use crate::error::{Error, Result};
 
 use super::types::{
-    ApiError, ArkadeToEvmSwapCreateResponse, ArkadeToEvmSwapRequest, AssetPair,
-    BtcToArkadeSwapRequest, BtcToArkadeSwapResponse, BtcToEvmSwapRequest, BtcToEvmSwapResponse,
-    ClaimGelatoRequest, CreateVtxoSwapRequest, EstimateVtxoSwapRequest, EstimateVtxoSwapResponse,
-    EvmChain, EvmToArkadeSwapRequest, EvmToBtcSwapResponse, EvmToLightningSwapRequest,
-    GetSwapResponse, OnchainToEvmSwapRequest, OnchainToEvmSwapResponse, QuoteRequest,
-    QuoteResponse, RecoverSwapsRequest, RecoverSwapsResponse, TokenInfo, Version, VtxoSwapResponse,
+    ApiError, ArkadeToEvmSwapCreateResponse, ArkadeToEvmSwapRequest, BtcToArkadeSwapRequest,
+    BtcToArkadeSwapResponse, BtcToEvmSwapRequest, BtcToEvmSwapResponse, ClaimGelatoRequest,
+    CreateVtxoSwapRequest, EstimateVtxoSwapRequest, EstimateVtxoSwapResponse, EvmChain,
+    EvmToArkadeSwapRequest, EvmToBtcSwapResponse, EvmToLightningSwapRequest, GetSwapResponse,
+    OnchainToEvmSwapRequest, OnchainToEvmSwapResponse, QuoteRequest, QuoteResponse,
+    RecoverSwapsRequest, RecoverSwapsResponse, TokenInfo, TokenInfos, Version, VtxoSwapResponse,
 };
 
 /// Lendaswap API client.
@@ -75,13 +75,8 @@ impl ApiClient {
     /// Get supported tokens.
     pub async fn get_tokens(&self) -> Result<Vec<TokenInfo>> {
         let url = format!("{}/tokens", self.base_url);
-        self.get_json(&url).await
-    }
-
-    /// Get available asset pairs.
-    pub async fn get_asset_pairs(&self) -> Result<Vec<AssetPair>> {
-        let url = format!("{}/asset-pairs", self.base_url);
-        self.get_json(&url).await
+        let token_infos: TokenInfos = self.get_json(&url).await?;
+        Ok([token_infos.btc_tokens, token_infos.evm_tokens].concat())
     }
 
     /// Get a quote for a swap.
@@ -345,8 +340,6 @@ pub mod tests {
         client.health_check().await.unwrap();
 
         client.get_tokens().await.unwrap();
-
-        client.get_asset_pairs().await.unwrap();
 
         client
             .get_quote(&QuoteRequest {

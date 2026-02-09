@@ -31,7 +31,6 @@ describe("API Client - Type Safety", () => {
     // These should type-check correctly
     // We're not actually calling the API, just verifying types compile
     const _getTokens = () => client.GET("/tokens");
-    const _getAssetPairs = () => client.GET("/asset-pairs");
     const _getQuote = () =>
       client.GET("/quote", {
         params: {
@@ -48,7 +47,6 @@ describe("API Client - Type Safety", () => {
       });
 
     expect(_getTokens).toBeDefined();
-    expect(_getAssetPairs).toBeDefined();
     expect(_getQuote).toBeDefined();
     expect(_getSwap).toBeDefined();
   });

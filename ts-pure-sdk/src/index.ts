@@ -8,7 +8,6 @@ export type {
   ArkadeToEthereumSwapRequest,
   // Request types
   ArkadeToPolygonSwapRequest,
-  AssetPair,
   BitcoinToArbitrumSwapRequest,
   BitcoinToEthereumSwapRequest,
   BitcoinToPolygonSwapRequest,
