@@ -1,24 +1,18 @@
 /**
  * Price calculation utilities for swap amount conversions.
  *
- * This module provides functions to calculate swap amounts using exchange rates
- * from the price feed. It handles:
- * - Tier-based rate selection based on swap volume
+ * This module provides functions to calculate swap amounts using exchange rates.
+ * It handles:
  * - Exchange rate inversion for BTC ↔ EVM token swaps
  * - Forward and reverse amount calculations with fee handling
  *
  * @example
  * ```typescript
  * import {
- *   selectTierRate,
  *   computeExchangeRate,
  *   calculateTargetAmount,
  *   calculateSourceAmount,
- *   type PriceTiers,
  * } from '@lendasat/lendaswap-sdk';
- *
- * // Select tier based on amount
- * const rate = selectTierRate(priceTiers, 1000); // Gets tier_1000 rate
  *
  * // Compute exchange rate with proper inversion
  * const exchangeRate = computeExchangeRate(rate, isSourceBtc, isTargetEvm);
@@ -30,39 +24,6 @@
  * const sourceAmount = calculateSourceAmount(0.01, exchangeRate, 0.0001, false, true);
  * ```
  */
-
-import type { PriceTiers } from "./price-feed.js";
-
-/**
- * Select the appropriate tier rate based on the asset amount.
- * Higher amounts get better rates (lower spread).
- *
- * @param tiers - The price tiers from the price feed
- * @param assetAmount - The swap amount in quote asset units
- * @returns The rate for the appropriate tier
- *
- * @example
- * ```typescript
- * const tiers = { tier_1: 0.000010773, tier_100: 0.0000107787, tier_1000: 0.0000107740, tier_5000: 0.0000107524 };
- *
- * selectTierRate(tiers, 50);    // Returns tier_1 (0.000010773)
- * selectTierRate(tiers, 500);   // Returns tier_100 (0.0000107787)
- * selectTierRate(tiers, 2000);  // Returns tier_1000 (0.0000107740)
- * selectTierRate(tiers, 10000); // Returns tier_5000 (0.0000107524)
- * ```
- */
-export function selectTierRate(tiers: PriceTiers, assetAmount: number): number {
-  if (assetAmount >= 5000) {
-    return tiers.tier_5000;
-  }
-  if (assetAmount >= 1000) {
-    return tiers.tier_1000;
-  }
-  if (assetAmount >= 100) {
-    return tiers.tier_100;
-  }
-  return tiers.tier_1;
-}
 
 /**
  * Compute the exchange rate with proper inversion handling.

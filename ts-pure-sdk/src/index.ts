@@ -81,15 +81,7 @@ export {
   calculateSourceAmount,
   calculateTargetAmount,
   computeExchangeRate,
-  selectTierRate,
 } from "./price-calculations";
-export {
-  PriceFeedService,
-  type PriceTiers,
-  type PriceUpdateCallback,
-  type PriceUpdateMessage,
-  type TradingPairPrices,
-} from "./price-feed";
 // Redeem module (Arkade claim)
 export {
   type ArkadeClaimParams,
