@@ -111,6 +111,13 @@ export type {
   EthereumClaimData,
 } from "./redeem/index.js";
 
+/** Well-known WBTC contract addresses by EVM chain ID */
+const WBTC_BY_CHAIN_ID: Record<number, string> = {
+  137: "0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6", // Polygon
+  1: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", // Ethereum
+  42161: "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f", // Arbitrum
+};
+
 /** Result of attempting a refund */
 export interface RefundResult {
   /** Whether the refund was successful */
@@ -1076,26 +1083,25 @@ export class Client {
     const secret = storedSwap.preimage;
     const secretHex = secret.startsWith("0x") ? secret : `0x${secret}`;
 
-    // source_token is a TokenSummary with the WBTC address (what's locked in the HTLC)
-    // target_token is a TokenSummary with the final token the user wants (e.g. USDC)
-    const sourceToken = arkadeSwap.source_token as {
-      address: string;
-      symbol: string;
-      decimals: number;
-    };
-    const targetToken = arkadeSwap.target_token as {
-      address: string;
-      symbol: string;
-      decimals: number;
-    };
-    const wbtcAddress = sourceToken.address;
+    // WBTC address from server response, fall back to well-known addresses
+    const wbtcAddress =
+      arkadeSwap.wbtc_address ?? WBTC_BY_CHAIN_ID[arkadeSwap.evm_chain_id];
+    if (!wbtcAddress) {
+      throw new Error(
+        `Cannot determine WBTC address for chain ID ${arkadeSwap.evm_chain_id}`,
+      );
+    }
     const amount = BigInt(arkadeSwap.evm_expected_sats);
 
+    // target_token.token_id contains the ERC-20 contract address for the final token the user wants
+    const targetTokenAddress = String(arkadeSwap.target_token.token_id);
+
     // Check if target token differs from WBTC (meaning a DEX swap is needed)
-    const needsDexSwap = targetToken.address !== sourceToken.address;
+    const needsDexSwap =
+      targetTokenAddress.toLowerCase() !== wbtcAddress.toLowerCase();
 
     // sweepToken: if there's a DEX swap (target != wbtc), sweep the target token; otherwise sweep WBTC.
-    const sweepToken = needsDexSwap ? targetToken.address : sourceToken.address;
+    const sweepToken = needsDexSwap ? targetTokenAddress : wbtcAddress;
 
     // Fetch DEX calldata from server if needed
     let dexCalldata: { to: string; data: string; value: string } | undefined;

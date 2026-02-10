@@ -95,11 +95,11 @@ export async function claim(
     );
   }
 
-  // target_token may be a string (TokenId) or object (TokenSummary)
+  // target_token may be a string (TokenId) or object (TokenInfo with token_id)
   const targetToken =
     typeof swap.target_token === "string"
       ? swap.target_token
-      : swap.target_token.address;
+      : String(swap.target_token.token_id);
   const chain = getChainFromTokenId(targetToken);
 
   if (!chain) {
@@ -155,20 +155,27 @@ async function buildCoordinatorClaimData(
   ctx: RedeemContext,
   destination?: string,
 ): Promise<ClaimResult> {
-  // source_token and target_token are TokenSummary objects
-  const sourceToken = swap.source_token as {
-    address: string;
-    symbol: string;
-    decimals: number;
+  // WBTC address from server response, fall back to well-known addresses
+  const WBTC_BY_CHAIN_ID: Record<number, string> = {
+    137: "0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6", // Polygon
+    1: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", // Ethereum
+    42161: "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f", // Arbitrum
   };
-  const targetToken = swap.target_token as {
-    address: string;
-    symbol: string;
-    decimals: number;
-  };
+  const wbtcAddress =
+    swap.wbtc_address ?? WBTC_BY_CHAIN_ID[swap.evm_chain_id];
+  if (!wbtcAddress) {
+    return {
+      success: false,
+      message: `Cannot determine WBTC address for chain ID ${swap.evm_chain_id}`,
+    };
+  }
+
+  // target_token.token_id contains the ERC-20 contract address for the final token
+  const targetTokenAddress = String(swap.target_token.token_id);
 
   // Check if this swap involves a DEX swap (target token is different from WBTC)
-  const needsDexSwap = targetToken.address !== sourceToken.address;
+  const needsDexSwap =
+    targetTokenAddress.toLowerCase() !== wbtcAddress.toLowerCase();
 
   let dexCallData: { to: string; data: string; value: string } | undefined;
 
@@ -205,11 +212,11 @@ async function buildCoordinatorClaimData(
     coordinatorAddress: swap.evm_coordinator_address,
     chainId: swap.evm_chain_id,
     amount: swap.evm_expected_sats,
-    wbtcAddress: sourceToken.address,
+    wbtcAddress,
     sender: swap.server_evm_address,
     timelock: swap.evm_refund_locktime,
     dexCallData,
-    targetTokenAddress: targetToken.address,
+    targetTokenAddress,
     network: swap.network,
   };
 

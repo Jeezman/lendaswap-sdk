@@ -1201,6 +1201,7 @@
           "btc_vhtlc_address",
           "evm_htlc_address",
           "evm_coordinator_address",
+          "wbtc_address",
           "client_evm_address",
           "server_evm_address",
           "evm_refund_locktime",
@@ -1253,7 +1254,11 @@
             "type": "integer",
             "format": "int64"
           },
-          "vhtlc_refund_locktime": { "type": "integer", "format": "int64" }
+          "vhtlc_refund_locktime": { "type": "integer", "format": "int64" },
+          "wbtc_address": {
+            "type": "string",
+            "description": "WBTC token contract address on the target EVM chain (the token locked in the HTLC)."
+          }
         }
       },
       "BitcoinToArkadeSwapRequest": {
