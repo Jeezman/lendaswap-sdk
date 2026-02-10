@@ -1,11 +1,11 @@
-import type { TokenId, TokenSummary } from "./api/client.js";
+import type { TokenId, TokenInfo } from "./api/client.js";
 
-/** A token identifier: either a plain string TokenId or a TokenSummary object. */
-export type TokenInput = TokenId | TokenSummary;
+/** A token identifier: either a plain string TokenId or a TokenInfo object. */
+export type TokenInput = TokenId | TokenInfo;
 
 /** Extracts the string TokenId from a TokenInput. */
 function toTokenId(token: TokenInput): TokenId {
-  return typeof token === "string" ? token : token.symbol;
+  return typeof token === "string" ? token : token.token_id;
 }
 
 // Well-known token constants

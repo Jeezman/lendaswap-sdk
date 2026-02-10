@@ -1,8 +1,9 @@
 /**
- * Bitcoin (on-chain) to EVM swap creation.
+ * Bitcoin (on-chain) to EVM swap creation via the generic endpoint.
  */
 
 import type { GetSwapResponse } from "../api/client.js";
+import { deriveEvmAddress } from "../evm/signing.js";
 import { bytesToHex } from "../signer/index.js";
 import type {
   BitcoinToEvmSwapOptions,
@@ -12,6 +13,9 @@ import type {
 
 /**
  * Creates a new Bitcoin (on-chain) to EVM swap.
+ *
+ * Uses the chain-agnostic `/swap/bitcoin/evm` endpoint which supports any
+ * ERC-20 token reachable through 1inch aggregation.
  *
  * @param options - The swap options.
  * @param ctx - The context containing API client and helper functions.
@@ -23,8 +27,8 @@ import type {
  * const result = await createBitcoinToEvmSwap(
  *   {
  *     targetAddress: "0x1234...",
- *     targetToken: "usdc_pol",
- *     targetChain: "polygon",
+ *     tokenAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // USDC on Polygon
+ *     evmChainId: 137,
  *     sourceAmount: 100000, // 100k sats
  *   },
  *   { apiClient, deriveSwapParams, storeSwap }
@@ -41,62 +45,37 @@ export async function createBitcoinToEvmSwap(
   const refundPk = bytesToHex(swapParams.publicKey);
   const userId = bytesToHex(swapParams.userId);
 
-  const body = {
-    hash_lock: hashLock,
-    refund_pk: refundPk,
-    user_id: userId,
-    target_address: options.targetAddress,
-    target_token: options.targetToken,
-    source_amount: options.sourceAmount,
-    referral_code: options.referralCode,
-  };
+  // The claiming address is derived from the swap's secret key.
+  // This allows the SDK to sign gasless claims internally.
+  const claimingAddress = deriveEvmAddress(swapParams.secretKey);
 
-  let response: BitcoinToEvmSwapResult["response"];
+  const { data, error } = await ctx.apiClient.POST("/swap/bitcoin/evm", {
+    body: {
+      hash_lock: hashLock,
+      refund_pk: refundPk,
+      user_id: userId,
+      claiming_address: claimingAddress,
+      target_address: options.targetAddress,
+      token_address: options.tokenAddress,
+      evm_chain_id: options.evmChainId,
+      amount_in: options.sourceAmount,
+      amount_out: options.targetAmount,
+      referral_code: options.referralCode,
+    },
+  });
 
-  switch (options.targetChain) {
-    case "polygon": {
-      const { data, error } = await ctx.apiClient.POST(
-        "/swap/bitcoin/polygon",
-        { body },
-      );
-      if (error)
-        throw new Error(`Failed to create swap: ${JSON.stringify(error)}`);
-      if (!data) throw new Error("No swap data returned");
-      response = data;
-      break;
-    }
-    case "arbitrum": {
-      const { data, error } = await ctx.apiClient.POST(
-        "/swap/bitcoin/arbitrum",
-        { body },
-      );
-      if (error)
-        throw new Error(`Failed to create swap: ${JSON.stringify(error)}`);
-      if (!data) throw new Error("No swap data returned");
-      response = data;
-      break;
-    }
-    case "ethereum": {
-      const { data, error } = await ctx.apiClient.POST(
-        "/swap/bitcoin/ethereum",
-        { body },
-      );
-      if (error)
-        throw new Error(`Failed to create swap: ${JSON.stringify(error)}`);
-      if (!data) throw new Error("No swap data returned");
-      response = data;
-      break;
-    }
-    default:
-      throw new Error(`Unsupported target chain: ${options.targetChain}`);
+  if (error) {
+    throw new Error(`Failed to create swap: ${JSON.stringify(error)}`);
+  }
+  if (!data) {
+    throw new Error("No swap data returned");
   }
 
   // Store the swap if storage is configured
-  // Use onchain_to_evm direction for Bitcoin on-chain swaps
-  await ctx.storeSwap(response.id, swapParams, {
-    ...response,
+  await ctx.storeSwap(data.id, swapParams, {
+    ...data,
     direction: "onchain_to_evm",
-  } as GetSwapResponse);
+  } as unknown as GetSwapResponse);
 
-  return { response, swapParams };
+  return { response: data, swapParams };
 }

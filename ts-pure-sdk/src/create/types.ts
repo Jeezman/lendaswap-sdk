@@ -5,12 +5,12 @@
 import type {
   ApiClient,
   ArkadeToEvmSwapResponse,
+  BitcoinToEvmSwapResponse as ApiBitcoinToEvmSwapResponse,
   BtcToArkadeSwapResponse,
   BtcToEvmSwapResponse,
   EvmToArkadeGenericSwapResponse,
   EvmToBtcSwapResponse,
   GetSwapResponse,
-  OnchainToEvmSwapResponse,
   TokenId,
 } from "../api/client.js";
 import type { SwapParams } from "../signer";
@@ -34,16 +34,18 @@ export interface BtcToEvmSwapOptions {
   referralCode?: string;
 }
 
-/** Options for creating a Bitcoin (on-chain) to EVM swap */
+/** Options for creating a Bitcoin (on-chain) to EVM swap via the generic endpoint */
 export interface BitcoinToEvmSwapOptions {
-  /** Target EVM address to receive tokens */
+  /** EVM address where tokens are swept after the claim (user's final destination) */
   targetAddress: string;
-  /** Target token ID (e.g., "usdc_pol", "usdt_arb") */
-  targetToken: TokenId;
-  /** Target EVM chain */
-  targetChain: EvmChain;
-  /** Amount in satoshis to send */
-  sourceAmount: number;
+  /** ERC-20 contract address of the desired token on the target chain */
+  tokenAddress: string;
+  /** Numeric EVM chain ID: 1 (Ethereum), 137 (Polygon), 42161 (Arbitrum) */
+  evmChainId: number;
+  /** Amount in satoshis to send (mutually exclusive with targetAmount) */
+  sourceAmount?: number;
+  /** Amount of target token to receive in smallest unit (mutually exclusive with sourceAmount) */
+  targetAmount?: number;
   /** Optional referral code for fee exemption */
   referralCode?: string;
 }
@@ -56,14 +58,8 @@ export interface BtcToEvmSwapResult {
   swapParams: SwapParams;
 }
 
-/**
- * Union type for Bitcoin on-chain swap responses.
- * Note: The API returns different types for different chains due to spec inconsistency.
- * All chains actually return OnchainToEvmSwapResponse in practice.
- */
-export type BitcoinToEvmSwapResponse =
-  | BtcToEvmSwapResponse
-  | OnchainToEvmSwapResponse;
+/** Response from the generic `/swap/bitcoin/evm` endpoint. */
+export type BitcoinToEvmSwapResponse = ApiBitcoinToEvmSwapResponse;
 
 /** Result of creating a Bitcoin (on-chain) to EVM swap */
 export interface BitcoinToEvmSwapResult {

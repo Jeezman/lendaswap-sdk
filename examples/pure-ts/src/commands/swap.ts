@@ -375,50 +375,37 @@ export async function createSwap(
       ].join("\n");
 
     } else {
-      // bitcoin on-chain
-      const targetChain = parseTargetChain(to);
-      if (!targetChain) {
-        console.error(`Unsupported target token: ${to}`);
+      // bitcoin on-chain to EVM (generic endpoint)
+      const tokenInfo = EVM_TOKEN_MAP[to];
+      if (!tokenInfo) {
+        console.error(`Unknown target token: ${to}`);
+        console.error(`Supported tokens: ${Object.keys(EVM_TOKEN_MAP).join(", ")}`);
         process.exit(1);
       }
 
       const result = await client.createBitcoinToEvmSwap({
         targetAddress: address!,
-        targetToken: to,
-        targetChain,
+        tokenAddress: tokenInfo.tokenAddress,
+        evmChainId: tokenInfo.evmChainId,
         sourceAmount: Math.floor(amountNum),
       });
 
       swapId = result.response.id;
       status = result.response.status;
       keyIndex = result.swapParams.keyIndex;
-
-      // Handle union type - check which fields exist
-      if ("btc_htlc_address" in result.response) {
-        sourceAmount = result.response.source_amount;
-        sourceDecimals = 0; // sats
-        sourceSymbol = "sats";
-        targetAmount = result.response.target_amount;
-        targetDecimals = 6; // USDC/USDT
-        targetSymbol = to.replace(/_.*$/, "").toUpperCase();
-        paymentInfo = `Send BTC to this address:\n  ${result.response.btc_htlc_address}`;
-      } else if ("source_amount" in result.response) {
-        sourceAmount = result.response.source_amount;
-        sourceDecimals = 0; // sats
-        sourceSymbol = "sats";
-        targetAmount = result.response.target_amount;
-        targetDecimals = 6; // USDC/USDT
-        targetSymbol = to.replace(/_.*$/, "").toUpperCase();
-        paymentInfo = `Fund this address:\n  ${result.response.htlc_address_arkade}`;
-      } else {
-        sourceAmount = amountNum;
-        sourceDecimals = 0;
-        sourceSymbol = "units";
-        targetAmount = 0;
-        targetDecimals = 0;
-        targetSymbol = "units";
-        paymentInfo = "Check swap response for payment details";
-      }
+      sourceAmount = result.response.source_amount;
+      sourceDecimals = 0; // sats
+      sourceSymbol = "sats";
+      targetAmount = result.response.target_amount;
+      targetDecimals = result.response.target_token.decimals;
+      targetSymbol = result.response.target_token.symbol;
+      paymentInfo = [
+        `Send BTC to this on-chain address:`,
+        `  ${result.response.btc_htlc_address}`,
+        ``,
+        `Amount to send: ${result.response.source_amount} sats`,
+        `EVM HTLC: ${result.response.evm_htlc_address}`,
+      ].join("\n");
     }
 
     // Display the result

@@ -11,7 +11,6 @@ import {
   type OnchainToEvmSwapResponse,
   type QuoteResponse,
   type TokenInfos,
-  type TokenSummary,
 } from "./api/client.js";
 import { getVhtlcAmounts, type VhtlcAmounts } from "./arkade.js";
 import {
@@ -965,12 +964,12 @@ export class Client {
       };
     }
 
-    // Check if target is Arkade (handle both string "btc_arkade" and TokenSummary object)
+    // Check if target is Arkade (handle both string "btc_arkade" and TokenInfo object)
     const isArkadeTarget =
       swap.target_token === "btc_arkade" ||
       (typeof swap.target_token === "object" &&
         swap.target_token !== null &&
-        (swap.target_token as TokenSummary).symbol === "BTC");
+        (swap.target_token as { symbol: string }).symbol === "BTC");
 
     if (isArkadeTarget) {
       // Determine destination address based on swap direction
@@ -2060,8 +2059,8 @@ export class Client {
    * ```ts
    * const result = await client.createBitcoinToEvmSwap({
    *   targetAddress: "0x1234...",
-   *   targetToken: "usdc_pol",
-   *   targetChain: "polygon",
+   *   tokenAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // USDC on Polygon
+   *   evmChainId: 137,
    *   sourceAmount: 100000, // 100k sats
    * });
    * console.log("Send BTC to:", result.response.btc_htlc_address);

@@ -24,36 +24,17 @@ export type BtcToArkadeSwapResponse =
 export type EvmToArkadeSwapResponse =
   components["schemas"]["EvmToArkadeSwapResponse"];
 
-// Request types for btc_to_evm
-export type ArkadeToPolygonSwapRequest =
-  components["schemas"]["ArkadeToPolygonSwapRequest"];
-export type ArkadeToEthereumSwapRequest =
-  components["schemas"]["ArkadeToEthereumSwapRequest"];
-export type ArkadeToArbitrumSwapRequest =
-  components["schemas"]["ArkadeToArbitrumSwapRequest"];
+// Lightning swap request types (still chain-specific)
 export type LightningToPolygonSwapRequest =
   components["schemas"]["LightningToPolygonSwapRequest"];
 export type LightningToEthereumSwapRequest =
   components["schemas"]["LightningToEthereumSwapRequest"];
 export type LightningToArbitrumSwapRequest =
   components["schemas"]["LightningToArbitrumSwapRequest"];
-export type BitcoinToPolygonSwapRequest =
-  components["schemas"]["BitcoinToPolygonSwapRequest"];
-export type BitcoinToEthereumSwapRequest =
-  components["schemas"]["BitcoinToEthereumSwapRequest"];
-export type BitcoinToArbitrumSwapRequest =
-  components["schemas"]["BitcoinToArbitrumSwapRequest"];
 
-// Request types for evm_to_arkade
-export type PolygonToArkadeSwapRequest =
-  components["schemas"]["PolygonToArkadeSwapRequest"];
-export type ArbitrumToArkadeSwapRequest =
-  components["schemas"]["ArbitrumToArkadeSwapRequest"];
-export type EthereumToArkadeSwapRequest =
-  components["schemas"]["EthereumToArkadeSwapRequest"];
-
-export type ClaimGelatoRequest = components["schemas"]["ClaimGelatoRequest"];
-export type ClaimGelatoResponse = components["schemas"]["ClaimGelatoResponse"];
+// Gasless claim types
+export type ClaimGaslessRequest = components["schemas"]["ClaimGaslessRequest"];
+export type ClaimGaslessResponse = components["schemas"]["ClaimGaslessResponse"];
 
 // Arkade-to-EVM (generic endpoint) types
 export type ArkadeToEvmSwapRequest =
@@ -61,7 +42,12 @@ export type ArkadeToEvmSwapRequest =
 export type ArkadeToEvmSwapResponse =
   components["schemas"]["ArkadeToEvmSwapResponse"];
 export type DexCallData = components["schemas"]["DexCallData"];
-export type TokenSummary = components["schemas"]["TokenSummary"];
+
+// Bitcoin-to-EVM (generic endpoint) types
+export type BitcoinToEvmSwapRequest =
+  components["schemas"]["BitcoinToEvmSwapRequest"];
+export type BitcoinToEvmSwapResponse =
+  components["schemas"]["BitcoinToEvmSwapResponse"];
 
 // EVM-to-Arkade (generic endpoint) types
 export type EvmToArkadeGenericSwapRequest =
