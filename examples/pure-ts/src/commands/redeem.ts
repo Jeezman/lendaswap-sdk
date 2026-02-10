@@ -135,14 +135,17 @@ export async function redeemSwap(
     }
 
     // #region check-vhtlc-amounts
-    const amounts = await client.amountsForSwap(swapId);
+    // amountsForSwap only applies to VHTLC-based swaps (evm_to_arkade, btc_to_arkade)
+    if (swap.direction !== "arkade_to_evm" && swap.direction !== "onchain_to_evm") {
+      const amounts = await client.amountsForSwap(swapId);
 
-    console.log("Spendable:", amounts.spendable, "sats");
-    // ... 100000 "sats"
-    console.log("Spent:", amounts.spent, "sats");
-    // ... 0 "sats"
-    console.log("Recoverable:", amounts.recoverable, "sats");
-    // ... 0 "sats"
+      console.log("Spendable:", amounts.spendable, "sats");
+      // ... 100000 "sats"
+      console.log("Spent:", amounts.spent, "sats");
+      // ... 0 "sats"
+      console.log("Recoverable:", amounts.recoverable, "sats");
+      // ... 0 "sats"
+    }
     // #endregion check-vhtlc-amounts
 
   } catch (error) {
