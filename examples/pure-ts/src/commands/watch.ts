@@ -39,12 +39,18 @@ export async function watchSwap(
       // #region get-swap
       const swap = await client.getSwap(swapId);
 
-      console.log("Status:", swap.status);
-      // ... "serverfunded"
-      console.log("Source:", swap.source_amount, swap.source_token);
-      // ... 100000 "btc_lightning"
-      console.log("Target:", swap.target_amount, swap.target_token);
-      // ... 48.25 "usdc_pol"
+      const srcTok = "source_token" in swap ? swap.source_token : null;
+      const tgtTok = "target_token" in swap ? swap.target_token : null;
+      const sourceLabel = srcTok && typeof srcTok === "object" && "symbol" in srcTok
+        ? `${(srcTok as Record<string, unknown>).symbol} (${(srcTok as Record<string, unknown>).chain ?? ""})`
+        : swap.direction;
+      const targetLabel = tgtTok && typeof tgtTok === "object" && "symbol" in tgtTok
+        ? `${(tgtTok as Record<string, unknown>).symbol} (${(tgtTok as Record<string, unknown>).chain ?? ""})`
+        : "";
+      const sourceAmt = "source_amount" in swap ? swap.source_amount : ("btc_expected_sats" in swap ? swap.btc_expected_sats : "?");
+      const targetAmt = "target_amount" in swap ? swap.target_amount : "";
+
+      console.log(`Status: ${swap.status}  |  ${sourceAmt} ${sourceLabel} -> ${targetAmt} ${targetLabel}`);
       // #endregion get-swap
 
       // Only print full details if status changed
