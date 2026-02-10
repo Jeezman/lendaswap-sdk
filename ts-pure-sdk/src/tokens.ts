@@ -9,11 +9,11 @@ function toTokenId(token: TokenInput): TokenId {
 }
 
 // Well-known token constants
-export const BTC_LIGHTNING: TokenId = "btc_lightning";
-export const BTC_ARKADE: TokenId = "btc_arkade";
-export const BTC_ONCHAIN: TokenId = "btc_onchain";
+export const BTC_LIGHTNING: TokenId = "lightning:btc";
+export const BTC_ARKADE: TokenId = "arkade:btc";
+export const BTC_ONCHAIN: TokenId = "bitcoin:btc";
 
-const EVM_CHAINS = ["eth", "pol", "arb"] as const;
+const EVM_CHAINS = ["ethereum", "polygon", "arbitrum"] as const;
 
 /** Returns true if the token is Bitcoin on Lightning. */
 export function isLightning(token: TokenInput): boolean {

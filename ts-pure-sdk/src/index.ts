@@ -29,6 +29,7 @@ export type {
   SwapStatus,
   TokenId,
   TokenInfo,
+  TokenInfos,
 } from "./api/client.js";
 // API client
 export { createApiClient } from "./api/client.js";

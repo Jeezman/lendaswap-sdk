@@ -10,7 +10,7 @@ import {
   type GetSwapResponse,
   type OnchainToEvmSwapResponse,
   type QuoteResponse,
-  type TokenInfo,
+  type TokenInfos,
   type TokenSummary,
 } from "./api/client.js";
 import { getVhtlcAmounts, type VhtlcAmounts } from "./arkade.js";
@@ -38,14 +38,14 @@ import {
   type EvmToArkadeSwapResult,
   type EvmToLightningSwapOptions,
   type EvmToLightningSwapResult,
-} from "./create/index.js";
+} from "./create";
 import { broadcastTransaction, findOutputByAddress } from "./esplora.js";
 import {
   buildRedeemDigest,
   encodeApproveCallData,
   encodeRefundSwapCallData,
   signEvmDigest,
-} from "./evm/index.js";
+} from "./evm";
 import {
   buildArkadeClaim,
   type ClaimGaslessResult,
@@ -57,7 +57,7 @@ import {
   buildArkadeRefund,
   buildOnchainRefundTransaction,
   verifyHtlcAddress,
-} from "./refund/index.js";
+} from "./refund";
 import { bytesToHex, Signer, type SwapParams } from "./signer/index.js";
 import {
   type StoredSwap,
@@ -637,13 +637,12 @@ export class Client {
    * @returns A promise that resolves to an array of token information.
    * @throws Error if the request fails.
    */
-  async getTokens(): Promise<TokenInfo[]> {
+  async getTokens(): Promise<TokenInfos> {
     const { data, error } = await this.#apiClient.GET("/tokens");
-    if (error) {
+    if (error || !data) {
       throw new Error(`Failed to get tokens: ${JSON.stringify(error)}`);
     }
-    if (!data) return [];
-    return [...data.btc_tokens, ...data.evm_tokens];
+    return data;
   }
 
   // =========================================================================
