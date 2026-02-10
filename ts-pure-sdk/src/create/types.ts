@@ -3,9 +3,9 @@
  */
 
 import type {
+  BitcoinToEvmSwapResponse as ApiBitcoinToEvmSwapResponse,
   ApiClient,
   ArkadeToEvmSwapResponse,
-  BitcoinToEvmSwapResponse as ApiBitcoinToEvmSwapResponse,
   BtcToArkadeSwapResponse,
   BtcToEvmSwapResponse,
   EvmToArkadeGenericSwapResponse,

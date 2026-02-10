@@ -10,7 +10,6 @@
 
 import type { ArkadeToEvmSwapResponse } from "../api/client.js";
 import { buildEthereumClaimData } from "./ethereum.js";
-import { claimGasless } from "./gasless.js";
 import {
   type ArkadeClaimData,
   type ClaimResult,
@@ -27,6 +26,8 @@ export {
 } from "./arkade.js";
 // Re-export utilities from ethereum module
 export { encodeClaimSwapCallData, uuidToBytes32 } from "./ethereum.js";
+// Re-export gasless claim
+export { claimViaGasless, type GaslessClaimParams } from "./gasless.js";
 // Re-export types
 export type {
   ArkadeClaimData,
@@ -130,8 +131,8 @@ export async function claim(
     return buildEthereumClaimData(id, secret, swap);
   }
 
-  // Polygon and Arbitrum use Gelato relay
-  return claimGasless(id, secret, chain, ctx);
+  // Polygon and Arbitrum - return manual claim data (same as Ethereum)
+  return buildEthereumClaimData(id, secret, swap);
 }
 
 /**
@@ -161,8 +162,7 @@ async function buildCoordinatorClaimData(
     1: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", // Ethereum
     42161: "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f", // Arbitrum
   };
-  const wbtcAddress =
-    swap.wbtc_address ?? WBTC_BY_CHAIN_ID[swap.evm_chain_id];
+  const wbtcAddress = swap.wbtc_address ?? WBTC_BY_CHAIN_ID[swap.evm_chain_id];
   if (!wbtcAddress) {
     return {
       success: false,

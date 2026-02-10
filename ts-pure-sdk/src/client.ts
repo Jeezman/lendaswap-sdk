@@ -23,11 +23,9 @@ import {
   type BtcToEvmSwapOptions,
   type BtcToEvmSwapResult,
   type CreateSwapContext,
-  createArkadeToEvmSwap,
   createArkadeToEvmSwapGeneric,
   createBitcoinToArkadeSwap,
   createBitcoinToEvmSwap,
-  createEvmToArkadeSwap,
   createEvmToArkadeSwapGeneric,
   createEvmToLightningSwap,
   createLightningToEvmSwap,
@@ -39,16 +37,12 @@ import {
   type EvmToLightningSwapResult,
 } from "./create";
 import { broadcastTransaction, findOutputByAddress } from "./esplora.js";
-import {
-  buildRedeemDigest,
-  encodeApproveCallData,
-  encodeRefundSwapCallData,
-  signEvmDigest,
-} from "./evm";
+import { encodeApproveCallData, encodeRefundSwapCallData } from "./evm";
 import {
   buildArkadeClaim,
   type ClaimGaslessResult,
   type ClaimResult,
+  claimViaGasless as gaslessClaim,
   claim as redeemClaim,
 } from "./redeem/index.js";
 import {
@@ -57,7 +51,12 @@ import {
   buildOnchainRefundTransaction,
   verifyHtlcAddress,
 } from "./refund";
-import { bytesToHex, Signer, type SwapParams } from "./signer/index.js";
+import {
+  bytesToHex,
+  hexToBytes,
+  Signer,
+  type SwapParams,
+} from "./signer/index.js";
 import {
   type StoredSwap,
   SWAP_STORAGE_VERSION,
@@ -109,13 +108,6 @@ export type {
   CoordinatorClaimData,
   EthereumClaimData,
 } from "./redeem/index.js";
-
-/** Well-known WBTC contract addresses by EVM chain ID */
-const WBTC_BY_CHAIN_ID: Record<number, string> = {
-  137: "0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6", // Polygon
-  1: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", // Ethereum
-  42161: "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f", // Arbitrum
-};
 
 /** Result of attempting a refund */
 export interface RefundResult {
@@ -1050,24 +1042,21 @@ export class Client {
     destination: string,
     options?: { slippage?: number },
   ): Promise<ClaimGaslessResult> {
-    // Get stored swap data (contains preimage and secret key)
     if (!this.#swapStorage) {
       throw new Error(
         "Swap storage is not configured. Cannot retrieve preimage needed for gasless claim.",
       );
     }
 
-    const storedSwap = await this.#swapStorage.get(id);
-    if (!storedSwap) {
-      throw new Error(
-        `Swap ${id} not found in local storage. Cannot claim without stored data.`,
-      );
+    // Fetch all data upfront
+    const stored = await this.#swapStorage.get(id);
+    if (!stored) {
+      throw new Error(`Swap ${id} not found in local storage.`);
     }
 
-    // Fetch fresh swap data from the API to get the full GET response shape
-    // (the stored creation response has a different schema and may lack fields
-    // like target_token_address and dex_call_data).
-    const swap = await this.getSwap(id, { updateStorage: true });
+    const swap = (await this.getSwap(id, {
+      updateStorage: true,
+    })) as ArkadeToEvmSwapResponse & { direction: string };
 
     if (swap.direction !== "arkade_to_evm") {
       throw new Error(
@@ -1075,34 +1064,11 @@ export class Client {
       );
     }
 
-    const arkadeSwap = swap as ArkadeToEvmSwapResponse & {
-      direction: "arkade_to_evm";
-    };
-
-    const secret = storedSwap.preimage;
-    const secretHex = secret.startsWith("0x") ? secret : `0x${secret}`;
-
-    // WBTC address from server response, fall back to well-known addresses
-    const wbtcAddress =
-      arkadeSwap.wbtc_address ?? WBTC_BY_CHAIN_ID[arkadeSwap.evm_chain_id];
-    if (!wbtcAddress) {
-      throw new Error(
-        `Cannot determine WBTC address for chain ID ${arkadeSwap.evm_chain_id}`,
-      );
-    }
-    const amount = BigInt(arkadeSwap.evm_expected_sats);
-
-    // target_token.token_id contains the ERC-20 contract address for the final token the user wants
-    const targetTokenAddress = String(arkadeSwap.target_token.token_id);
-
-    // Check if target token differs from WBTC (meaning a DEX swap is needed)
+    // Fetch DEX calldata if the target token differs from WBTC
+    const targetTokenAddress = swap.target_token.token_id;
     const needsDexSwap =
-      targetTokenAddress.toLowerCase() !== wbtcAddress.toLowerCase();
+      targetTokenAddress.toLowerCase() !== swap.wbtc_address.toLowerCase();
 
-    // sweepToken: if there's a DEX swap (target != wbtc), sweep the target token; otherwise sweep WBTC.
-    const sweepToken = needsDexSwap ? targetTokenAddress : wbtcAddress;
-
-    // Fetch DEX calldata from server if needed
     let dexCalldata: { to: string; data: string; value: string } | undefined;
     if (needsDexSwap) {
       const slippage = options?.slippage ?? 1.0;
@@ -1115,13 +1081,11 @@ export class Client {
           },
         },
       );
-
       if (calldataResponse.error) {
         throw new Error(
           `Failed to fetch DEX calldata: ${calldataResponse.error.error}`,
         );
       }
-
       if (calldataResponse.data) {
         dexCalldata = {
           to: calldataResponse.data.to,
@@ -1131,55 +1095,14 @@ export class Client {
       }
     }
 
-    // Build EIP-712 digest
-    const digest = buildRedeemDigest({
-      htlcAddress: arkadeSwap.evm_htlc_address,
-      chainId: arkadeSwap.evm_chain_id,
-      preimage: secretHex,
-      amount,
-      token: wbtcAddress,
-      sender: arkadeSwap.server_evm_address,
-      timelock: arkadeSwap.evm_refund_locktime,
-      caller: arkadeSwap.evm_coordinator_address,
+    return gaslessClaim({
+      baseUrl: this.#config.baseUrl,
+      preimage: stored.preimage,
+      secretKey: hexToBytes(stored.secretKey),
+      swap: swap as ArkadeToEvmSwapResponse,
       destination,
-      sweepToken,
-      minAmountOut: 0n,
+      dexCalldata,
     });
-
-    // Sign with the swap's internally derived EVM key
-    const sig = signEvmDigest(storedSwap.secretKey, digest);
-
-    // Send to server with DEX calldata if applicable
-    const response = await fetch(
-      `${this.#config.baseUrl}/swap/${id}/claim-gasless`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          secret: secretHex,
-          destination,
-          v: sig.v,
-          r: sig.r,
-          s: sig.s,
-          dex_calldata: dexCalldata,
-        }),
-      },
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(
-        `Gasless claim failed (${response.status}): ${errorText}`,
-      );
-    }
-
-    const result = await response.json();
-    return {
-      id: result.id,
-      status: result.status,
-      txHash: result.tx_hash,
-      message: result.message,
-    };
   }
 
   /**
@@ -1966,29 +1889,14 @@ export class Client {
   }
 
   /**
-   * Creates a new Arkade to EVM swap.
-   *
-   * Automatically derives swap parameters and increments the key index.
-   *
-   * @param options - The swap options.
-   * @returns The swap response and parameters for storage.
-   * @throws Error if the swap creation fails.
-   *
-   * @example
-   * ```ts
-   * const result = await client.createArkadeToEvmSwap({
-   *   targetAddress: "0x1234...",
-   *   targetToken: "usdc_pol",
-   *   targetChain: "polygon",
-   *   sourceAmount: 100000, // 100k sats
-   * });
-   * console.log("Fund this address:", result.response.htlc_address_arkade);
-   * ```
+   * @deprecated Use `createArkadeToEvmSwapGeneric` instead. Chain-specific endpoints have been removed.
    */
   async createArkadeToEvmSwap(
-    options: BtcToEvmSwapOptions,
+    _options: BtcToEvmSwapOptions,
   ): Promise<BtcToEvmSwapResult> {
-    return createArkadeToEvmSwap(options, this.#getCreateContext());
+    throw new Error(
+      "createArkadeToEvmSwap is deprecated. Use createArkadeToEvmSwapGeneric instead.",
+    );
   }
 
   /**
@@ -2133,10 +2041,15 @@ export class Client {
    * console.log("HTLC contract:", result.response.htlc_address_evm);
    * ```
    */
+  /**
+   * @deprecated Use `createEvmToArkadeSwapGeneric` instead. Chain-specific endpoints have been removed.
+   */
   async createEvmToArkadeSwap(
-    options: EvmToArkadeSwapOptions,
+    _options: EvmToArkadeSwapOptions,
   ): Promise<EvmToArkadeSwapResult> {
-    return createEvmToArkadeSwap(options, this.#getCreateContext());
+    throw new Error(
+      "createEvmToArkadeSwap is deprecated. Use createEvmToArkadeSwapGeneric instead.",
+    );
   }
 
   /**

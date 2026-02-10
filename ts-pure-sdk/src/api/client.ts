@@ -34,7 +34,8 @@ export type LightningToArbitrumSwapRequest =
 
 // Gasless claim types
 export type ClaimGaslessRequest = components["schemas"]["ClaimGaslessRequest"];
-export type ClaimGaslessResponse = components["schemas"]["ClaimGaslessResponse"];
+export type ClaimGaslessResponse =
+  components["schemas"]["ClaimGaslessResponse"];
 
 // Arkade-to-EVM (generic endpoint) types
 export type ArkadeToEvmSwapRequest =
