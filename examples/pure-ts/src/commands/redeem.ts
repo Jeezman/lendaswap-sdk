@@ -90,19 +90,18 @@ export async function redeemSwap(
       console.log(`  cast send ${result.ethereumClaimData.contractAddress} ${result.ethereumClaimData.callData} --private-key <YOUR_KEY>`);
     } else if (result.chain === "arkade") {
       // #region claim-vhtlc
-      const arkadeResult = await client.claimArkade(swapId, {
-        destinationAddress: "ark1q...", // Your Arkade address
-      });
-
-      if (arkadeResult.success) {
-        console.log("Claimed! TX:", arkadeResult.txId);
-        // ... "ark1tx..."
-        console.log("Amount:", arkadeResult.claimAmount, "sats");
-        // ... 100000 "sats"
-      } else {
-        console.error("Claim failed:", arkadeResult.message);
-      }
+      // client.claim() already performed the Arkade VHTLC claim above.
+      // To claim manually instead, use client.claimArkade():
+      //
+      //   const arkadeResult = await client.claimArkade(swapId, {
+      //     destinationAddress: "ark1q...", // Your Arkade address
+      //   });
+      //   console.log("Claimed! TX:", arkadeResult.txId);
+      //   console.log("Amount:", arkadeResult.claimAmount, "sats");
       // #endregion claim-vhtlc
+      console.log(`  Direction:    ${swap.direction} (Arkade VHTLC)`);
+      console.log(`  TX Hash:      ${result.txHash}`);
+      console.log(`  Message:      ${result.message}`);
 
     } else if (swap.direction === "arkade_to_evm") {
       // Arkade-to-EVM - gasless claim via server
@@ -135,8 +134,9 @@ export async function redeemSwap(
     }
 
     // #region check-vhtlc-amounts
-    // amountsForSwap only applies to VHTLC-based swaps (evm_to_arkade, btc_to_arkade)
-    if (swap.direction !== "arkade_to_evm" && swap.direction !== "onchain_to_evm") {
+    // amountsForSwap only applies to VHTLC-based swaps that lock into Arkade
+    const vhtlcDirections = ["evm_to_arkade", "btc_to_arkade", "evm_to_btc", "btc_to_evm"];
+    if (vhtlcDirections.includes(swap.direction)) {
       const amounts = await client.amountsForSwap(swapId);
 
       console.log("Spendable:", amounts.spendable, "sats");
