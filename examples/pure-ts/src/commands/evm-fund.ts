@@ -103,11 +103,11 @@ export async function evmFundSwap(
   let sourceAmountDisplay: number;
 
   if (swap.direction === "evm_to_arkade") {
-    // Generic endpoint - source_token is a TokenSummary {address, symbol, decimals}
+    // Generic endpoint - source_token is a TokenInfo {token_id, symbol, decimals, chain, name}
     const evmSwap = swap as typeof swap & {
       evm_htlc_address: string;
       evm_chain_id: number;
-      source_token: { address: string; symbol: string; decimals: number };
+      source_token: { token_id: string; symbol: string; decimals: number };
       source_amount: number;
     };
 
@@ -118,7 +118,7 @@ export async function evmFundSwap(
       42161: "arbitrum",
     };
     chainName = chainIdToName[evmSwap.evm_chain_id];
-    tokenAddress = evmSwap.source_token.address as `0x${string}`;
+    tokenAddress = evmSwap.source_token.token_id as `0x${string}`;
     tokenDecimals = evmSwap.source_token.decimals;
     amountNeeded = BigInt(evmSwap.source_amount);
     htlcAddress = evmSwap.evm_htlc_address;
