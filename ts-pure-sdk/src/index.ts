@@ -13,6 +13,7 @@ export type {
   BitcoinToPolygonSwapRequest,
   BtcToArkadeSwapResponse,
   BtcToEvmSwapResponse,
+  Chain,
   ClaimGelatoRequest,
   ClaimGelatoResponse,
   components,

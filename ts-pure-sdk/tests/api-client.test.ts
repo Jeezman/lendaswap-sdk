@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createApiClient } from "../src/index.js";
+import { createApiClient } from "../src";
 
 describe("API Client", () => {
   it("should create a client with base URL", () => {
@@ -35,9 +35,11 @@ describe("API Client - Type Safety", () => {
       client.GET("/quote", {
         params: {
           query: {
-            from: "btc_arkade",
-            to: "usdc_pol",
-            base_amount: 100000,
+            source_chain: "Arkade",
+            source_token: "btc",
+            target_chain: "Polygon",
+            target_token: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
+            source_amount: 100000,
           },
         },
       });

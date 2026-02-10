@@ -3,6 +3,7 @@ import {
   type ArkadeToEvmSwapResponse,
   type BtcToArkadeSwapResponse,
   type BtcToEvmSwapResponse,
+  type Chain,
   createApiClient,
   type EvmToArkadeSwapResponse,
   type EvmToBtcSwapResponse,
@@ -651,23 +652,33 @@ export class Client {
 
   /**
    * Gets a quote for swapping between two tokens.
-   * @param from - The source token ID (e.g., "btc_arkade", "btc_lightning").
-   * @param to - The target token ID (e.g., "usdc_pol", "usdt_eth").
-   * @param baseAmount - The amount to swap in the source token's smallest unit.
+   * @param params - Quote parameters.
+   * @param params.sourceChain - Source blockchain (e.g., "Arkade", "Polygon").
+   * @param params.sourceToken - Source token: contract address for EVM tokens, or "btc" for BTC.
+   * @param params.targetChain - Target blockchain (e.g., "Polygon", "Lightning").
+   * @param params.targetToken - Target token: contract address for EVM tokens, or "btc" for BTC.
+   * @param params.sourceAmount - Amount in smallest unit of source token (mutually exclusive with targetAmount).
+   * @param params.targetAmount - Amount in smallest unit of target token (mutually exclusive with sourceAmount).
    * @returns A promise that resolves to the quote response with pricing details.
    * @throws Error if the request fails.
    */
-  async getQuote(
-    from: string,
-    to: string,
-    baseAmount: number,
-  ): Promise<QuoteResponse> {
+  async getQuote(params: {
+    sourceChain: Chain;
+    sourceToken: string;
+    targetChain: Chain;
+    targetToken: string;
+    sourceAmount?: number;
+    targetAmount?: number;
+  }): Promise<QuoteResponse> {
     const { data, error } = await this.#apiClient.GET("/quote", {
       params: {
         query: {
-          from: from,
-          to: to,
-          base_amount: baseAmount,
+          source_chain: params.sourceChain,
+          source_token: params.sourceToken,
+          target_chain: params.targetChain,
+          target_token: params.targetToken,
+          source_amount: params.sourceAmount,
+          target_amount: params.targetAmount,
         },
       },
     });

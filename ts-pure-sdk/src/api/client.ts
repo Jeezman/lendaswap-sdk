@@ -11,6 +11,7 @@ export type TokenInfo = components["schemas"]["TokenInfo"];
 export type TokenInfos = components["schemas"]["TokenInfos"];
 export type SwapStatus = components["schemas"]["SwapStatus"];
 export type QuoteResponse = components["schemas"]["QuoteResponse"];
+export type Chain = components["schemas"]["Chain"];
 export type GetSwapResponse = components["schemas"]["GetSwapResponse"];
 export type BtcToEvmSwapResponse =
   components["schemas"]["BtcToEvmSwapResponse"];
