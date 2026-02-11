@@ -122,3 +122,14 @@ export function getChainFromTokenId(tokenId: string): ClaimChain | undefined {
   if (tokenId === "btc_arkade") return "arkade";
   return undefined;
 }
+
+/**
+ * Maps an API Chain name (e.g. "Polygon") to a ClaimChain (e.g. "polygon").
+ */
+export function getClaimChainFromChainName(chain: string): ClaimChain | undefined {
+  const lower = chain.toLowerCase();
+  if (lower === "polygon" || lower === "arbitrum" || lower === "ethereum" || lower === "arkade") {
+    return lower;
+  }
+  return undefined;
+}

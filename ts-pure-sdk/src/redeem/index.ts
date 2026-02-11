@@ -15,6 +15,7 @@ import {
   type ClaimResult,
   type CoordinatorClaimData,
   getChainFromTokenId,
+  getClaimChainFromChainName,
   type RedeemContext,
 } from "./types.js";
 
@@ -96,17 +97,21 @@ export async function claim(
     );
   }
 
-  // target_token may be a string (TokenId) or object (TokenInfo with token_id)
-  const targetToken =
-    typeof swap.target_token === "string"
-      ? swap.target_token
-      : String(swap.target_token.token_id);
-  const chain = getChainFromTokenId(targetToken);
+  // target_token may be a string (TokenId) or object (TokenInfo with chain + token_id)
+  const chain =
+    typeof swap.target_token === "object" &&
+    swap.target_token !== null &&
+    "chain" in swap.target_token
+      ? getClaimChainFromChainName(
+          (swap.target_token as { chain: string }).chain,
+        )
+      : getChainFromTokenId(swap.target_token as string);
 
+  console.log(`asd: ${swap.target_token}`);
   if (!chain) {
     return {
       success: false,
-      message: `Unknown target chain for token: ${targetToken}. Cannot determine claim method.`,
+      message: `Unknown target chain for token: ${JSON.stringify(swap.target_token)}. Cannot determine claim method.`,
     };
   }
 

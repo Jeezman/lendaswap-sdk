@@ -1471,9 +1471,10 @@
           },
           "status": { "type": "string" },
           "target_amount": {
-            "type": "number",
-            "format": "double",
-            "description": "How much the user will receive of the target asset"
+            "type": "integer",
+            "format": "int64",
+            "description": "How much the user will receive in the target token's smallest unit",
+            "minimum": 0
           },
           "target_token": {
             "$ref": "#/components/schemas/TokenInfo",
@@ -2274,7 +2275,7 @@
           },
           {
             "allOf": [
-              { "$ref": "#/components/schemas/OnchainToEvmSwapResponse" },
+              { "$ref": "#/components/schemas/BitcoinToEvmSwapResponse" },
               {
                 "type": "object",
                 "required": ["direction"],
@@ -2448,126 +2449,6 @@
           "user_id": {
             "type": "string",
             "description": "User ID derived from wallet for recovery purposes"
-          }
-        }
-      },
-      "OnchainToEvmSwapResponse": {
-        "type": "object",
-        "description": "On-chain BTC → EVM swap response",
-        "required": [
-          "id",
-          "status",
-          "btc_htlc_address",
-          "fee_sats",
-          "evm_hash_lock",
-          "btc_hash_lock",
-          "btc_server_pk",
-          "btc_refund_locktime",
-          "network",
-          "created_at",
-          "chain",
-          "client_evm_address",
-          "evm_htlc_address",
-          "server_evm_address",
-          "evm_refund_locktime",
-          "source_token",
-          "target_token",
-          "target_amount",
-          "source_amount"
-        ],
-        "properties": {
-          "btc_claim_txid": {
-            "type": ["string", "null"],
-            "description": "On-chain claim transaction ID (server claim)"
-          },
-          "btc_fund_txid": {
-            "type": ["string", "null"],
-            "description": "On-chain funding transaction ID"
-          },
-          "btc_hash_lock": {
-            "type": "string",
-            "description": "Hash lock (20-byte hex)\n\nTo be used for bitcoin htlc. This is the [`ripemd160(evm_hash_lock)`]"
-          },
-          "btc_htlc_address": {
-            "type": "string",
-            "description": "On-chain Bitcoin HTLC P2WSH address (user sends BTC here)"
-          },
-          "btc_refund_locktime": {
-            "type": "integer",
-            "format": "int64",
-            "description": "On-chain BTC refund locktime (unix timestamp)"
-          },
-          "btc_server_pk": {
-            "type": "string",
-            "description": "The server's pk inside the htlc"
-          },
-          "chain": {
-            "type": "string",
-            "description": "EVM chain (Polygon, Ethereum)"
-          },
-          "client_evm_address": {
-            "type": "string",
-            "description": "Client's EVM address (where tokens will be received)"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Timestamp of when the swap was created"
-          },
-          "evm_claim_txid": {
-            "type": ["string", "null"],
-            "description": "EVM HTLC claim transaction ID (user claim)"
-          },
-          "evm_fund_txid": {
-            "type": ["string", "null"],
-            "description": "EVM HTLC fund transaction ID"
-          },
-          "evm_hash_lock": {
-            "type": "string",
-            "description": "Hash lock (32-byte hex)\n\nTo be used for EVM htlc"
-          },
-          "evm_htlc_address": {
-            "type": "string",
-            "description": "EVM HTLC contract address"
-          },
-          "evm_refund_locktime": {
-            "type": "integer",
-            "format": "int64",
-            "description": "EVM HTLC refund locktime (unix timestamp)"
-          },
-          "fee_sats": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Protocol fee in satoshis"
-          },
-          "id": { "type": "string", "description": "Unique swap identifier" },
-          "network": { "type": "string", "description": "Bitcoin network" },
-          "server_evm_address": {
-            "type": "string",
-            "description": "Server's EVM address"
-          },
-          "source_amount": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Amount user must send in satoshis",
-            "minimum": 0
-          },
-          "source_token": {
-            "$ref": "#/components/schemas/TokenId",
-            "description": "Source token (e.g., btc_onchain)"
-          },
-          "status": {
-            "$ref": "#/components/schemas/SwapStatus",
-            "description": "Current status of the swap"
-          },
-          "target_amount": {
-            "type": "number",
-            "format": "double",
-            "description": "How much the user will receive of the target asset"
-          },
-          "target_token": {
-            "$ref": "#/components/schemas/TokenId",
-            "description": "Target token (e.g., polygon_usdc)"
           }
         }
       },
