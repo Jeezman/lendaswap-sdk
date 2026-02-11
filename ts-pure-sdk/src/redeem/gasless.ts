@@ -5,7 +5,10 @@
  * uses the HTLCCoordinator contract for gasless execution.
  */
 
-import type { ArkadeToEvmSwapResponse } from "../api/client.js";
+import type {
+  ArkadeToEvmSwapResponse,
+  BitcoinToEvmSwapResponse,
+} from "../api/client.js";
 import { buildRedeemDigest, signEvmDigest } from "../evm";
 import type { ClaimGaslessResult } from "./types.js";
 
@@ -18,7 +21,7 @@ export interface GaslessClaimParams {
   /** The secret key for EVM signing (raw bytes) */
   secretKey: Uint8Array;
   /** The swap data from the server */
-  swap: ArkadeToEvmSwapResponse;
+  swap: ArkadeToEvmSwapResponse | BitcoinToEvmSwapResponse;
   /** The EVM address where tokens should be sent */
   destination: string;
   /** Pre-fetched DEX calldata (for non-WBTC targets) */

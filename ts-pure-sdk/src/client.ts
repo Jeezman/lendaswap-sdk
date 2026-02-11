@@ -1,6 +1,7 @@
 import {
   type ApiClient,
   type ArkadeToEvmSwapResponse,
+  type BitcoinToEvmSwapResponse,
   type BtcToArkadeSwapResponse,
   type BtcToEvmSwapResponse,
   type Chain,
@@ -8,7 +9,6 @@ import {
   type EvmToArkadeSwapResponse,
   type EvmToBtcSwapResponse,
   type GetSwapResponse,
-  type OnchainToEvmSwapResponse,
   type QuoteResponse,
   type TokenInfos,
 } from "./api/client.js";
@@ -930,21 +930,27 @@ export class Client {
     const swap = storedSwap.response;
     const secret = storedSwap.preimage;
 
-    // Arkade-to-EVM: use gasless claim via server (SDK signs internally)
+    // Arkade-to-EVM and Bitcoin-to-EVM: use gasless claim via server (SDK signs internally)
     // The destination is always the stored target_evm_address (set at swap creation time)
-    if (swap.direction === "arkade_to_evm") {
-      const arkadeSwap = swap as ArkadeToEvmSwapResponse & {
-        direction: "arkade_to_evm";
+    if (
+      swap.direction === "arkade_to_evm" ||
+      swap.direction === "bitcoin_to_evm"
+    ) {
+      const evmSwap = swap as (
+        | ArkadeToEvmSwapResponse
+        | BitcoinToEvmSwapResponse
+      ) & {
+        direction: string;
       };
       // Use the stored target address - this was set when the swap was created
       const destination =
-        arkadeSwap.target_evm_address ?? arkadeSwap.client_evm_address;
+        evmSwap.target_evm_address ?? evmSwap.client_evm_address;
 
       if (!destination) {
         return {
           success: false,
           message:
-            "Arkade-to-EVM claim failed: no target address found. " +
+            "Gasless claim failed: no target address found. " +
             "This swap may have been created before target address storage was implemented.",
         };
       }
@@ -1056,16 +1062,21 @@ export class Client {
 
     const swap = (await this.getSwap(id, {
       updateStorage: true,
-    })) as ArkadeToEvmSwapResponse & { direction: string };
+    })) as (ArkadeToEvmSwapResponse | BitcoinToEvmSwapResponse) & {
+      direction: string;
+    };
 
-    if (swap.direction !== "arkade_to_evm") {
+    if (
+      swap.direction !== "arkade_to_evm" &&
+      swap.direction !== "bitcoin_to_evm"
+    ) {
       throw new Error(
-        `Expected arkade_to_evm swap, got ${swap.direction}. claimViaGasless is for Arkade-to-EVM swaps.`,
+        `Expected arkade_to_evm or bitcoin_to_evm swap, got ${swap.direction}. claimViaGasless is for EVM-targeted swaps.`,
       );
     }
 
     // Fetch DEX calldata if the target token differs from WBTC
-    const targetTokenAddress = swap.target_token.token_id;
+    const targetTokenAddress = String(swap.target_token.token_id);
     const needsDexSwap =
       targetTokenAddress.toLowerCase() !== swap.wbtc_address.toLowerCase();
 
@@ -1099,7 +1110,7 @@ export class Client {
       baseUrl: this.#config.baseUrl,
       preimage: stored.preimage,
       secretKey: hexToBytes(stored.secretKey),
-      swap: swap as ArkadeToEvmSwapResponse,
+      swap: swap as ArkadeToEvmSwapResponse | BitcoinToEvmSwapResponse,
       destination,
       dexCalldata,
     });
@@ -1343,7 +1354,7 @@ export class Client {
     }
 
     // Bitcoin on-chain swaps require on-chain refund transaction
-    if (direction === "onchain_to_evm") {
+    if (direction === "bitcoin_to_evm") {
       return this.#buildOnchainRefund(id, swap, options);
     }
 
@@ -1401,12 +1412,12 @@ export class Client {
 
     // Ensure we have an on-chain funded swap
     if (
-      swap.direction !== "onchain_to_evm" &&
+      swap.direction !== "bitcoin_to_evm" &&
       swap.direction !== "btc_to_arkade"
     ) {
       return {
         success: false,
-        message: `Expected onchain_to_evm or btc_to_arkade swap, got ${swap.direction}`,
+        message: `Expected bitcoin_to_evm or btc_to_arkade swap, got ${swap.direction}`,
       };
     }
 
@@ -1428,8 +1439,8 @@ export class Client {
       serverPubKeyFull = arkadeSwap.server_vhtlc_pk;
       networkStr = arkadeSwap.network;
     } else {
-      const onchainSwap = swap as OnchainToEvmSwapResponse & {
-        direction: "onchain_to_evm";
+      const onchainSwap = swap as BitcoinToEvmSwapResponse & {
+        direction: "bitcoin_to_evm";
       };
       btcHtlcAddress = onchainSwap.btc_htlc_address;
       btcRefundLocktime = onchainSwap.btc_refund_locktime;

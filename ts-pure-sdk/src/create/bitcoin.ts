@@ -74,7 +74,7 @@ export async function createBitcoinToEvmSwap(
   // Store the swap if storage is configured
   await ctx.storeSwap(data.id, swapParams, {
     ...data,
-    direction: "onchain_to_evm",
+    direction: "bitcoin_to_evm",
   } as unknown as GetSwapResponse);
 
   return { response: data, swapParams };

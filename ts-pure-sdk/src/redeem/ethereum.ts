@@ -6,9 +6,9 @@
  */
 
 import type {
+  BitcoinToEvmSwapResponse,
   BtcToEvmSwapResponse,
   GetSwapResponse,
-  OnchainToEvmSwapResponse,
 } from "../api/client.js";
 import type { ClaimResult } from "./types.js";
 
@@ -144,9 +144,9 @@ function getEvmHtlcAddress(swap: GetSwapResponse): string | undefined {
   if ("htlc_address_evm" in swap) {
     return (swap as BtcToEvmSwapResponse).htlc_address_evm;
   }
-  // OnchainToEvmSwapResponse uses evm_htlc_address
+  // BitcoinToEvmSwapResponse uses evm_htlc_address
   if ("evm_htlc_address" in swap) {
-    return (swap as OnchainToEvmSwapResponse).evm_htlc_address;
+    return (swap as BitcoinToEvmSwapResponse).evm_htlc_address;
   }
   return undefined;
 }

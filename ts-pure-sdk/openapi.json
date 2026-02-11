@@ -1386,7 +1386,11 @@
           "source_token",
           "target_token",
           "target_amount",
-          "source_amount"
+          "source_amount",
+          "evm_chain_id",
+          "evm_coordinator_address",
+          "wbtc_address",
+          "evm_expected_sats"
         ],
         "properties": {
           "btc_claim_txid": {
@@ -1479,6 +1483,28 @@
           "target_token": {
             "$ref": "#/components/schemas/TokenInfo",
             "description": "Target token info"
+          },
+          "evm_chain_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "EVM chain ID"
+          },
+          "evm_coordinator_address": {
+            "type": "string",
+            "description": "HTLCCoordinator contract address for gasless claims"
+          },
+          "wbtc_address": {
+            "type": "string",
+            "description": "WBTC token contract address on the target EVM chain (the token locked in the HTLC)"
+          },
+          "evm_expected_sats": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Expected amount in the EVM HTLC (satoshis of WBTC)"
+          },
+          "target_evm_address": {
+            "type": ["string", "null"],
+            "description": "EVM address where tokens are swept after the claim (user's final destination)"
           }
         }
       },
@@ -2280,7 +2306,7 @@
                 "type": "object",
                 "required": ["direction"],
                 "properties": {
-                  "direction": { "type": "string", "enum": ["onchain_to_evm"] }
+                  "direction": { "type": "string", "enum": ["bitcoin_to_evm"] }
                 }
               }
             ]
