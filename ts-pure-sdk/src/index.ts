@@ -19,7 +19,6 @@ export type {
   LightningToArbitrumSwapRequest,
   LightningToEthereumSwapRequest,
   LightningToPolygonSwapRequest,
-  OnchainToEvmSwapResponse,
   // Types
   paths,
   QuoteResponse,
