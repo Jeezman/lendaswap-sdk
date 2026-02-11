@@ -16,7 +16,7 @@ export type GetSwapResponse = components["schemas"]["GetSwapResponse"];
 export type BtcToEvmSwapResponse =
   components["schemas"]["BtcToEvmSwapResponse"];
 export type OnchainToEvmSwapResponse =
-  components["schemas"]["OnchainToEvmSwapResponse"];
+  components["schemas"]["BitcoinToEvmSwapResponse"];
 export type EvmToBtcSwapResponse =
   components["schemas"]["EvmToBtcSwapResponse"];
 export type BtcToArkadeSwapResponse =
