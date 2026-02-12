@@ -13,6 +13,7 @@
 
 import { ripemd160 } from "@noble/hashes/legacy";
 import { sha256 } from "@noble/hashes/sha2";
+import { schnorr } from "@noble/curves/secp256k1.js";
 import { hex } from "@scure/base";
 import * as btc from "@scure/btc-signer";
 
@@ -372,24 +373,33 @@ export function buildOnchainClaimTransaction(
   // Add output (destination)
   tx.addOutputAddress(destinationAddress, claimAmount, networkConfig);
 
-  // Sign the input with user's key
-  tx.signIdx(userSkBytes, 0);
+  // Manually compute sighash, sign, and build the full witness.
+  // We can't use tx.signIdx() because finalize() only produces [signature]
+  // but the hashlock script requires [preimage, signature] in the witness.
+  // After signIdx, btc-signer locks the transaction and won't let us modify
+  // the witness fields. So we do everything manually.
 
-  // Now we need to manually finalize with the preimage in the witness.
-  // The hashlock script expects witness stack: [preimage, signature]
-  // Plus the Taproot script-path items: [script, control_block]
-  // Full witness: [preimage, signature, script, encoded_control_block]
-  //
-  // btc-signer's finalize() only adds the signature, so we intercept.
+  const [controlBlockInfo, leafScriptWithVersion] = hashlockLeaf;
 
-  // Extract signature from the partially signed transaction
-  const input = tx.getInput(0);
-  if (!input.tapScriptSig || input.tapScriptSig.length === 0) {
-    throw new Error("Failed to sign: no tapScriptSig produced");
-  }
+  // tapLeafScript entries have the leaf version byte appended to the script.
+  // Strip it for sighash computation and the witness.
+  const leafScript = leafScriptWithVersion.slice(0, -1);
+  const leafVersion = leafScriptWithVersion[leafScriptWithVersion.length - 1];
 
-  const sig = input.tapScriptSig[0][1];
-  const [controlBlockInfo, leafScript] = hashlockLeaf;
+  // Compute the Taproot script-path sighash (BIP 342)
+  // preimageWitnessV1 returns the final tagged hash, not a preimage to be hashed again.
+  const sighash = tx.preimageWitnessV1(
+    0,
+    [p2tr.script],
+    btc.SigHash.DEFAULT,
+    [htlcAmount],
+    undefined,
+    leafScript,
+    leafVersion,
+  );
+
+  // Sign the sighash with Schnorr (BIP 340)
+  const sig = schnorr.sign(sighash, userSkBytes);
 
   // Encode the control block struct to raw bytes:
   // [version(1)] [internalKey(32)] [merklePath(32*n)]
@@ -407,19 +417,10 @@ export function buildOnchainClaimTransaction(
     encodedControlBlock.set(cbInfo.merklePath[i], 33 + 32 * i);
   }
 
-  // Construct the final witness:
+  // Set the final witness directly (no signIdx needed):
   // [preimage, signature, script, control_block]
-  const witnessItems: Uint8Array[] = [
-    preimageBytes,
-    sig,
-    leafScript,
-    encodedControlBlock,
-  ];
-
   tx.updateInput(0, {
-    finalScriptWitness: witnessItems,
-    tapScriptSig: undefined as unknown as typeof input.tapScriptSig,
-    tapLeafScript: undefined as unknown as typeof input.tapLeafScript,
+    finalScriptWitness: [preimageBytes, sig, leafScript, encodedControlBlock],
   });
 
   // Extract the signed transaction
