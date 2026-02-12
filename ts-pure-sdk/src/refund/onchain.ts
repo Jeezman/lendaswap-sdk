@@ -11,9 +11,9 @@
  * - Timelock script path: user refunds after locktime
  */
 
+import { schnorr } from "@noble/curves/secp256k1.js";
 import { ripemd160 } from "@noble/hashes/legacy";
 import { sha256 } from "@noble/hashes/sha2";
-import { schnorr } from "@noble/curves/secp256k1.js";
 import { hex } from "@scure/base";
 import * as btc from "@scure/btc-signer";
 
