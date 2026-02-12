@@ -1,0 +1,84 @@
+/**
+ * EVM to Bitcoin (on-chain) swap creation.
+ *
+ * Supports swapping tokens from Polygon, Arbitrum, or Ethereum to BTC on-chain
+ * via Taproot HTLC.
+ */
+
+import type { GetSwapResponse } from "../api/client.js";
+import { bytesToHex } from "../signer/index.js";
+import type {
+  CreateSwapContext,
+  EvmToBitcoinSwapOptions,
+  EvmToBitcoinSwapResult,
+} from "./types.js";
+
+/**
+ * Creates a new EVM-to-Bitcoin swap via the generic endpoint.
+ *
+ * Uses the chain-agnostic `/swap/evm/bitcoin` endpoint which supports any
+ * ERC-20 token reachable through 1inch aggregation.
+ *
+ * @param options - The swap options.
+ * @param ctx - The context containing API client and helper functions.
+ * @returns The swap response and parameters for storage.
+ * @throws Error if the swap creation fails.
+ *
+ * @example
+ * ```ts
+ * const result = await createEvmToBitcoinSwap(
+ *   {
+ *     tokenAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // USDC on Polygon
+ *     evmChainId: 137,
+ *     userAddress: "0x1234...",
+ *     sourceAmount: 100000000n, // 100 USDC (6 decimals)
+ *   },
+ *   { apiClient, deriveSwapParams, storeSwap }
+ * );
+ * console.log("EVM HTLC:", result.response.evm_htlc_address);
+ * console.log("BTC HTLC:", result.response.btc_htlc_address);
+ * ```
+ */
+export async function createEvmToBitcoinSwap(
+  options: EvmToBitcoinSwapOptions,
+  ctx: CreateSwapContext,
+): Promise<EvmToBitcoinSwapResult> {
+  const swapParams = await ctx.deriveSwapParams();
+  const hashLock = `0x${bytesToHex(swapParams.preimageHash)}`;
+  // For BTC on-chain claim, the user needs their public key (compressed, 33 bytes)
+  const claimPk = bytesToHex(swapParams.publicKey);
+  const userId = bytesToHex(swapParams.userId);
+
+  const { data, error } = await ctx.apiClient.POST("/swap/evm/bitcoin", {
+    body: {
+      hash_lock: hashLock,
+      claim_pk: claimPk,
+      user_id: userId,
+      token_address: options.tokenAddress,
+      evm_chain_id: options.evmChainId,
+      user_address: options.userAddress,
+      amount_in: options.sourceAmount
+        ? Number(options.sourceAmount)
+        : undefined,
+      amount_out: options.targetAmount
+        ? Number(options.targetAmount)
+        : undefined,
+      referral_code: options.referralCode,
+    },
+  });
+
+  if (error) {
+    throw new Error(`Failed to create swap: ${JSON.stringify(error)}`);
+  }
+  if (!data) {
+    throw new Error("No swap data returned");
+  }
+
+  // Store the swap if storage is configured
+  await ctx.storeSwap(data.id, swapParams, {
+    ...data,
+    direction: "evm_to_bitcoin",
+  } as unknown as GetSwapResponse);
+
+  return { response: data, swapParams };
+}

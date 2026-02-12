@@ -13,8 +13,11 @@ export {
 } from "./arkade.js";
 export {
   type BitcoinNetwork,
+  buildOnchainClaimTransaction,
   buildOnchainRefundTransaction,
   computeHash160,
+  type OnchainClaimParams,
+  type OnchainClaimResult,
   type OnchainRefundParams,
   type OnchainRefundResult,
   verifyHtlcAddress,

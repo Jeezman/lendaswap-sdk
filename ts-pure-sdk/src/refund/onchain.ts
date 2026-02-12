@@ -19,6 +19,48 @@ import * as btc from "@scure/btc-signer";
 /** Bitcoin network type */
 export type BitcoinNetwork = "mainnet" | "testnet" | "signet" | "regtest";
 
+/** Parameters needed to build a claim transaction for an on-chain Taproot HTLC */
+export interface OnchainClaimParams {
+  /** The funding transaction ID (hex, no 0x prefix) */
+  fundingTxId: string;
+  /** The output index in the funding transaction */
+  fundingVout: number;
+  /** Amount locked in the HTLC in satoshis */
+  htlcAmount: bigint;
+  /** Hash lock (20-byte hex, RIPEMD160(SHA256(secret))) */
+  hashLock: string;
+  /** User's x-only public key (32-byte hex) — the claimer */
+  userClaimPubKey: string;
+  /** Server's x-only public key (32-byte hex) — the refunder */
+  serverRefundPubKey: string;
+  /** User's secret key (32-byte hex) for signing */
+  userSecretKey: string;
+  /** The preimage (32-byte hex) that hashes to the hash lock */
+  preimage: string;
+  /** Refund locktime (unix timestamp) — needed to reconstruct the HTLC */
+  refundLocktime: number;
+  /** Destination address to receive claimed funds */
+  destinationAddress: string;
+  /** Fee rate in satoshis per virtual byte */
+  feeRateSatPerVb: number;
+  /** Bitcoin network */
+  network: BitcoinNetwork;
+}
+
+/** Result of building a claim transaction */
+export interface OnchainClaimResult {
+  /** The signed transaction hex (ready to broadcast) */
+  txHex: string;
+  /** Transaction ID (hash) */
+  txId: string;
+  /** Amount being claimed (after fees) */
+  claimAmount: bigint;
+  /** Fee paid in satoshis */
+  fee: bigint;
+  /** The HTLC address that funds are being claimed from */
+  htlcAddress: string;
+}
+
 /** Parameters needed to build a refund transaction */
 export interface OnchainRefundParams {
   /** The funding transaction ID (hex, no 0x prefix) */
@@ -198,6 +240,206 @@ function buildHtlcTaprootInfo(
  * Using a conservative estimate of 130 vBytes.
  */
 const REFUND_TX_VBYTES = 130n;
+
+/**
+ * Estimate vBytes for a claim transaction.
+ * Similar to refund but includes the preimage in the witness (~32 bytes extra).
+ * Conservative estimate: 150 vBytes.
+ */
+const CLAIM_TX_VBYTES = 150n;
+
+/**
+ * Build and sign a claim transaction for an on-chain Bitcoin Taproot HTLC.
+ *
+ * This creates a transaction that spends from the HTLC using the hashlock
+ * script path by providing the preimage and a valid signature.
+ *
+ * Used for EVM-to-Bitcoin swaps where the user claims BTC after the server
+ * has funded the on-chain HTLC.
+ *
+ * @param params - The claim parameters
+ * @returns The signed transaction and related info
+ * @throws Error if the transaction cannot be built
+ */
+export function buildOnchainClaimTransaction(
+  params: OnchainClaimParams,
+): OnchainClaimResult {
+  const {
+    fundingTxId,
+    fundingVout,
+    htlcAmount,
+    hashLock,
+    userClaimPubKey,
+    serverRefundPubKey,
+    userSecretKey,
+    preimage,
+    refundLocktime,
+    destinationAddress,
+    feeRateSatPerVb,
+    network,
+  } = params;
+
+  // Parse hex inputs
+  const hashLockBytes = hex.decode(hashLock);
+  const userClaimPkBytes = hex.decode(userClaimPubKey);
+  const serverRefundPkBytes = hex.decode(serverRefundPubKey);
+  const userSkBytes = hex.decode(userSecretKey);
+  const preimageBytes = hex.decode(preimage);
+
+  if (hashLockBytes.length !== 20) {
+    throw new Error(
+      `Invalid hash lock length: expected 20, got ${hashLockBytes.length}`,
+    );
+  }
+  if (userClaimPkBytes.length !== 32) {
+    throw new Error(
+      `Invalid user claim pubkey length: expected 32, got ${userClaimPkBytes.length}`,
+    );
+  }
+  if (serverRefundPkBytes.length !== 32) {
+    throw new Error(
+      `Invalid server refund pubkey length: expected 32, got ${serverRefundPkBytes.length}`,
+    );
+  }
+  if (userSkBytes.length !== 32) {
+    throw new Error(
+      `Invalid user secret key length: expected 32, got ${userSkBytes.length}`,
+    );
+  }
+  if (preimageBytes.length !== 32) {
+    throw new Error(
+      `Invalid preimage length: expected 32, got ${preimageBytes.length}`,
+    );
+  }
+
+  // Verify preimage matches hash lock
+  const computedHashLock = computeHash160(preimageBytes);
+  if (hex.encode(computedHashLock) !== hex.encode(hashLockBytes)) {
+    throw new Error(
+      "Preimage does not match hash lock: HASH160(preimage) != hashLock",
+    );
+  }
+
+  // Build the HTLC Taproot structure
+  // For evm_to_bitcoin: user is claimer (hashlock), server is refunder (timelock)
+  // buildHtlcTaprootInfo(hashLock, claimerPk, refunderPk, locktime)
+  const { p2tr } = buildHtlcTaprootInfo(
+    hashLockBytes,
+    userClaimPkBytes,
+    serverRefundPkBytes,
+    refundLocktime,
+  );
+
+  // Calculate fee
+  const fee = CLAIM_TX_VBYTES * BigInt(Math.ceil(feeRateSatPerVb));
+  if (fee >= htlcAmount) {
+    throw new Error(
+      `Fee (${fee} sats) exceeds HTLC amount (${htlcAmount} sats)`,
+    );
+  }
+  const claimAmount = htlcAmount - fee;
+
+  // Get network config
+  const networkConfig = getNetwork(network);
+
+  // Find the tapLeafScript for the hashlock script (index 0 in our tree)
+  const tapLeafScript = p2tr.tapLeafScript;
+  if (!tapLeafScript || tapLeafScript.length < 1) {
+    throw new Error("Failed to build tapLeafScript for hashlock");
+  }
+
+  // The hashlock script is at index 0 in our tree
+  const hashlockLeaf = tapLeafScript[0];
+
+  // Build the transaction
+  const tx = new btc.Transaction({
+    allowUnknownOutputs: true,
+    allowUnknownInputs: true,
+  });
+
+  // Add input (the HTLC output we're spending)
+  tx.addInput({
+    txid: fundingTxId,
+    index: fundingVout,
+    witnessUtxo: {
+      script: p2tr.script,
+      amount: htlcAmount,
+    },
+    tapLeafScript: [hashlockLeaf],
+    sequence: 0xffffffff,
+  });
+
+  // Add output (destination)
+  tx.addOutputAddress(destinationAddress, claimAmount, networkConfig);
+
+  // Sign the input with user's key
+  tx.signIdx(userSkBytes, 0);
+
+  // Now we need to manually finalize with the preimage in the witness.
+  // The hashlock script expects witness stack: [preimage, signature]
+  // Plus the Taproot script-path items: [script, control_block]
+  // Full witness: [preimage, signature, script, encoded_control_block]
+  //
+  // btc-signer's finalize() only adds the signature, so we intercept.
+
+  // Extract signature from the partially signed transaction
+  const input = tx.getInput(0);
+  if (!input.tapScriptSig || input.tapScriptSig.length === 0) {
+    throw new Error("Failed to sign: no tapScriptSig produced");
+  }
+
+  const sig = input.tapScriptSig[0][1];
+  const [controlBlockInfo, leafScript] = hashlockLeaf;
+
+  // Encode the control block struct to raw bytes:
+  // [version(1)] [internalKey(32)] [merklePath(32*n)]
+  const cbInfo = controlBlockInfo as {
+    version: number;
+    internalKey: Uint8Array;
+    merklePath: Uint8Array[];
+  };
+  const encodedControlBlock = new Uint8Array(
+    1 + 32 + 32 * cbInfo.merklePath.length,
+  );
+  encodedControlBlock[0] = cbInfo.version;
+  encodedControlBlock.set(cbInfo.internalKey, 1);
+  for (let i = 0; i < cbInfo.merklePath.length; i++) {
+    encodedControlBlock.set(cbInfo.merklePath[i], 33 + 32 * i);
+  }
+
+  // Construct the final witness:
+  // [preimage, signature, script, control_block]
+  const witnessItems: Uint8Array[] = [
+    preimageBytes,
+    sig,
+    leafScript,
+    encodedControlBlock,
+  ];
+
+  tx.updateInput(0, {
+    finalScriptWitness: witnessItems,
+    tapScriptSig: undefined as unknown as typeof input.tapScriptSig,
+    tapLeafScript: undefined as unknown as typeof input.tapLeafScript,
+  });
+
+  // Extract the signed transaction
+  const txHex = hex.encode(tx.extract());
+  const txId = tx.id;
+
+  // Compute the HTLC address
+  const htlcAddress = btc.Address(networkConfig).encode({
+    type: "tr",
+    pubkey: p2tr.tweakedPubkey,
+  });
+
+  return {
+    txHex,
+    txId,
+    claimAmount,
+    fee,
+    htlcAddress,
+  };
+}
 
 /**
  * Build and sign a refund transaction for an on-chain Bitcoin HTLC.

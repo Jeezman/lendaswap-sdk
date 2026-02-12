@@ -88,8 +88,8 @@ export async function evmFundSwap(
   // Get swap details
   const swap = await client.getSwap(swapId);
 
-  if (swap.direction !== "evm_to_btc" && swap.direction !== "evm_to_arkade") {
-    console.error(`This command is for EVM-to-BTC/Arkade swaps, got: ${swap.direction}`);
+  if (swap.direction !== "evm_to_btc" && swap.direction !== "evm_to_arkade" && swap.direction !== "evm_to_bitcoin") {
+    console.error(`This command is for EVM-to-BTC/Arkade/Bitcoin swaps, got: ${swap.direction}`);
     process.exit(1);
   }
 
@@ -102,7 +102,7 @@ export async function evmFundSwap(
   let sourceTokenDisplay: string;
   let sourceAmountDisplay: number;
 
-  if (swap.direction === "evm_to_arkade") {
+  if (swap.direction === "evm_to_arkade" || swap.direction === "evm_to_bitcoin") {
     // Generic endpoint - source_token is a TokenInfo {token_id, symbol, decimals, chain, name}
     const evmSwap = swap as typeof swap & {
       evm_htlc_address: string;
@@ -159,9 +159,9 @@ export async function evmFundSwap(
   }
 
   // Detect coordinator mode
-  // For evm_to_arkade swaps, always use coordinator (source token needs DEX swap to WBTC)
+  // For evm_to_arkade/evm_to_bitcoin swaps, always use coordinator (source token needs DEX swap to WBTC)
   // For evm_to_btc swaps, can optionally use coordinator via USE_COORDINATOR=1
-  const useCoordinator = swap.direction === "evm_to_arkade" || process.env.USE_COORDINATOR === "1";
+  const useCoordinator = swap.direction === "evm_to_arkade" || swap.direction === "evm_to_bitcoin" || process.env.USE_COORDINATOR === "1";
 
   // Create EVM wallet
   const evmWallet = createEvmWallet(evmMnemonic, chainName);

@@ -7,6 +7,7 @@ import {
   type Chain,
   createApiClient,
   type EvmToArkadeSwapResponse,
+  type EvmToBitcoinSwapResponse,
   type EvmToBtcSwapResponse,
   type GetSwapResponse,
   type QuoteResponse,
@@ -27,12 +28,15 @@ import {
   createBitcoinToArkadeSwap,
   createBitcoinToEvmSwap,
   createEvmToArkadeSwapGeneric,
+  createEvmToBitcoinSwap,
   createEvmToLightningSwap,
   createLightningToEvmSwap,
   type EvmToArkadeSwapGenericOptions,
   type EvmToArkadeSwapGenericResult,
   type EvmToArkadeSwapOptions,
   type EvmToArkadeSwapResult,
+  type EvmToBitcoinSwapOptions,
+  type EvmToBitcoinSwapResult,
   type EvmToLightningSwapOptions,
   type EvmToLightningSwapResult,
 } from "./create";
@@ -48,6 +52,7 @@ import {
 import {
   type BitcoinNetwork,
   buildArkadeRefund,
+  buildOnchainClaimTransaction,
   buildOnchainRefundTransaction,
   verifyHtlcAddress,
 } from "./refund";
@@ -79,6 +84,8 @@ export type {
   EvmToArkadeSwapGenericResult,
   EvmToArkadeSwapOptions,
   EvmToArkadeSwapResult,
+  EvmToBitcoinSwapOptions,
+  EvmToBitcoinSwapResult,
   EvmToLightningSwapOptions,
   EvmToLightningSwapResult,
 } from "./create/index.js";
@@ -178,6 +185,10 @@ export interface ClaimOptions {
    * and stored on the server. This option is ignored for arkade_to_evm swaps.
    */
   destination?: string;
+  /** Bitcoin destination address for EVM-to-Bitcoin claims (required for evm_to_bitcoin direction) */
+  destinationAddress?: string;
+  /** Fee rate in sat/vB for on-chain Bitcoin claims (default: 2) */
+  feeRateSatPerVb?: number;
 }
 
 /** Result of getting EVM funding call data */
@@ -962,6 +973,11 @@ export class Client {
       };
     }
 
+    // EVM-to-Bitcoin: user claims BTC from on-chain Taproot HTLC with preimage
+    if (swap.direction === "evm_to_bitcoin") {
+      return this.#claimOnchainBtc(id, _options);
+    }
+
     // Check if target is Arkade (handle both string "btc_arkade" and TokenInfo object)
     const isArkadeTarget =
       swap.target_token === "btc_arkade" ||
@@ -1367,10 +1383,190 @@ export class Client {
       return this.#buildEvmToBtcRefund(id, swap);
     }
 
+    // EVM-to-Bitcoin uses coordinator refund (same pattern as EVM-to-Arkade)
+    if (direction === "evm_to_bitcoin") {
+      return this.#buildEvmToBitcoinRefund(id, swap);
+    }
+
     return {
       success: false,
       message: `Refund not supported for direction: ${direction}.`,
     };
+  }
+
+  /**
+   * Claims BTC from an on-chain Taproot HTLC for an EVM-to-Bitcoin swap.
+   *
+   * The user reveals the preimage to spend from the hashlock script path.
+   * @internal
+   */
+  async #claimOnchainBtc(
+    id: string,
+    options?: ClaimOptions,
+  ): Promise<ClaimResult> {
+    if (!this.#swapStorage) {
+      return {
+        success: false,
+        message:
+          "Swap storage is not configured. Cannot retrieve preimage and keys needed for claim.",
+      };
+    }
+
+    const storedSwap = await this.#swapStorage.get(id);
+    if (!storedSwap) {
+      return {
+        success: false,
+        message: `Swap ${id} not found in local storage.`,
+      };
+    }
+
+    // Fetch the latest swap state from API
+    const swap = (await this.getSwap(id, {
+      updateStorage: true,
+    })) as EvmToBitcoinSwapResponse & { direction: "evm_to_bitcoin" };
+
+    if (swap.direction !== "evm_to_bitcoin") {
+      return {
+        success: false,
+        message: `Expected evm_to_bitcoin swap, got ${swap.direction}`,
+      };
+    }
+
+    // Extract BTC HTLC parameters
+    const btcHtlcAddress = swap.btc_htlc_address;
+    const btcHashLock = swap.btc_hash_lock;
+    const btcRefundLocktime = swap.btc_refund_locktime;
+    const networkStr = swap.network;
+
+    // Get server refund pk (needed to reconstruct the Taproot tree)
+    const serverRefundPkRaw = (swap as { btc_server_refund_pk?: string })
+      .btc_server_refund_pk;
+    if (!serverRefundPkRaw) {
+      return {
+        success: false,
+        message:
+          "Server refund public key not available. The API response may need to be updated.",
+      };
+    }
+
+    // Map network string
+    const networkMap: Record<string, BitcoinNetwork> = {
+      mainnet: "mainnet",
+      testnet: "testnet",
+      signet: "signet",
+      regtest: "regtest",
+    };
+    const network = networkMap[networkStr];
+    if (!network) {
+      return {
+        success: false,
+        message: `Unknown Bitcoin network: ${networkStr}`,
+      };
+    }
+
+    // Get user's x-only public key (32 bytes from 33-byte compressed)
+    const fullPubKey = storedSwap.publicKey;
+    const userClaimPk =
+      fullPubKey.length === 66 ? fullPubKey.slice(2) : fullPubKey;
+
+    // Strip compressed key prefix if present
+    const serverRefundPk =
+      serverRefundPkRaw.length === 66
+        ? serverRefundPkRaw.slice(2)
+        : serverRefundPkRaw;
+
+    // Verify HTLC address matches our reconstruction
+    const addressMatches = verifyHtlcAddress(
+      btcHtlcAddress,
+      btcHashLock,
+      userClaimPk, // claimer = user (goes in hashlock position)
+      serverRefundPk, // refunder = server (goes in timelock position)
+      btcRefundLocktime,
+      network,
+    );
+
+    if (!addressMatches) {
+      return {
+        success: false,
+        message:
+          `HTLC address mismatch. Computed address does not match server's (${btcHtlcAddress}). ` +
+          `Parameters: hashLock='${btcHashLock}', userPk='${userClaimPk}', ` +
+          `serverPk='${serverRefundPk}', locktime='${btcRefundLocktime}', network='${network}'`,
+      };
+    }
+
+    // Find the UTXO at the HTLC address
+    const esploraUrl = this.#config.esploraUrl ?? DEFAULT_ESPLORA_URLS[network];
+    if (!esploraUrl) {
+      return {
+        success: false,
+        message: `No Esplora URL configured for network ${network}.`,
+      };
+    }
+
+    const htlcOutput = await findOutputByAddress(esploraUrl, btcHtlcAddress);
+    if (!htlcOutput) {
+      return {
+        success: false,
+        message: `Could not find UTXO at HTLC address ${btcHtlcAddress}. The server may not have funded the HTLC yet.`,
+      };
+    }
+
+    // Determine destination address
+    const destinationAddress = options?.destinationAddress;
+    if (!destinationAddress) {
+      return {
+        success: false,
+        message:
+          "Destination address is required to claim BTC. " +
+          'Provide it via options: { destinationAddress: "bc1p..." }',
+      };
+    }
+
+    try {
+      const result = buildOnchainClaimTransaction({
+        fundingTxId: htlcOutput.txid,
+        fundingVout: htlcOutput.vout,
+        htlcAmount: htlcOutput.amount,
+        hashLock: btcHashLock,
+        userClaimPubKey: userClaimPk,
+        serverRefundPubKey: serverRefundPk,
+        userSecretKey: storedSwap.secretKey,
+        preimage: storedSwap.preimage,
+        refundLocktime: btcRefundLocktime,
+        destinationAddress,
+        feeRateSatPerVb: options?.feeRateSatPerVb ?? 2,
+        network,
+      });
+
+      // Broadcast
+      try {
+        await broadcastTransaction(esploraUrl, result.txHex);
+        return {
+          success: true,
+          message: "BTC claim transaction broadcast successfully!",
+          txHash: result.txId,
+          // chain: "bitcoin" — not in ClaimChain type
+        };
+      } catch (broadcastError) {
+        const msg =
+          broadcastError instanceof Error
+            ? broadcastError.message
+            : String(broadcastError);
+        return {
+          success: true,
+          message: `Claim transaction built but broadcast failed: ${msg}. TxHex: ${result.txHex}`,
+          txHash: result.txId,
+          // chain: "bitcoin" — not in ClaimChain type
+        };
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        message: `Failed to build claim transaction: ${msg}`,
+      };
+    }
   }
 
   /**
@@ -1855,6 +2051,57 @@ export class Client {
     };
   }
 
+  /**
+   * Builds refund data for an EVM-to-Bitcoin swap via the coordinator.
+   * Same pattern as EVM-to-Arkade: uses the coordinator refund-and-swap-calldata endpoint.
+   * @internal
+   */
+  async #buildEvmToBitcoinRefund(
+    id: string,
+    swap: GetSwapResponse,
+  ): Promise<RefundResult> {
+    const evmSwap = swap as EvmToBitcoinSwapResponse & {
+      direction: "evm_to_bitcoin";
+    };
+
+    const timelock = evmSwap.evm_refund_locktime;
+    const now = Math.floor(Date.now() / 1000);
+    const timelockExpired = now >= timelock;
+
+    // Fetch coordinator refund calldata from server (default mode: swap-back)
+    const response = await this.#apiClient.GET(
+      "/swap/{id}/refund-and-swap-calldata",
+      {
+        params: {
+          path: { id },
+          query: { mode: "swap-back" },
+        },
+      },
+    );
+
+    if (response.error) {
+      return {
+        success: false,
+        message: `Failed to fetch refund calldata: ${response.error.error || "Unknown error"}`,
+      };
+    }
+
+    const { coordinator_address, calldata } = response.data;
+
+    return {
+      success: true,
+      message: timelockExpired
+        ? "EVM refund calldata ready. Submit this transaction with your EVM wallet."
+        : `Timelock has not expired yet. Refund will be available at ${new Date(timelock * 1000).toISOString()}.`,
+      evmRefundData: {
+        to: coordinator_address,
+        data: calldata,
+        timelockExpired,
+        timelockExpiry: timelock,
+      },
+    };
+  }
+
   // =========================================================================
   // Swap Creation - BTC to EVM
   // =========================================================================
@@ -2092,6 +2339,35 @@ export class Client {
   }
 
   /**
+   * Creates a new EVM-to-Bitcoin (on-chain) swap.
+   *
+   * Uses the chain-agnostic `/swap/evm/bitcoin` endpoint which supports any
+   * ERC-20 token reachable through 1inch aggregation. The user locks tokens
+   * in an EVM HTLC and receives BTC to an on-chain Taproot HTLC.
+   *
+   * @param options - The swap options.
+   * @returns The swap response and parameters for storage.
+   * @throws Error if the swap creation fails.
+   *
+   * @example
+   * ```ts
+   * const result = await client.createEvmToBitcoinSwap({
+   *   tokenAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // USDC on Polygon
+   *   evmChainId: 137,
+   *   userAddress: "0x1234...",
+   *   sourceAmount: 100000000n, // 100 USDC (6 decimals)
+   * });
+   * console.log("EVM HTLC:", result.response.evm_htlc_address);
+   * console.log("BTC HTLC:", result.response.btc_htlc_address);
+   * ```
+   */
+  async createEvmToBitcoinSwap(
+    options: EvmToBitcoinSwapOptions,
+  ): Promise<EvmToBitcoinSwapResult> {
+    return createEvmToBitcoinSwap(options, this.#getCreateContext());
+  }
+
+  /**
    * Creates a new EVM to Lightning swap.
    *
    * This allows users to swap ERC-20 tokens (USDC, USDT, etc.) from EVM chains
@@ -2297,19 +2573,25 @@ export class Client {
   ): Promise<CoordinatorFundingCallData> {
     const swap = await this.getSwap(swapId);
 
-    if (swap.direction !== "evm_to_btc" && swap.direction !== "evm_to_arkade") {
+    if (
+      swap.direction !== "evm_to_btc" &&
+      swap.direction !== "evm_to_arkade" &&
+      swap.direction !== "evm_to_bitcoin"
+    ) {
       throw new Error(
-        `Expected evm_to_btc swap, got ${swap.direction}. Coordinator fund call data method is for EVM-to-Arkade/Lightning swaps via coordinator.`,
+        `Expected evm_to_btc/evm_to_arkade/evm_to_bitcoin swap, got ${swap.direction}. Coordinator fund call data method is for EVM-sourced swaps via coordinator.`,
       );
     }
 
     // Get source amount based on swap direction
-    // For evm_to_arkade: source_amount is already in smallest units (integer)
+    // For evm_to_arkade/evm_to_bitcoin: source_amount is already in smallest units (integer)
     // For evm_to_btc: source_amount is in human-readable units (decimal)
     let exactAmount: bigint;
-    if (swap.direction === "evm_to_arkade") {
+    if (
+      swap.direction === "evm_to_arkade" ||
+      swap.direction === "evm_to_bitcoin"
+    ) {
       const evmSwap = swap as GetSwapResponse & {
-        direction: "evm_to_arkade";
         source_amount: number;
       };
       exactAmount = BigInt(evmSwap.source_amount);

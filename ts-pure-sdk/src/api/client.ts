@@ -54,6 +54,12 @@ export type EvmToArkadeGenericSwapRequest =
 export type EvmToArkadeGenericSwapResponse =
   components["schemas"]["EvmToArkadeGenericSwapResponse"];
 
+// EVM-to-Bitcoin (generic endpoint) types
+export type EvmToBitcoinSwapRequest =
+  components["schemas"]["EvmToBitcoinSwapRequest"];
+export type EvmToBitcoinSwapResponse =
+  components["schemas"]["EvmToBitcoinSwapResponse"];
+
 export interface ApiClientOptions {
   baseUrl: string;
   apiKey?: string;

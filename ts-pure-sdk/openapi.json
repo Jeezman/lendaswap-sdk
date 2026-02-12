@@ -548,6 +548,51 @@
         }
       }
     },
+    "/swap/evm/bitcoin": {
+      "post": {
+        "tags": ["swap-evm-bitcoin"],
+        "summary": "Create a chain-agnostic EVM-to-Bitcoin swap.",
+        "operationId": "create_evm_to_bitcoin_swap",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvmToBitcoinSwapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Swap created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvmToBitcoinSwapResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/swap/lightning/arbitrum": {
       "post": {
         "tags": ["swap-lightning-arbitrum"],
@@ -815,8 +860,8 @@
     "/swap/{id}/claim-gasless": {
       "post": {
         "tags": ["gasless"],
-        "summary": "Claims an Arkade-to-EVM swap gaslessly via the HTLCCoordinator contract.",
-        "description": "The server submits `coordinator.redeemAndExecute` on the client's behalf,\nusing the client's EIP-712 signature and secret.",
+        "summary": "Claims an EVM-targeted swap gaslessly via the HTLCCoordinator contract.",
+        "description": "Supports both Arkade-to-EVM and Bitcoin-to-EVM swaps. The server submits\n`coordinator.redeemAndExecute` on the client's behalf, using the client's\nEIP-712 signature and secret.",
         "operationId": "claim_via_gasless",
         "parameters": [
           {
@@ -868,7 +913,7 @@
     "/swap/{id}/redeem-and-swap-calldata": {
       "get": {
         "tags": ["redeem-and-swap-calldata"],
-        "summary": "Returns fresh 1inch DEX calldata for an Arkade-to-EVM swap.",
+        "summary": "Returns fresh 1inch DEX calldata for an EVM-targeted swap (Arkade-to-EVM or Bitcoin-to-EVM).",
         "description": "The calldata is generated with `receiver = destination` so that 1inch\nsends the output tokens directly to the user's address, avoiding an\nextra sweep transfer.",
         "operationId": "get_dex_calldata",
         "parameters": [
@@ -1379,18 +1424,18 @@
           "network",
           "created_at",
           "chain",
+          "evm_chain_id",
           "client_evm_address",
           "evm_htlc_address",
+          "evm_coordinator_address",
           "server_evm_address",
           "evm_refund_locktime",
+          "wbtc_address",
+          "evm_expected_sats",
           "source_token",
           "target_token",
           "target_amount",
-          "source_amount",
-          "evm_chain_id",
-          "evm_coordinator_address",
-          "wbtc_address",
-          "evm_expected_sats"
+          "source_amount"
         ],
         "properties": {
           "btc_claim_txid": {
@@ -1420,20 +1465,34 @@
           },
           "chain": {
             "type": "string",
-            "description": "EVM chain (Polygon, Ethereum)"
+            "description": "EVM chain name (e.g. \"Polygon\", \"Ethereum\", \"Arbitrum\")"
           },
           "client_evm_address": {
             "type": "string",
-            "description": "Client's EVM address (where tokens will be received)"
+            "description": "EVM address that will sign the HTLC claim (SDK-derived for gasless claims)"
           },
           "created_at": {
             "type": "string",
             "format": "date-time",
             "description": "Timestamp of when the swap was created"
           },
+          "evm_chain_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Numeric EVM chain ID (e.g. 137, 1, 42161)"
+          },
           "evm_claim_txid": {
             "type": ["string", "null"],
             "description": "EVM HTLC claim transaction ID (user claim)"
+          },
+          "evm_coordinator_address": {
+            "type": "string",
+            "description": "HTLCCoordinator contract address (for redeemAndExecute)"
+          },
+          "evm_expected_sats": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Amount of WBTC sats locked in the EVM HTLC"
           },
           "evm_fund_txid": {
             "type": ["string", "null"],
@@ -1480,31 +1539,17 @@
             "description": "How much the user will receive in the target token's smallest unit",
             "minimum": 0
           },
+          "target_evm_address": {
+            "type": ["string", "null"],
+            "description": "EVM address where tokens are swept after the claim (user's final destination)"
+          },
           "target_token": {
             "$ref": "#/components/schemas/TokenInfo",
             "description": "Target token info"
           },
-          "evm_chain_id": {
-            "type": "integer",
-            "format": "int64",
-            "description": "EVM chain ID"
-          },
-          "evm_coordinator_address": {
-            "type": "string",
-            "description": "HTLCCoordinator contract address for gasless claims"
-          },
           "wbtc_address": {
             "type": "string",
             "description": "WBTC token contract address on the target EVM chain (the token locked in the HTLC)"
-          },
-          "evm_expected_sats": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Expected amount in the EVM HTLC (satoshis of WBTC)"
-          },
-          "target_evm_address": {
-            "type": ["string", "null"],
-            "description": "EVM address where tokens are swept after the claim (user's final destination)"
           }
         }
       },
@@ -2131,6 +2176,171 @@
           "vhtlc_refund_locktime": { "type": "integer", "format": "int64" }
         }
       },
+      "EvmToBitcoinSwapRequest": {
+        "type": "object",
+        "description": "Request to create an EVM-to-Bitcoin swap.\n\nUser sends any ERC-20 token on EVM, receives on-chain BTC (Taproot HTLC).\nThe caller specifies the source chain via `evm_chain_id` and the token\nvia its ERC-20 contract `token_address`.",
+        "required": [
+          "user_address",
+          "evm_chain_id",
+          "token_address",
+          "hash_lock",
+          "claim_pk",
+          "user_id"
+        ],
+        "properties": {
+          "amount_in": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Source token amount in smallest units (mutually exclusive with `amount_out`).",
+            "minimum": 0
+          },
+          "amount_out": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Desired BTC output in sats (mutually exclusive with `amount_in`).",
+            "minimum": 0
+          },
+          "claim_pk": {
+            "type": "string",
+            "description": "User's BTC public key for claiming BTC from the on-chain Taproot HTLC."
+          },
+          "evm_chain_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Numeric EVM chain ID: 1 (Ethereum), 137 (Polygon), 42161 (Arbitrum).",
+            "minimum": 0
+          },
+          "hash_lock": {
+            "type": "string",
+            "description": "Hash lock (0x-prefixed 32-byte hex). Client generates secret, computes SHA256(secret)."
+          },
+          "referral_code": {
+            "type": ["string", "null"],
+            "description": "Optional referral code for tracking."
+          },
+          "token_address": {
+            "type": "string",
+            "description": "ERC-20 contract address of the source token on the EVM chain."
+          },
+          "user_address": {
+            "type": "string",
+            "description": "User's EVM address (sender of the ERC-20 token)."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User ID derived from wallet for recovery purposes."
+          }
+        }
+      },
+      "EvmToBitcoinSwapResponse": {
+        "type": "object",
+        "description": "EVM → Bitcoin (on-chain) swap response",
+        "required": [
+          "id",
+          "status",
+          "fee_sats",
+          "evm_hash_lock",
+          "btc_hash_lock",
+          "source_token",
+          "target_token",
+          "created_at",
+          "chain",
+          "evm_chain_id",
+          "source_amount",
+          "evm_expected_sats",
+          "btc_expected_sats",
+          "evm_htlc_address",
+          "client_evm_address",
+          "server_evm_address",
+          "evm_refund_locktime",
+          "btc_htlc_address",
+          "btc_user_claim_pk",
+          "btc_server_refund_pk",
+          "btc_refund_locktime",
+          "wbtc_address",
+          "network"
+        ],
+        "properties": {
+          "btc_claim_txid": { "type": ["string", "null"] },
+          "btc_expected_sats": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Expected BTC amount (in sats) user will receive"
+          },
+          "btc_fund_txid": { "type": ["string", "null"] },
+          "btc_hash_lock": {
+            "type": "string",
+            "description": "BTC hash lock (RIPEMD160 of EVM hash lock)"
+          },
+          "btc_htlc_address": {
+            "type": "string",
+            "description": "On-chain BTC Taproot HTLC address (server creates, user claims)"
+          },
+          "btc_refund_locktime": {
+            "type": "integer",
+            "format": "int64",
+            "description": "BTC HTLC refund locktime (unix timestamp)"
+          },
+          "btc_server_refund_pk": {
+            "type": "string",
+            "description": "Server's x-only public key for refunding BTC"
+          },
+          "btc_user_claim_pk": {
+            "type": "string",
+            "description": "User's x-only public key for claiming BTC"
+          },
+          "chain": { "type": "string", "description": "EVM chain name" },
+          "client_evm_address": {
+            "type": "string",
+            "description": "User's EVM address (funds the EVM HTLC)"
+          },
+          "created_at": { "type": "string", "format": "date-time" },
+          "evm_chain_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Numeric EVM chain ID"
+          },
+          "evm_claim_txid": { "type": ["string", "null"] },
+          "evm_expected_sats": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Expected WBTC amount (in sats) on EVM"
+          },
+          "evm_fund_txid": { "type": ["string", "null"] },
+          "evm_hash_lock": {
+            "type": "string",
+            "description": "EVM hash lock (SHA-256, 0x-prefixed 32-byte hex)"
+          },
+          "evm_htlc_address": {
+            "type": "string",
+            "description": "EVM HTLC contract address (user creates, server claims)"
+          },
+          "evm_refund_locktime": {
+            "type": "integer",
+            "format": "int64",
+            "description": "EVM HTLC refund locktime (unix timestamp)"
+          },
+          "fee_sats": { "type": "integer", "format": "int64" },
+          "id": { "type": "string" },
+          "network": { "type": "string" },
+          "server_evm_address": {
+            "type": "string",
+            "description": "Server's EVM address (claims the EVM HTLC)"
+          },
+          "source_amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Source token amount in smallest units"
+          },
+          "source_token": { "$ref": "#/components/schemas/TokenInfo" },
+          "status": { "type": "string" },
+          "target_token": { "$ref": "#/components/schemas/TokenInfo" },
+          "wbtc_address": {
+            "type": "string",
+            "description": "WBTC token contract address on the EVM chain"
+          }
+        }
+      },
       "EvmToBtcSwapResponse": {
         "allOf": [
           {
@@ -2331,6 +2541,18 @@
                 "required": ["direction"],
                 "properties": {
                   "direction": { "type": "string", "enum": ["evm_to_arkade"] }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              { "$ref": "#/components/schemas/EvmToBitcoinSwapResponse" },
+              {
+                "type": "object",
+                "required": ["direction"],
+                "properties": {
+                  "direction": { "type": "string", "enum": ["evm_to_bitcoin"] }
                 }
               }
             ]
@@ -3011,6 +3233,10 @@
     {
       "name": "swap-evm-arkade",
       "description": "Create chain-agnostic EVM to Arkade swaps."
+    },
+    {
+      "name": "swap-evm-bitcoin",
+      "description": "Create chain-agnostic EVM to on-chain Bitcoin swaps."
     },
     {
       "name": "swap-arkade-arbitrum",

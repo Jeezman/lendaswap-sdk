@@ -35,6 +35,16 @@ export async function redeemSwap(
   const swap = storedSwap?.response;
 
   console.log(`Current status: ${swap.status}`);
+  console.log(`Direction: ${swap.direction}`);
+
+  // For evm_to_bitcoin claims, destination is a Bitcoin address (required)
+  if (swap.direction === "evm_to_bitcoin" && !destination) {
+    console.error("");
+    console.error("Error: EVM-to-Bitcoin swaps require a BTC destination address.");
+    console.error("Usage: tsx src/index.ts redeem <swap-id> <btc-address>");
+    console.error("Example: tsx src/index.ts redeem 12345678-... bc1p...");
+    process.exit(1);
+  }
 
   // Claim the swap (reads preimage and keys from storage)
   // For arkade_to_evm, the target address was set at swap creation time
@@ -43,8 +53,13 @@ export async function redeemSwap(
   console.log("");
 
   try {
+    // Build claim options based on direction
+    const claimOptions = swap.direction === "evm_to_bitcoin"
+      ? { destinationAddress: destination!, feeRateSatPerVb: 2 }
+      : destination ? { destination } : undefined;
+
     // #region claim-gelato
-    const result = await client.claim(swapId, destination ? { destination } : undefined);
+    const result = await client.claim(swapId, claimOptions);
 
     if (result.success) {
       console.log("Claimed! TX:", result.txHash);
@@ -88,6 +103,19 @@ export async function redeemSwap(
       console.log("Use this call data with your Ethereum wallet to claim the swap.");
       console.log("Example using cast:");
       console.log(`  cast send ${result.ethereumClaimData.contractAddress} ${result.ethereumClaimData.callData} --private-key <YOUR_KEY>`);
+    } else if (swap.direction === "evm_to_bitcoin") {
+      // EVM-to-Bitcoin - on-chain BTC claim
+      console.log(`  Direction:    evm_to_bitcoin (on-chain BTC claim)`);
+      console.log(`  TX Hash:      ${result.txHash}`);
+      console.log(`  Destination:  ${destination}`);
+      console.log("");
+      console.log(`  Message:      ${result.message}`);
+      console.log("");
+      console.log("=".repeat(60));
+      console.log("");
+      console.log("The BTC claim transaction has been broadcast to the Bitcoin network.");
+      console.log("Use 'npm run watch -- " + swapId + "' to monitor until completion.");
+
     } else if (result.chain === "arkade") {
       // #region claim-vhtlc
       // client.claim() already performed the Arkade VHTLC claim above.

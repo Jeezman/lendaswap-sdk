@@ -6,7 +6,7 @@
 import {type Client, type EvmChain} from "@lendasat/lendaswap-sdk-pure";
 import {mnemonicToAccount} from "viem/accounts";
 
-type SwapType = "lightning" | "arkade" | "bitcoin" | "bitcoin-to-arkade" | "evm-to-arkade" | "evm-to-lightning";
+type SwapType = "lightning" | "arkade" | "bitcoin" | "bitcoin-to-arkade" | "evm-to-arkade" | "evm-to-lightning" | "evm-to-bitcoin";
 
 /** Format an amount from smallest units to human-readable with the raw value */
 function formatAmount(amount: number, decimals: number, symbol: string): string {
@@ -60,6 +60,11 @@ export async function createSwap(
     console.error("EVM to Lightning Examples:");
     console.error("  tsx src/index.ts swap usdc_pol btc_lightning lnbc... 0xYourEvmAddress");
     console.error("  tsx src/index.ts swap usdc_arb btc_lightning lnbc... 0xYourEvmAddress");
+    console.error("");
+    console.error("EVM to Bitcoin (on-chain) Examples:");
+    console.error("  tsx src/index.ts swap usdc_pol btc_onchain 1000000 bc1p...");
+    console.error("  tsx src/index.ts swap usdc_arb btc_onchain 1000000 bc1p...");
+    console.error("  tsx src/index.ts swap usdc_eth btc_onchain 1000000 bc1p...");
     process.exit(1);
   }
 
@@ -90,6 +95,10 @@ export async function createSwap(
     console.error("Supported EVM to Lightning:");
     console.error("  Source: usdc_pol, usdc_arb, usdc_eth (or any *_pol, *_arb, *_eth)");
     console.error("  Target: btc_lightning");
+    console.error("");
+    console.error("Supported EVM to Bitcoin (on-chain):");
+    console.error("  Source: usdc_pol, usdc_arb, usdc_eth (or any *_pol, *_arb, *_eth)");
+    console.error("  Target: btc_onchain");
     process.exit(1);
   }
 
@@ -107,6 +116,9 @@ export async function createSwap(
   } else if (swapType === "evm-to-arkade") {
     console.log(`  Amount: ${amountNum}`);
     console.log(`  Arkade Address: ${address}`);
+  } else if (swapType === "evm-to-bitcoin") {
+    console.log(`  Amount: ${amountNum}`);
+    console.log(`  BTC Destination: ${address}`);
   } else if (swapType === "bitcoin-to-arkade") {
     console.log(`  Sats to Receive: ${amountNum}`);
     console.log(`  Arkade Address: ${address}`);
@@ -262,6 +274,67 @@ export async function createSwap(
         `   HTLC Address: ${result.response.htlc_address_evm}`,
         ``,
         `Once funded, the server will pay the Lightning invoice.`,
+      ].join("\n");
+
+    } else if (swapType === "evm-to-bitcoin") {
+      // EVM to Bitcoin (on-chain) swap
+      // `address` is the BTC destination address for claiming
+      // EVM user address: try 5th positional arg, then derive from EVM_MNEMONIC
+      let evmUserAddress = process.argv[7]; // 5th positional arg after 'swap'
+
+      if (!evmUserAddress && evmMnemonic) {
+        const account = mnemonicToAccount(evmMnemonic);
+        evmUserAddress = account.address;
+        console.log(`  Using EVM address from EVM_MNEMONIC: ${evmUserAddress}`);
+      }
+
+      if (!evmUserAddress) {
+        console.error("Error: EVM to Bitcoin swaps require your EVM wallet address.");
+        console.error("Either provide it as the 5th argument or set EVM_MNEMONIC environment variable.");
+        console.error("");
+        console.error("Usage: tsx src/index.ts swap <sourceToken> btc_onchain <amount> <btcAddress> [evmAddress]");
+        console.error("Example: tsx src/index.ts swap usdc_pol btc_onchain 1000000 bc1p... 0x1234...");
+        process.exit(1);
+      }
+
+      const tokenInfo = EVM_TOKEN_MAP[from];
+      if (!tokenInfo) {
+        console.error(`Unknown source token: ${from}`);
+        console.error(`Supported tokens: ${Object.keys(EVM_TOKEN_MAP).join(", ")}`);
+        process.exit(1);
+      }
+
+      console.log(`  Chain ID: ${tokenInfo.evmChainId}`);
+      console.log(`  Token Address: ${tokenInfo.tokenAddress}`);
+      console.log(`  EVM User Address: ${evmUserAddress}`);
+      console.log("");
+
+      const amountBigInt = BigInt(amount);
+      const result = await client.createEvmToBitcoinSwap({
+        tokenAddress: tokenInfo.tokenAddress,
+        evmChainId: tokenInfo.evmChainId,
+        userAddress: evmUserAddress,
+        sourceAmount: amountBigInt,
+      });
+
+      console.log("Swap ID:", result.response.id);
+
+      swapId = result.response.id;
+      status = result.response.status;
+      keyIndex = result.swapParams.keyIndex;
+      sourceAmount = result.response.source_amount;
+      sourceDecimals = result.response.source_token.decimals;
+      sourceSymbol = result.response.source_token.symbol;
+      targetAmount = result.response.target_amount;
+      targetDecimals = 0; // sats
+      targetSymbol = "sats";
+      paymentInfo = [
+        `1. Fund via coordinator using 'npm run evm-fund -- ${result.response.id}'`,
+        `   This will swap ${sourceSymbol} → WBTC and lock into EVM HTLC`,
+        ``,
+        `2. Once the server funds the BTC HTLC, redeem with:`,
+        `   npm run redeem -- ${result.response.id} ${address}`,
+        `   (BTC will be sent to: ${address})`,
       ].join("\n");
 
     } else if (swapType === "bitcoin-to-arkade") {
@@ -459,6 +532,9 @@ function parseSwapType(from: string, to: string): SwapType | null {
 
   // EVM to Lightning
   if (to === "btc_lightning" && isEvmToken(from)) return "evm-to-lightning";
+
+  // EVM to Bitcoin (on-chain)
+  if ((to === "btc_onchain" || to === "bitcoin") && isEvmToken(from)) return "evm-to-bitcoin";
 
   return null;
 }

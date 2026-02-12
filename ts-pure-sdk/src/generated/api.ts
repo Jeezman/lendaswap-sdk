@@ -237,6 +237,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/swap/evm/bitcoin": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Create a chain-agnostic EVM-to-Bitcoin swap. */
+    post: operations["create_evm_to_bitcoin_swap"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/swap/lightning/arbitrum": {
     parameters: {
       query?: never;
@@ -354,9 +371,10 @@ export interface paths {
     get?: never;
     put?: never;
     /**
-     * Claims an Arkade-to-EVM swap gaslessly via the HTLCCoordinator contract.
-     * @description The server submits `coordinator.redeemAndExecute` on the client's behalf,
-     *     using the client's EIP-712 signature and secret.
+     * Claims an EVM-targeted swap gaslessly via the HTLCCoordinator contract.
+     * @description Supports both Arkade-to-EVM and Bitcoin-to-EVM swaps. The server submits
+     *     `coordinator.redeemAndExecute` on the client's behalf, using the client's
+     *     EIP-712 signature and secret.
      */
     post: operations["claim_via_gasless"];
     delete?: never;
@@ -373,7 +391,7 @@ export interface paths {
       cookie?: never;
     };
     /**
-     * Returns fresh 1inch DEX calldata for an Arkade-to-EVM swap.
+     * Returns fresh 1inch DEX calldata for an EVM-targeted swap (Arkade-to-EVM or Bitcoin-to-EVM).
      * @description The calldata is generated with `receiver = destination` so that 1inch
      *     sends the output tokens directly to the user's address, avoiding an
      *     extra sweep transfer.
@@ -666,17 +684,29 @@ export interface components {
       btc_refund_locktime: number;
       /** @description The server's pk inside the htlc */
       btc_server_pk: string;
-      /** @description EVM chain (Polygon, Ethereum) */
+      /** @description EVM chain name (e.g. "Polygon", "Ethereum", "Arbitrum") */
       chain: string;
-      /** @description Client's EVM address (where tokens will be received) */
+      /** @description EVM address that will sign the HTLC claim (SDK-derived for gasless claims) */
       client_evm_address: string;
       /**
        * Format: date-time
        * @description Timestamp of when the swap was created
        */
       created_at: string;
+      /**
+       * Format: int64
+       * @description Numeric EVM chain ID (e.g. 137, 1, 42161)
+       */
+      evm_chain_id: number;
       /** @description EVM HTLC claim transaction ID (user claim) */
       evm_claim_txid?: string | null;
+      /** @description HTLCCoordinator contract address (for redeemAndExecute) */
+      evm_coordinator_address: string;
+      /**
+       * Format: int64
+       * @description Amount of WBTC sats locked in the EVM HTLC
+       */
+      evm_expected_sats: number;
       /** @description EVM HTLC fund transaction ID */
       evm_fund_txid?: string | null;
       /**
@@ -716,24 +746,12 @@ export interface components {
        * @description How much the user will receive in the target token's smallest unit
        */
       target_amount: number;
-      /** @description Target token info */
-      target_token: components["schemas"]["TokenInfo"];
-      /**
-       * Format: int64
-       * @description EVM chain ID
-       */
-      evm_chain_id: number;
-      /** @description HTLCCoordinator contract address for gasless claims */
-      evm_coordinator_address: string;
-      /** @description WBTC token contract address on the target EVM chain (the token locked in the HTLC) */
-      wbtc_address: string;
-      /**
-       * Format: int64
-       * @description Expected amount in the EVM HTLC (satoshis of WBTC)
-       */
-      evm_expected_sats: number;
       /** @description EVM address where tokens are swept after the claim (user's final destination) */
       target_evm_address?: string | null;
+      /** @description Target token info */
+      target_token: components["schemas"]["TokenInfo"];
+      /** @description WBTC token contract address on the target EVM chain (the token locked in the HTLC) */
+      wbtc_address: string;
     };
     /** @description BTC → Arkade swap response */
     BtcToArkadeSwapResponse: {
@@ -1089,6 +1107,108 @@ export interface components {
       /** Format: int64 */
       vhtlc_refund_locktime: number;
     };
+    /**
+     * @description Request to create an EVM-to-Bitcoin swap.
+     *
+     *     User sends any ERC-20 token on EVM, receives on-chain BTC (Taproot HTLC).
+     *     The caller specifies the source chain via `evm_chain_id` and the token
+     *     via its ERC-20 contract `token_address`.
+     */
+    EvmToBitcoinSwapRequest: {
+      /**
+       * Format: int64
+       * @description Source token amount in smallest units (mutually exclusive with `amount_out`).
+       */
+      amount_in?: number | null;
+      /**
+       * Format: int64
+       * @description Desired BTC output in sats (mutually exclusive with `amount_in`).
+       */
+      amount_out?: number | null;
+      /** @description User's BTC public key for claiming BTC from the on-chain Taproot HTLC. */
+      claim_pk: string;
+      /**
+       * Format: int64
+       * @description Numeric EVM chain ID: 1 (Ethereum), 137 (Polygon), 42161 (Arbitrum).
+       */
+      evm_chain_id: number;
+      /** @description Hash lock (0x-prefixed 32-byte hex). Client generates secret, computes SHA256(secret). */
+      hash_lock: string;
+      /** @description Optional referral code for tracking. */
+      referral_code?: string | null;
+      /** @description ERC-20 contract address of the source token on the EVM chain. */
+      token_address: string;
+      /** @description User's EVM address (sender of the ERC-20 token). */
+      user_address: string;
+      /** @description User ID derived from wallet for recovery purposes. */
+      user_id: string;
+    };
+    /** @description EVM → Bitcoin (on-chain) swap response */
+    EvmToBitcoinSwapResponse: {
+      btc_claim_txid?: string | null;
+      /**
+       * Format: int64
+       * @description Expected BTC amount (in sats) user will receive
+       */
+      btc_expected_sats: number;
+      btc_fund_txid?: string | null;
+      /** @description BTC hash lock (RIPEMD160 of EVM hash lock) */
+      btc_hash_lock: string;
+      /** @description On-chain BTC Taproot HTLC address (server creates, user claims) */
+      btc_htlc_address: string;
+      /**
+       * Format: int64
+       * @description BTC HTLC refund locktime (unix timestamp)
+       */
+      btc_refund_locktime: number;
+      /** @description Server's x-only public key for refunding BTC */
+      btc_server_refund_pk: string;
+      /** @description User's x-only public key for claiming BTC */
+      btc_user_claim_pk: string;
+      /** @description EVM chain name */
+      chain: string;
+      /** @description User's EVM address (funds the EVM HTLC) */
+      client_evm_address: string;
+      /** Format: date-time */
+      created_at: string;
+      /**
+       * Format: int64
+       * @description Numeric EVM chain ID
+       */
+      evm_chain_id: number;
+      evm_claim_txid?: string | null;
+      /**
+       * Format: int64
+       * @description Expected WBTC amount (in sats) on EVM
+       */
+      evm_expected_sats: number;
+      evm_fund_txid?: string | null;
+      /** @description EVM hash lock (SHA-256, 0x-prefixed 32-byte hex) */
+      evm_hash_lock: string;
+      /** @description EVM HTLC contract address (user creates, server claims) */
+      evm_htlc_address: string;
+      /**
+       * Format: int64
+       * @description EVM HTLC refund locktime (unix timestamp)
+       */
+      evm_refund_locktime: number;
+      /** Format: int64 */
+      fee_sats: number;
+      id: string;
+      network: string;
+      /** @description Server's EVM address (claims the EVM HTLC) */
+      server_evm_address: string;
+      /**
+       * Format: int64
+       * @description Source token amount in smallest units
+       */
+      source_amount: number;
+      source_token: components["schemas"]["TokenInfo"];
+      status: string;
+      target_token: components["schemas"]["TokenInfo"];
+      /** @description WBTC token contract address on the EVM chain */
+      wbtc_address: string;
+    };
     /** @description EVM → BTC swap response */
     EvmToBtcSwapResponse: components["schemas"]["SwapCommonFields"] & {
       /** @description Token approval transaction hash */
@@ -1176,6 +1296,10 @@ export interface components {
       | (components["schemas"]["EvmToArkadeSwapResponse"] & {
           /** @enum {string} */
           direction: "evm_to_arkade";
+        })
+      | (components["schemas"]["EvmToBitcoinSwapResponse"] & {
+          /** @enum {string} */
+          direction: "evm_to_bitcoin";
         });
     LightningToArbitrumSwapRequest: {
       /**
@@ -2092,6 +2216,48 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["EvmToArkadeGenericSwapResponse"];
+        };
+      };
+      /** @description Bad request - invalid parameters */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal server error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  create_evm_to_bitcoin_swap: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["EvmToBitcoinSwapRequest"];
+      };
+    };
+    responses: {
+      /** @description Swap created successfully */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EvmToBitcoinSwapResponse"];
         };
       };
       /** @description Bad request - invalid parameters */
