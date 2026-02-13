@@ -13,22 +13,10 @@ export type SwapStatus = components["schemas"]["SwapStatus"];
 export type QuoteResponse = components["schemas"]["QuoteResponse"];
 export type Chain = components["schemas"]["Chain"];
 export type GetSwapResponse = components["schemas"]["GetSwapResponse"];
-export type BtcToEvmSwapResponse =
-  components["schemas"]["BtcToEvmSwapResponse"];
-export type EvmToBtcSwapResponse =
-  components["schemas"]["EvmToBtcSwapResponse"];
 export type BtcToArkadeSwapResponse =
   components["schemas"]["BtcToArkadeSwapResponse"];
 export type EvmToArkadeSwapResponse =
   components["schemas"]["EvmToArkadeSwapResponse"];
-
-// Lightning swap request types (still chain-specific)
-export type LightningToPolygonSwapRequest =
-  components["schemas"]["LightningToPolygonSwapRequest"];
-export type LightningToEthereumSwapRequest =
-  components["schemas"]["LightningToEthereumSwapRequest"];
-export type LightningToArbitrumSwapRequest =
-  components["schemas"]["LightningToArbitrumSwapRequest"];
 
 // Gasless claim types
 export type ClaimGaslessRequest = components["schemas"]["ClaimGaslessRequest"];

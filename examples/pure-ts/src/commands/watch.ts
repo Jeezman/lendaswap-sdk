@@ -154,60 +154,56 @@ function printPendingDetails(swap: GetSwapResponse): void {
   console.log("Waiting for your funding...");
   console.log("");
 
-  if (swap.direction === "btc_to_evm") {
-    // Lightning or Arkade swap
-    if ("ln_invoice" in swap && swap.ln_invoice) {
+  if (swap.direction === "lightning_to_evm") {
+    if ("boltz_invoice" in swap && swap.boltz_invoice) {
       console.log("Pay this Lightning Invoice:");
-      console.log(`  ${swap.ln_invoice}`);
+      console.log(`  ${swap.boltz_invoice}`);
     }
-    if ("htlc_address_arkade" in swap && swap.htlc_address_arkade) {
-      console.log("Or fund this Arkade VHTLC address:");
-      console.log(`  ${swap.htlc_address_arkade}`);
+  } else if (swap.direction === "btc_to_arkade" || swap.direction === "arkade_to_evm") {
+    if ("btc_vhtlc_address" in swap && swap.btc_vhtlc_address) {
+      console.log("Fund this Arkade VHTLC address:");
+      console.log(`  ${swap.btc_vhtlc_address}`);
     }
-    if ("source_amount" in swap) {
-      console.log("");
-      console.log(`Amount to send: ${swap.source_amount.toLocaleString()} sats`);
-    }
-  } else if (swap.direction === "onchain_to_evm") {
-    // Bitcoin on-chain swap
+  } else if (swap.direction === "bitcoin_to_evm") {
     if ("btc_htlc_address" in swap && swap.btc_htlc_address) {
       console.log("Send BTC to this address:");
       console.log(`  ${swap.btc_htlc_address}`);
     }
-    if ("source_amount" in swap) {
-      console.log("");
-      console.log(`Amount to send: ${swap.source_amount.toLocaleString()} sats`);
+  } else if (swap.direction === "evm_to_arkade" || swap.direction === "evm_to_bitcoin" || swap.direction === "evm_to_lightning") {
+    if ("evm_htlc_address" in swap && swap.evm_htlc_address) {
+      console.log("Fund this EVM HTLC:");
+      console.log(`  ${swap.evm_htlc_address}`);
     }
+  }
+
+  if ("source_amount" in swap) {
+    console.log("");
+    console.log(`Amount to send: ${swap.source_amount.toLocaleString()}`);
   }
 }
 
 function printFundingTxId(swap: GetSwapResponse): void {
-  if (swap.direction === "btc_to_evm" && "bitcoin_htlc_fund_txid" in swap && swap.bitcoin_htlc_fund_txid) {
-    console.log(`Funding TX: ${swap.bitcoin_htlc_fund_txid}`);
-  } else if (swap.direction === "onchain_to_evm" && "btc_fund_txid" in swap && swap.btc_fund_txid) {
+  if ("btc_fund_txid" in swap && swap.btc_fund_txid) {
     console.log(`Funding TX: ${swap.btc_fund_txid}`);
+  } else if ("evm_fund_txid" in swap && swap.evm_fund_txid) {
+    console.log(`Funding TX: ${swap.evm_fund_txid}`);
   }
 }
 
 function printServerFundingDetails(swap: GetSwapResponse): void {
-  if (swap.direction === "btc_to_evm" && "evm_htlc_fund_txid" in swap && swap.evm_htlc_fund_txid) {
-    console.log(`Server funding TX: ${swap.evm_htlc_fund_txid}`);
-  } else if (swap.direction === "onchain_to_evm" && "evm_fund_txid" in swap && swap.evm_fund_txid) {
+  if ("evm_fund_txid" in swap && swap.evm_fund_txid) {
     console.log(`Server funding TX: ${swap.evm_fund_txid}`);
   }
-
-  if ("htlc_address_evm" in swap && swap.htlc_address_evm) {
-    console.log(`EVM HTLC: ${swap.htlc_address_evm}`);
-  } else if ("evm_htlc_address" in swap && swap.evm_htlc_address) {
+  if ("evm_htlc_address" in swap && swap.evm_htlc_address) {
     console.log(`EVM HTLC: ${swap.evm_htlc_address}`);
   }
 }
 
 function printRedeemDetails(swap: GetSwapResponse): void {
-  if (swap.direction === "btc_to_evm" && "evm_htlc_claim_txid" in swap && swap.evm_htlc_claim_txid) {
-    console.log(`Redeem TX: ${swap.evm_htlc_claim_txid}`);
-  } else if (swap.direction === "onchain_to_evm" && "evm_claim_txid" in swap && swap.evm_claim_txid) {
+  if ("evm_claim_txid" in swap && swap.evm_claim_txid) {
     console.log(`Redeem TX: ${swap.evm_claim_txid}`);
+  } else if ("btc_claim_txid" in swap && swap.btc_claim_txid) {
+    console.log(`Redeem TX: ${swap.btc_claim_txid}`);
   }
 }
 

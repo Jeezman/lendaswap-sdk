@@ -8,9 +8,7 @@ import type {
   EvmToBitcoinSwapResponse as ApiEvmToBitcoinSwapResponse,
   ArkadeToEvmSwapResponse,
   BtcToArkadeSwapResponse,
-  BtcToEvmSwapResponse,
   EvmToArkadeGenericSwapResponse,
-  EvmToBtcSwapResponse,
   TokenId,
 } from "../api/client.js";
 import type { SwapParams } from "../signer";
@@ -101,14 +99,6 @@ export interface BitcoinToEvmSwapOptions {
   referralCode?: string;
 }
 
-/** Result of creating a BTC to EVM swap */
-export interface BtcToEvmSwapResult {
-  /** The swap response from the API */
-  response: BtcToEvmSwapResponse;
-  /** The swap parameters used (for storage/recovery) */
-  swapParams: SwapParams;
-}
-
 /** Response from the generic `/swap/bitcoin/evm` endpoint. */
 export type BitcoinToEvmSwapResponse = ApiBitcoinToEvmSwapResponse;
 
@@ -157,7 +147,7 @@ export interface EvmToArkadeSwapOptions {
 /** Result of creating an EVM to Arkade swap */
 export interface EvmToArkadeSwapResult {
   /** The swap response from the API */
-  response: EvmToBtcSwapResponse;
+  response: EvmToArkadeGenericSwapResponse;
   /** The swap parameters used (for storage/recovery) */
   swapParams: SwapParams;
 }
@@ -174,14 +164,6 @@ export interface EvmToLightningSwapOptions {
   userAddress: string;
   /** Optional referral code for fee exemption */
   referralCode?: string;
-}
-
-/** Result of creating an EVM to Lightning swap */
-export interface EvmToLightningSwapResult {
-  /** The swap response from the API */
-  response: EvmToBtcSwapResponse;
-  /** The swap parameters used (for storage/recovery) */
-  swapParams: SwapParams;
 }
 
 /** Options for creating a Lightning-to-EVM swap via the generic endpoint */

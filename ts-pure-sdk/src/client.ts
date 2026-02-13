@@ -2,12 +2,10 @@ import {
   type ApiClient,
   type ArkadeToEvmSwapResponse,
   type BtcToArkadeSwapResponse,
-  type BtcToEvmSwapResponse,
   type Chain,
   createApiClient,
   type EvmToArkadeSwapResponse,
   type EvmToBitcoinSwapResponse,
-  type EvmToBtcSwapResponse,
   type GetSwapResponse,
   type LightningToEvmSwapResponse,
   type QuoteResponse,
@@ -21,37 +19,25 @@ import {
   type BitcoinToArkadeSwapResult,
   type BitcoinToEvmSwapOptions,
   type BitcoinToEvmSwapResult,
-  type BtcToEvmSwapOptions,
-  type BtcToEvmSwapResult,
   type CreateSwapContext,
   createArkadeToEvmSwapGeneric,
   createBitcoinToArkadeSwap,
   createBitcoinToEvmSwap,
   createEvmToArkadeSwapGeneric,
   createEvmToBitcoinSwap,
-  createEvmToLightningSwap,
   createEvmToLightningSwapGeneric,
-  createLightningToEvmSwap,
   createLightningToEvmSwapGeneric,
   type EvmToArkadeSwapGenericOptions,
   type EvmToArkadeSwapGenericResult,
-  type EvmToArkadeSwapOptions,
-  type EvmToArkadeSwapResult,
   type EvmToBitcoinSwapOptions,
   type EvmToBitcoinSwapResult,
   type EvmToLightningSwapGenericOptions,
   type EvmToLightningSwapGenericResult,
-  type EvmToLightningSwapOptions,
-  type EvmToLightningSwapResult,
   type LightningToEvmSwapGenericOptions,
   type LightningToEvmSwapGenericResult,
 } from "./create";
 import { broadcastTransaction, findOutputByAddress } from "./esplora.js";
-import {
-  encodeApproveCallData,
-  encodeHtlcErc20RefundCallData,
-  encodeRefundSwapCallData,
-} from "./evm";
+import { encodeApproveCallData, encodeHtlcErc20RefundCallData } from "./evm";
 import {
   buildArkadeClaim,
   type ClaimGaslessResult,
@@ -89,7 +75,6 @@ export type {
   BitcoinToEvmSwapResponse,
   BitcoinToEvmSwapResult,
   BtcToEvmSwapOptions,
-  BtcToEvmSwapResult,
   EvmChain,
   EvmToArkadeSwapGenericOptions,
   EvmToArkadeSwapGenericResult,
@@ -98,7 +83,6 @@ export type {
   EvmToBitcoinSwapOptions,
   EvmToBitcoinSwapResult,
   EvmToLightningSwapOptions,
-  EvmToLightningSwapResult,
 } from "./create/index.js";
 
 import type { BitcoinToEvmSwapResponse } from "./create";
@@ -885,8 +869,6 @@ export class Client {
     const swap = stored.response;
 
     if (
-      swap.direction !== "btc_to_evm" &&
-      swap.direction !== "evm_to_btc" &&
       swap.direction !== "btc_to_arkade" &&
       swap.direction !== "arkade_to_evm" &&
       swap.direction !== "evm_to_arkade"
@@ -909,10 +891,8 @@ export class Client {
           | (ArkadeToEvmSwapResponse & { direction: "arkade_to_evm" })
           | (EvmToArkadeSwapResponse & { direction: "evm_to_arkade" })
       ).btc_vhtlc_address;
-    } else {
-      vhtlcAddress = (swap as BtcToEvmSwapResponse | EvmToBtcSwapResponse)
-        .htlc_address_arkade;
     }
+
     if (!vhtlcAddress) {
       throw new Error("Swap does not have an Arkade VHTLC address");
     }
@@ -1030,11 +1010,6 @@ export class Client {
           direction: "btc_to_arkade";
         };
         destinationAddress = btcToArkadeSwap.target_arkade_address;
-      } else if (swap.direction === "evm_to_btc") {
-        const evmSwap = swap as EvmToBtcSwapResponse & {
-          direction: "evm_to_btc";
-        };
-        destinationAddress = evmSwap.user_address_arkade ?? undefined;
       } else if (swap.direction === "evm_to_arkade") {
         // For evm_to_arkade swaps, check if we have target_arkade_address in stored response
         // The creation response (EvmToArkadeGenericSwapResponse) doesn't have it,
@@ -1231,7 +1206,6 @@ export class Client {
 
     // Ensure we have an Arkade-target swap
     if (
-      swap.direction !== "evm_to_btc" &&
       swap.direction !== "btc_to_arkade" &&
       swap.direction !== "evm_to_arkade"
     ) {
@@ -1295,23 +1269,7 @@ export class Client {
         evmToArkadeSwap.unilateral_refund_without_receiver_delay;
       network = evmToArkadeSwap.network;
     } else {
-      // Old evm_to_btc endpoint (targeting Arkade)
-      const evmToArkadeSwap = swap as EvmToBtcSwapResponse & {
-        direction: "evm_to_btc";
-      };
-      // For claim: lendaswap is SENDER in the VHTLC, user is RECEIVER
-      // In the API response:
-      //   sender_pk = client's public key
-      //   receiver_pk = lendaswap's public key
-      lendaswapPubKey = evmToArkadeSwap.receiver_pk;
-      arkadeServerPubKey = evmToArkadeSwap.server_pk;
-      vhtlcAddress = evmToArkadeSwap.htlc_address_arkade;
-      refundLocktime = evmToArkadeSwap.vhtlc_refund_locktime;
-      unilateralClaimDelay = evmToArkadeSwap.unilateral_claim_delay;
-      unilateralRefundDelay = evmToArkadeSwap.unilateral_refund_delay;
-      unilateralRefundWithoutReceiverDelay =
-        evmToArkadeSwap.unilateral_refund_without_receiver_delay;
-      network = evmToArkadeSwap.network;
+      throw Error("Unsupported pair");
     }
 
     try {
@@ -1391,16 +1349,6 @@ export class Client {
     // Use direction to determine refund method (source_token may be a TokenSummary object)
     const direction = swap.direction;
 
-    // Lightning (btc_to_evm) swaps cannot be refunded - they auto-expire
-    if (direction === "btc_to_evm") {
-      return {
-        success: false,
-        message:
-          "Lightning swaps cannot be refunded. If the invoice was paid, " +
-          "it will refund automatically.",
-      };
-    }
-
     // Arkade swaps require off-chain refund
     if (direction === "arkade_to_evm") {
       return this.#buildArkadeRefund(id, swap, options as ArkadeRefundOptions);
@@ -1414,10 +1362,6 @@ export class Client {
     // EVM-sourced swaps return calldata for manual execution
     if (direction === "evm_to_arkade") {
       return this.#buildEvmToArkadeRefund(id, swap);
-    }
-
-    if (direction === "evm_to_btc") {
-      return this.#buildEvmToBtcRefund(id, swap);
     }
 
     // EVM-to-Bitcoin uses coordinator refund (same pattern as EVM-to-Arkade)
@@ -1905,7 +1849,7 @@ export class Client {
     }
 
     // Ensure we have a btc_to_evm swap response (Arkade swaps)
-    if (swap.direction !== "btc_to_evm" && swap.direction !== "arkade_to_evm") {
+    if (swap.direction !== "arkade_to_evm") {
       return {
         success: false,
         message: `Expected btc_to_evm swap, got ${swap.direction}`,
@@ -1938,19 +1882,7 @@ export class Client {
       hashLockRaw = s.hash_lock;
       network = s.network;
     } else {
-      const s = swap as BtcToEvmSwapResponse & {
-        direction: "btc_to_evm";
-      };
-      lendaswapPubKey = s.receiver_pk;
-      arkadeServerPubKey = s.server_pk;
-      vhtlcAddress = s.htlc_address_arkade;
-      vhtlcRefundLocktime = s.vhtlc_refund_locktime;
-      unilateralClaimDelay = s.unilateral_claim_delay;
-      unilateralRefundDelay = s.unilateral_refund_delay;
-      unilateralRefundWithoutReceiverDelay =
-        s.unilateral_refund_without_receiver_delay;
-      hashLockRaw = s.hash_lock;
-      network = s.network;
+      throw Error("Unsupported funding combination");
     }
 
     // Check refund locktime
@@ -2061,37 +1993,6 @@ export class Client {
       evmRefundData: {
         to: coordinator_address,
         data: calldata,
-        timelockExpired,
-        timelockExpiry: timelock,
-      },
-    };
-  }
-
-  /**
-   * Builds refund data for an EVM-to-BTC swap (direct HTLC refund).
-   * @internal
-   */
-  async #buildEvmToBtcRefund(
-    id: string,
-    swap: GetSwapResponse,
-  ): Promise<RefundResult> {
-    const evmSwap = swap as EvmToBtcSwapResponse;
-    const htlcAddress = evmSwap.htlc_address_evm;
-    const timelock = evmSwap.evm_refund_locktime;
-
-    const now = Math.floor(Date.now() / 1000);
-    const timelockExpired = now >= timelock;
-
-    const refundData = encodeRefundSwapCallData(htlcAddress, id);
-
-    return {
-      success: true,
-      message: timelockExpired
-        ? "EVM refund calldata ready. Submit this transaction with your EVM wallet."
-        : `Timelock has not expired yet. Refund will be available at ${new Date(timelock * 1000).toISOString()}.`,
-      evmRefundData: {
-        to: refundData.to,
-        data: refundData.data,
         timelockExpired,
         timelockExpiry: timelock,
       },
@@ -2242,17 +2143,6 @@ export class Client {
   }
 
   /**
-   * @deprecated Use `createArkadeToEvmSwapGeneric` instead. Chain-specific endpoints have been removed.
-   */
-  async createArkadeToEvmSwap(
-    _options: BtcToEvmSwapOptions,
-  ): Promise<BtcToEvmSwapResult> {
-    throw new Error(
-      "createArkadeToEvmSwap is deprecated. Use createArkadeToEvmSwapGeneric instead.",
-    );
-  }
-
-  /**
    * Creates a new Arkade-to-EVM swap via the generic chain-agnostic endpoint.
    *
    * Uses the `/swap/arkade/evm` endpoint which supports any ERC-20 token
@@ -2279,32 +2169,6 @@ export class Client {
     options: ArkadeToEvmSwapOptions,
   ): Promise<ArkadeToEvmSwapResult> {
     return createArkadeToEvmSwapGeneric(options, this.#getCreateContext());
-  }
-
-  /**
-   * Creates a new Lightning to EVM swap.
-   *
-   * Automatically derives swap parameters and increments the key index.
-   *
-   * @param options - The swap options.
-   * @returns The swap response and parameters for storage.
-   * @throws Error if the swap creation fails.
-   *
-   * @example
-   * ```ts
-   * const result = await client.createLightningToEvmSwap({
-   *   targetAddress: "0x1234...",
-   *   targetToken: "usdc_pol",
-   *   targetChain: "polygon",
-   *   sourceAmount: 100000, // 100k sats
-   * });
-   * console.log("Pay this invoice:", result.response.ln_invoice);
-   * ```
-   */
-  async createLightningToEvmSwap(
-    options: BtcToEvmSwapOptions,
-  ): Promise<BtcToEvmSwapResult> {
-    return createLightningToEvmSwap(options, this.#getCreateContext());
   }
 
   /**
@@ -2382,42 +2246,6 @@ export class Client {
   // =========================================================================
 
   /**
-   * Creates a new EVM to Arkade swap.
-   *
-   * This allows users to swap ERC-20 tokens (USDC, USDT, etc.) from EVM chains
-   * to receive BTC on Arkade.
-   *
-   * Automatically derives swap parameters and increments the key index.
-   *
-   * @param options - The swap options.
-   * @returns The swap response and parameters for storage.
-   * @throws Error if the swap creation fails.
-   *
-   * @example
-   * ```ts
-   * const result = await client.createEvmToArkadeSwap({
-   *   sourceChain: "polygon",
-   *   sourceToken: "usdc_pol",
-   *   sourceAmount: 100.0, // 100 USDC
-   *   targetAddress: "ark1q...", // Arkade address
-   *   userAddress: "0x1234...", // EVM wallet address
-   * });
-   * console.log("Approve token:", result.response.source_token_address);
-   * console.log("HTLC contract:", result.response.htlc_address_evm);
-   * ```
-   */
-  /**
-   * @deprecated Use `createEvmToArkadeSwapGeneric` instead. Chain-specific endpoints have been removed.
-   */
-  async createEvmToArkadeSwap(
-    _options: EvmToArkadeSwapOptions,
-  ): Promise<EvmToArkadeSwapResult> {
-    throw new Error(
-      "createEvmToArkadeSwap is deprecated. Use createEvmToArkadeSwapGeneric instead.",
-    );
-  }
-
-  /**
    * Creates a new EVM-to-Arkade swap via the generic endpoint.
    *
    * Uses the chain-agnostic `/swap/evm/arkade` endpoint which supports any
@@ -2475,34 +2303,6 @@ export class Client {
   }
 
   /**
-   * Creates a new EVM to Lightning swap.
-   *
-   * This allows users to swap ERC-20 tokens (USDC, USDT, etc.) from EVM chains
-   * to pay a Lightning invoice.
-   *
-   * @param options - The swap options including bolt11 invoice.
-   * @returns The swap response and parameters for storage.
-   * @throws Error if the swap creation fails.
-   *
-   * @example
-   * ```ts
-   * const result = await client.createEvmToLightningSwap({
-   *   sourceChain: "polygon",
-   *   sourceToken: "usdc_pol",
-   *   bolt11Invoice: "lnbc...", // Lightning invoice to pay
-   *   userAddress: "0x1234...", // EVM wallet address
-   * });
-   * console.log("Approve token:", result.response.source_token_address);
-   * console.log("HTLC contract:", result.response.htlc_address_evm);
-   * ```
-   */
-  async createEvmToLightningSwap(
-    options: EvmToLightningSwapOptions,
-  ): Promise<EvmToLightningSwapResult> {
-    return createEvmToLightningSwap(options, this.#getCreateContext());
-  }
-
-  /**
    * Creates a new EVM to Lightning swap using the chain-agnostic generic endpoint.
    *
    * This allows users to swap any ERC-20 token from any supported EVM chain
@@ -2531,147 +2331,6 @@ export class Client {
   }
 
   // =========================================================================
-  // EVM HTLC Funding Helpers
-  // =========================================================================
-
-  /**
-   * Gets the call data needed to fund an EVM-to-Arkade/Lightning swap.
-   *
-   * Returns both:
-   * 1. `approve` - ERC20 approve call data (computed locally)
-   * 2. `createSwap` - HTLC createSwap call data (from server)
-   *
-   * @param swapId - The UUID of the swap.
-   * @param tokenDecimals - Decimals of the source token (e.g., 6 for USDC).
-   * @param approveMax - If true, approves max uint256. If false, approves exact amount. Default: true.
-   * @returns The approve and createSwap call data.
-   *
-   * @example
-   * ```ts
-   * const swap = await client.createEvmToArkadeSwap({...});
-   *
-   * // Get funding call data
-   * const funding = await client.getEvmFundingCallData(swap.response.id, 6);
-   *
-   * // Step 1: Approve token spend
-   * await wallet.sendTransaction({
-   *   to: funding.approve.to,
-   *   data: funding.approve.data,
-   * });
-   *
-   * // Step 2: Create the swap
-   * await wallet.sendTransaction({
-   *   to: funding.createSwap.to,
-   *   data: funding.createSwap.data,
-   * });
-   * ```
-   */
-  async getEvmFundingCallData(
-    swapId: string,
-    tokenDecimals: number,
-    approveMax = true,
-  ): Promise<EvmFundingCallData> {
-    const swap = await this.getSwap(swapId);
-
-    if (swap.direction !== "evm_to_btc" && swap.direction !== "evm_to_arkade") {
-      throw new Error(
-        `Expected evm_to_btc swap, got ${swap.direction}. Even funding call data method is for EVM-to-Arkade/Lightning swaps.`,
-      );
-    }
-
-    const evmSwap = swap as EvmToBtcSwapResponse & { direction: "evm_to_btc" };
-
-    if (!evmSwap.create_swap_tx) {
-      throw new Error("Server did not return create_swap_tx call data");
-    }
-
-    // Calculate approve amount
-    const exactAmount = BigInt(
-      Math.floor(evmSwap.source_amount * 10 ** tokenDecimals),
-    );
-    const maxUint256 = BigInt(
-      "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-    );
-    const approveAmount = approveMax ? maxUint256 : exactAmount;
-
-    // Build approve call data locally
-    const approve = encodeApproveCallData(
-      evmSwap.source_token_address,
-      evmSwap.htlc_address_evm,
-      approveAmount,
-    );
-
-    return {
-      approve: {
-        to: approve.to,
-        data: approve.data,
-      },
-      createSwap: {
-        to: evmSwap.htlc_address_evm,
-        data: evmSwap.create_swap_tx,
-      },
-    };
-  }
-
-  /**
-   * Gets call data for refunding an EVM HTLC.
-   *
-   * For EVM-to-Arkade/Lightning swaps, if the swap times out (server doesn't
-   * complete it), users can refund their tokens by calling refundSwap on
-   * the HTLC contract.
-   *
-   * @param swapId - The UUID of the swap.
-   * @returns The refund call data.
-   *
-   * @example
-   * ```ts
-   * // Get refund call data
-   * const refund = await client.getEvmRefundCallData(swapId);
-   *
-   * // Submit the refund transaction
-   * await wallet.sendTransaction({
-   *   to: refund.to,
-   *   data: refund.data,
-   * });
-   * ```
-   */
-  async getEvmRefundCallData(swapId: string): Promise<{
-    to: string;
-    data: string;
-    timelockExpired: boolean;
-    timelockExpiry: number;
-  }> {
-    // Try to get from storage first
-    const storedSwap = this.#swapStorage
-      ? await this.#swapStorage.get(swapId)
-      : null;
-
-    const swap = storedSwap?.response ?? (await this.getSwap(swapId));
-
-    if (swap.direction !== "evm_to_btc" && swap.direction !== "evm_to_arkade") {
-      throw new Error(
-        `Expected evm_to_btc swap, got ${swap.direction}. Evm refund call data is for EVM-to-Arkade/Lightning swaps.`,
-      );
-    }
-
-    const evmSwap = swap as EvmToBtcSwapResponse;
-    const htlcAddress = evmSwap.htlc_address_evm;
-    const timelock = evmSwap.evm_refund_locktime;
-
-    const now = Math.floor(Date.now() / 1000);
-    const timelockExpired = now >= timelock;
-
-    const refundData = encodeRefundSwapCallData(htlcAddress, swapId);
-
-    return {
-      to: refundData.to,
-      data: refundData.data,
-      timelockExpired,
-      timelockExpiry: timelock,
-    };
-  }
-
-  // =========================================================================
   // Coordinator Funding (EVM-to-BTC via DEX + HTLC)
   // =========================================================================
 
@@ -2685,14 +2344,13 @@ export class Client {
    * swap calldata and computes the refundCallsHash.
    *
    * @param swapId - The UUID of the swap.
-   * @param tokenDecimals - Decimals of the source token (e.g., 6 for USDC).
    * @param approveMax - If true, approves max uint256. If false, approves exact amount. Default: true.
    * @returns The approve and executeAndCreate call data.
    *
    * @example
    * ```ts
    * const swap = await client.createEvmToArkadeSwap({...});
-   * const funding = await client.getCoordinatorFundingCallData(swap.response.id, 6);
+   * const funding = await client.getCoordinatorFundingCallData(swap.response.id);
    *
    * // Step 1: Approve source token to coordinator
    * await wallet.sendTransaction({ to: funding.approve.to, data: funding.approve.data });
@@ -2703,13 +2361,11 @@ export class Client {
    */
   async getCoordinatorFundingCallData(
     swapId: string,
-    tokenDecimals: number,
     approveMax = true,
   ): Promise<CoordinatorFundingCallData> {
     const swap = await this.getSwap(swapId);
 
     if (
-      swap.direction !== "evm_to_btc" &&
       swap.direction !== "evm_to_arkade" &&
       swap.direction !== "evm_to_bitcoin"
     ) {
@@ -2731,12 +2387,7 @@ export class Client {
       };
       exactAmount = BigInt(evmSwap.source_amount);
     } else {
-      const evmSwap = swap as EvmToBtcSwapResponse & {
-        direction: "evm_to_btc";
-      };
-      exactAmount = BigInt(
-        Math.floor(evmSwap.source_amount * 10 ** tokenDecimals),
-      );
+      throw new Error("Unsupported swap direction");
     }
 
     // Fetch coordinator funding calldata from server
@@ -2783,98 +2434,6 @@ export class Client {
         to: serverData.coordinator_address,
         data: serverData.execute_and_create_calldata,
       },
-    };
-  }
-
-  /**
-   * Gets call data for refunding an EVM HTLC created via the coordinator.
-   *
-   * Two modes:
-   * - `"swap-back"`: calls `refundAndExecute` to swap WBTC back to source token via DEX
-   * - `"direct"`: calls `refundTo` to get WBTC directly
-   *
-   * Both are permissionless — anyone can call after the timelock expires.
-   *
-   * @param swapId - The UUID of the swap.
-   * @param mode - `"swap-back"` to reverse the DEX swap, or `"direct"` to get WBTC.
-   * @returns The refund call data.
-   */
-  async getCoordinatorRefundCallData(
-    swapId: string,
-    mode: "swap-back" | "direct",
-  ): Promise<CoordinatorRefundCallData> {
-    const swap = await this.getSwap(swapId);
-
-    if (swap.direction !== "evm_to_btc") {
-      throw new Error(
-        `Expected evm_to_btc swap, got ${swap.direction}. Coordinator refund call data method is for EVM-to-Arkade/Lightning swaps via coordinator.`,
-      );
-    }
-
-    const evmSwap = swap as EvmToBtcSwapResponse;
-    const timelock = evmSwap.evm_refund_locktime;
-    const now = Math.floor(Date.now() / 1000);
-    const timelockExpired = now >= timelock;
-
-    if (mode === "direct") {
-      // refundTo — get WBTC directly, no DEX swap
-      // We need to fetch swap details from server to get coordinator address and HTLC params
-      const baseUrl = this.#config.baseUrl.replace(/\/$/, "");
-      const url = `${baseUrl}/swap/${swapId}/refund-and-swap-calldata?mode=direct`;
-      const headers: Record<string, string> = {};
-      if (this.#config.apiKey) {
-        headers["X-API-Key"] = this.#config.apiKey;
-      }
-
-      const resp = await fetch(url, { headers });
-      if (!resp.ok) {
-        const body = await resp.text();
-        throw new Error(
-          `Failed to get coordinator refund calldata: ${resp.status} ${body}`,
-        );
-      }
-
-      const serverData = (await resp.json()) as {
-        coordinator_address: string;
-        calldata: string;
-      };
-
-      return {
-        to: serverData.coordinator_address,
-        data: serverData.calldata,
-        timelockExpired,
-        timelockExpiry: timelock,
-        mode,
-      };
-    }
-
-    // swap-back mode — refundAndExecute with reverse DEX swap
-    const baseUrl = this.#config.baseUrl.replace(/\/$/, "");
-    const url = `${baseUrl}/swap/${swapId}/refund-and-swap-calldata?mode=swap-back`;
-    const headers: Record<string, string> = {};
-    if (this.#config.apiKey) {
-      headers["X-API-Key"] = this.#config.apiKey;
-    }
-
-    const resp = await fetch(url, { headers });
-    if (!resp.ok) {
-      const body = await resp.text();
-      throw new Error(
-        `Failed to get coordinator refund calldata: ${resp.status} ${body}`,
-      );
-    }
-
-    const serverData = (await resp.json()) as {
-      coordinator_address: string;
-      calldata: string;
-    };
-
-    return {
-      to: serverData.coordinator_address,
-      data: serverData.calldata,
-      timelockExpired,
-      timelockExpiry: timelock,
-      mode,
     };
   }
 }

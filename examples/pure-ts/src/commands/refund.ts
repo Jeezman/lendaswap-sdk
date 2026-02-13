@@ -69,9 +69,9 @@ export async function refundSwap(
   console.log("");
 
   // Check which type of swap this is based on direction
-  const isOnchainSwap = swap.direction === "onchain_to_evm";
+  const isOnchainSwap = swap.direction === "bitcoin_to_evm";
   const isArkadeSwap = swap.direction === "arkade_to_evm";
-  const isEvmSwap = swap.direction === "evm_to_arkade" || swap.direction === "evm_to_btc";
+  const isEvmSwap = swap.direction === "evm_to_arkade" || swap.direction === "evm_to_bitcoin" || swap.direction === "evm_to_lightning";
 
   // Require destination address for refundable swaps (not EVM swaps)
   if ((isOnchainSwap || isArkadeSwap) && !actualDestination) {

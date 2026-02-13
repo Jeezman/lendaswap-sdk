@@ -112,6 +112,7 @@ export async function claim(
   // Arkade claims return data for manual execution with user's keys
   if (chain === "arkade") {
     // For EVM-to-Arkade swaps, we need specific fields from the swap
+    // @ts-expect-error
     const arkadeSwap = swap as {
       sender_pk: string;
       server_pk: string;

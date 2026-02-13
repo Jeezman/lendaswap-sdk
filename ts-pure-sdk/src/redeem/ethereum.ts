@@ -5,7 +5,7 @@
  * all original swap parameters for verification.
  */
 
-import type { BtcToEvmSwapResponse, GetSwapResponse } from "../api/client.js";
+import type { GetSwapResponse } from "../api/client.js";
 import type { ClaimResult } from "./types.js";
 
 /**
@@ -265,10 +265,6 @@ export function uuidToBytes32(uuid: string): string {
  * @returns The HTLC contract address or undefined if not found
  */
 function getEvmHtlcAddress(swap: GetSwapResponse): string | undefined {
-  // BtcToEvmSwapResponse uses htlc_address_evm
-  if ("htlc_address_evm" in swap) {
-    return (swap as BtcToEvmSwapResponse).htlc_address_evm;
-  }
   // Other EVM swap types use evm_htlc_address
   if ("evm_htlc_address" in swap) {
     return (swap as { evm_htlc_address: string }).evm_htlc_address;

@@ -133,28 +133,12 @@ export interface paths {
     /**
      * Get a quote for swapping BTC to/from EVM tokens
      * @description Specify exactly one of source_amount or target_amount.
-     *     Amounts are in the smallest unit of the respective token (satoshis for BTC, raw units for EVM tokens).
+     *     Amounts are in the smallest unit of the respective token (satoshis for BTC, raw units for EVM
+     *     tokens).
      */
     get: operations["get_quote"];
     put?: never;
     post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/swap/arbitrum/lightning": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Create a new Arbitrum to Lightning swap request */
-    post: operations["arbitrum_to_lightning_swap"];
     delete?: never;
     options?: never;
     head?: never;
@@ -220,23 +204,6 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/swap/ethereum/lightning": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Create a new Ethereum to Lightning swap request */
-    post: operations["ethereum_to_lightning_swap"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
   "/swap/evm/arkade": {
     parameters: {
       query?: never;
@@ -296,40 +263,6 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/swap/lightning/arbitrum": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Create a new Lightning to Arbitrum swap request */
-    post: operations["create_lightning_to_arbitrum_swap"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/swap/lightning/ethereum": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Create a new Lightning to Ethereum swap request */
-    post: operations["lightning_to_ethereum_swap"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
   "/swap/lightning/evm": {
     parameters: {
       query?: never;
@@ -341,40 +274,6 @@ export interface paths {
     put?: never;
     /** Create a chain-agnostic Lightning-to-EVM swap. */
     post: operations["create_lightning_evm_swap"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/swap/lightning/polygon": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Create a new Lightning to Polygon swap request */
-    post: operations["create_lightning_to_polygon_swap"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/swap/polygon/lightning": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Create a new Polygon to Lightning swap request */
-    post: operations["polygon_to_lightning_swap"];
     delete?: never;
     options?: never;
     head?: never;
@@ -474,8 +373,8 @@ export interface paths {
     /**
      * Returns calldata to refund an expired EVM-to-Arkade HTLC via the coordinator.
      * @description Two modes:
-     *     - `mode=swap-back` (default): calls `refundAndExecute` — refund WBTC from
-     *       expired HTLC, swap WBTC → source token via 1inch, sweep to caller.
+     *     - `mode=swap-back` (default): calls `refundAndExecute` — refund WBTC from expired HTLC, swap
+     *       WBTC → source token via 1inch, sweep to caller.
      *     - `mode=direct`: calls `refundTo` — refund WBTC directly to caller (no DEX).
      *
      *     Both are permissionless after the timelock expires.
@@ -557,18 +456,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
-    ArbitrumToLightningSwapRequest: {
-      /** @description Lightning BOLT11 invoice to pay */
-      bolt11_invoice: string;
-      /** @description Optional referral code for fee exemption */
-      referral_code?: string | null;
-      /** @description Source token to send (e.g., "usdc_arb", "usdt_arb") */
-      source_token: components["schemas"]["TokenId"];
-      /** @description User's Arbitrum wallet address (for checking allowance and building transactions) */
-      user_address: string;
-      /** @description User ID derived from wallet for recovery purposes */
-      user_id: string;
-    };
     /**
      * @description Chain-agnostic request for Arkade-to-EVM swaps.
      *
@@ -586,7 +473,8 @@ export interface components {
       /**
        * Format: int64
        * @description How much target token the user wants to receive (mutually exclusive with `amount_in`).
-       *     Value is in the target token's smallest unit (e.g. for USDC with 6 decimals, 1000000 = 1 USDC).
+       *     Value is in the target token's smallest unit (e.g. for USDC with 6 decimals, 1000000 = 1
+       *     USDC).
        */
       amount_out?: number | null;
       /** @description EVM address that will sign the HTLC claim (SDK-derived for gasless claims). */
@@ -699,7 +587,8 @@ export interface components {
       /**
        * Format: int64
        * @description How much target token the user wants to receive (mutually exclusive with `amount_in`).
-       *     Value is in the target token's smallest unit (e.g. for USDC with 6 decimals, 1000000 = 1 USDC).
+       *     Value is in the target token's smallest unit (e.g. for USDC with 6 decimals, 1000000 = 1
+       *     USDC).
        */
       amount_out?: number | null;
       /** @description EVM address that will sign the HTLC claim (SDK-derived for gasless claims). */
@@ -1029,18 +918,6 @@ export interface components {
       total_input_sats: number;
       /** @description Number of VTXOs being refreshed */
       vtxo_count: number;
-    };
-    EthereumToLightningSwapRequest: {
-      /** @description Lightning BOLT11 invoice to pay */
-      bolt11_invoice: string;
-      /** @description Optional referral code for fee exemption */
-      referral_code?: string | null;
-      /** @description Source token to send (e.g., "usdc_eth", "usdt_eth", "wbtc_eth") */
-      source_token: components["schemas"]["TokenId"];
-      /** @description User's Ethereum wallet address (for checking allowance and building transactions) */
-      user_address: string;
-      /** @description User ID derived from wallet for recovery purposes */
-      user_id: string;
     };
     EvmChainInfo: {
       /** Format: int64 */
@@ -1402,14 +1279,6 @@ export interface components {
       };
     };
     GetSwapResponse:
-      | (components["schemas"]["BtcToEvmSwapResponse"] & {
-          /** @enum {string} */
-          direction: "btc_to_evm";
-        })
-      | (components["schemas"]["EvmToBtcSwapResponse"] & {
-          /** @enum {string} */
-          direction: "evm_to_btc";
-        })
       | (components["schemas"]["BtcToArkadeSwapResponse"] & {
           /** @enum {string} */
           direction: "btc_to_arkade";
@@ -1438,66 +1307,6 @@ export interface components {
           /** @enum {string} */
           direction: "evm_to_lightning";
         });
-    LightningToArbitrumSwapRequest: {
-      /**
-       * @description Hash lock provided by the client (32-byte hex string with 0x prefix)
-       *     The client generates a secret and computes SHA256(secret) = hash_lock
-       *     Client will use the secret to claim the Arbitrum HTLC later
-       */
-      hash_lock: string;
-      /** @description Optional referral code for fee exemption */
-      referral_code?: string | null;
-      /** @description Refund public key used to generate the Arkade VHTLC */
-      refund_pk: string;
-      /**
-       * Format: int64
-       * @description How much the user wants to send. Expressed in sats
-       */
-      source_amount?: number | null;
-      /** @description Target Arbitrum address to receive the tokens */
-      target_address: string;
-      /**
-       * Format: double
-       * @description How much the user wants to receive of target token
-       *     Note: if [`source_amount`] and [`target_amount`] is specified we will prioritize [`target_amount`]
-       *     Note2: this is always just approximately due to price fluctations
-       */
-      target_amount?: number | null;
-      /** @description Target token to receive (e.g., "usdc_arb", "usdt_arb") */
-      target_token: components["schemas"]["TokenId"];
-      /** @description User ID derived from wallet for recovery purposes */
-      user_id: string;
-    };
-    LightningToEthereumSwapRequest: {
-      /**
-       * @description Hash lock provided by the client (32-byte hex string with 0x prefix)
-       *     The client generates a secret and computes SHA256(secret) = hash_lock
-       *     Client will use the secret to claim the Ethereum HTLC later
-       */
-      hash_lock: string;
-      /** @description Optional referral code for fee exemption */
-      referral_code?: string | null;
-      /** @description Refund public key used to generate the Arkade VHTLC */
-      refund_pk: string;
-      /**
-       * Format: int64
-       * @description How much the user wants to send. Expressed in sats
-       */
-      source_amount?: number | null;
-      /** @description Target Ethereum address to receive the tokens */
-      target_address: string;
-      /**
-       * Format: double
-       * @description How much the user wants to receive of target token
-       *     Note: if [`source_amount`] and [`target_amount`] is specified we will prioritize [`target_amount`]
-       *     Note2: this is always just approximately due to price fluctations
-       */
-      target_amount?: number | null;
-      /** @description Target token to receive (e.g., "usdc_eth", "usdt_eth") */
-      target_token: components["schemas"]["TokenId"];
-      /** @description User ID derived from wallet for recovery purposes */
-      user_id: string;
-    };
     /**
      * @description Chain-agnostic request for Lightning-to-EVM swaps.
      *
@@ -1515,7 +1324,8 @@ export interface components {
       /**
        * Format: int64
        * @description How much target token the user wants to receive (mutually exclusive with `amount_in`).
-       *     Value is in the target token's smallest unit (e.g. for USDC with 6 decimals, 1000000 = 1 USDC).
+       *     Value is in the target token's smallest unit (e.g. for USDC with 6 decimals, 1000000 = 1
+       *     USDC).
        */
       amount_out?: number | null;
       /** @description EVM address that will sign the HTLC claim (SDK-derived for gasless claims). */
@@ -1590,36 +1400,6 @@ export interface components {
       /** @description WBTC token contract address on the target EVM chain */
       wbtc_address: string;
     };
-    LightningToPolygonSwapRequest: {
-      /**
-       * @description Hash lock provided by the client (32-byte hex string with 0x prefix)
-       *     The client generates a secret and computes SHA256(secret) = hash_lock
-       *     Client will use the secret to claim the Polygon HTLC later
-       */
-      hash_lock: string;
-      /** @description Optional referral code for fee exemption */
-      referral_code?: string | null;
-      /** @description Refund public key used to generate the Arkade VHTLC */
-      refund_pk: string;
-      /**
-       * Format: int64
-       * @description How much the user wants to send. Expressed in sats
-       */
-      source_amount?: number | null;
-      /** @description Target Polygon address to receive the tokens */
-      target_address: string;
-      /**
-       * Format: double
-       * @description How much the user wants to receive of target token
-       *     Note: if [`source_amount`] and [`target_amount`] is specified we will prioritize [`target_amount`]
-       *     Note2: this is always just approximately due to price fluctations
-       */
-      target_amount?: number | null;
-      /** @description Target token to receive (e.g., "usdc_pol", "usdt0_pol") */
-      target_token: components["schemas"]["TokenId"];
-      /** @description User ID derived from wallet for recovery purposes */
-      user_id: string;
-    };
     MtpResponse: {
       /**
        * Format: int64
@@ -1631,18 +1411,6 @@ export interface components {
        * @description The tip block height when MTP was last calculated.
        */
       tip_height: number;
-    };
-    PolygonToLightningSwapRequest: {
-      /** @description Lightning BOLT11 invoice to pay */
-      bolt11_invoice: string;
-      /** @description Optional referral code for fee exemption */
-      referral_code?: string | null;
-      /** @description Source token to send (e.g., "usdc_pol", "usdt0_pol", "dai_pol") */
-      source_token: components["schemas"]["TokenId"];
-      /** @description User's Polygon wallet address (for checking allowance and building transactions) */
-      user_address: string;
-      /** @description User ID derived from wallet for recovery purposes */
-      user_id: string;
     };
     PriceTiers: {
       /**
@@ -1746,8 +1514,8 @@ export interface components {
     SwapCommonFields: {
       /**
        * Format: double
-       * @description For evm-btc swaps, this is the source asset amount, for btc-evm swaps, this is the target asset amount
-       *     Deprecated
+       * @description For evm-btc swaps, this is the source asset amount, for btc-evm swaps, this is the target
+       *     asset amount Deprecated
        */
       asset_amount: number;
       /**
@@ -1810,8 +1578,8 @@ export interface components {
      *     # Overview
      *
      *     This enum tracks the state of an atomic swap between Bitcoin (via Lightning/Arkade)
-     *     and Target Asset (on Polygon, Ethereum, etc). The swap uses Hash Time-Locked Contracts (HTLCs) to ensure
-     *     atomicity without requiring trust.
+     *     and Target Asset (on Polygon, Ethereum, etc). The swap uses Hash Time-Locked Contracts (HTLCs)
+     *     to ensure atomicity without requiring trust.
      *
      *     # Normal Flow
      *
@@ -2215,7 +1983,10 @@ export interface operations {
   get_quote: {
     parameters: {
       query: {
-        /** @description Source blockchain (e.g., "Arkade", "Lightning", "Bitcoin", "Polygon", "Ethereum", "Arbitrum") */
+        /**
+         * @description Source blockchain (e.g., "Arkade", "Lightning", "Bitcoin", "Polygon", "Ethereum",
+         *     "Arbitrum")
+         */
         source_chain: components["schemas"]["Chain"];
         /** @description Source token: contract address for EVM tokens, or "btc" for BTC */
         source_token: string;
@@ -2245,48 +2016,6 @@ export interface operations {
       };
       /** @description Bad request - invalid parameters */
       400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-    };
-  };
-  arbitrum_to_lightning_swap: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ArbitrumToLightningSwapRequest"];
-      };
-    };
-    responses: {
-      /** @description Swap created successfully */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["EvmToBtcSwapResponse"];
-        };
-      };
-      /** @description Bad request - invalid parameters */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-      /** @description Internal server error */
-      500: {
         headers: {
           [name: string]: unknown;
         };
@@ -2400,48 +2129,6 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["BitcoinToEvmSwapResponse"];
-        };
-      };
-      /** @description Bad request - invalid parameters */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-      /** @description Internal server error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-    };
-  };
-  ethereum_to_lightning_swap: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["EthereumToLightningSwapRequest"];
-      };
-    };
-    responses: {
-      /** @description Swap created successfully */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["EvmToBtcSwapResponse"];
         };
       };
       /** @description Bad request - invalid parameters */
@@ -2590,90 +2277,6 @@ export interface operations {
       };
     };
   };
-  create_lightning_to_arbitrum_swap: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["LightningToArbitrumSwapRequest"];
-      };
-    };
-    responses: {
-      /** @description Swap created successfully */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["BtcToEvmSwapResponse"];
-        };
-      };
-      /** @description Bad request - invalid parameters */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-      /** @description Internal server error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-    };
-  };
-  lightning_to_ethereum_swap: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["LightningToEthereumSwapRequest"];
-      };
-    };
-    responses: {
-      /** @description Swap created successfully */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["BtcToEvmSwapResponse"];
-        };
-      };
-      /** @description Bad request - invalid parameters */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-      /** @description Internal server error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-    };
-  };
   create_lightning_evm_swap: {
     parameters: {
       query?: never;
@@ -2694,90 +2297,6 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["LightningToEvmSwapResponse"];
-        };
-      };
-      /** @description Bad request - invalid parameters */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-      /** @description Internal server error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-    };
-  };
-  create_lightning_to_polygon_swap: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["LightningToPolygonSwapRequest"];
-      };
-    };
-    responses: {
-      /** @description Swap created successfully */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["BtcToEvmSwapResponse"];
-        };
-      };
-      /** @description Bad request - invalid parameters */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-      /** @description Internal server error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-    };
-  };
-  polygon_to_lightning_swap: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["PolygonToLightningSwapRequest"];
-      };
-    };
-    responses: {
-      /** @description Swap created successfully */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["EvmToBtcSwapResponse"];
         };
       };
       /** @description Bad request - invalid parameters */
