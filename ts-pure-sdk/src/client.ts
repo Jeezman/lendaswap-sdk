@@ -2016,7 +2016,38 @@ export class Client {
     const now = Math.floor(Date.now() / 1000);
     const timelockExpired = now >= timelock;
 
-    // Fetch coordinator refund calldata from server (default mode: swap-back)
+    // Check if source token is WBTC - if so, use direct HTLCErc20 refund
+    const sourceSymbol = evmSwap.source_token?.symbol?.toLowerCase();
+    const isWbtcSource = sourceSymbol === "wbtc";
+
+    if (isWbtcSource) {
+      // Direct HTLCErc20 refund - no DEX swap needed
+      const htlcAddress = evmSwap.evm_htlc_address;
+      const hashLock = evmSwap.evm_hash_lock;
+
+      const refundData = encodeHtlcErc20RefundCallData(htlcAddress, {
+        preimageHash: hashLock,
+        amount: BigInt(evmSwap.source_amount),
+        token: evmSwap.source_token.token_id,
+        claimAddress: evmSwap.server_evm_address, // The server would have been the claimer
+        timelock: timelock,
+      });
+
+      return {
+        success: true,
+        message: timelockExpired
+          ? "EVM refund calldata ready. Submit this transaction with your EVM wallet."
+          : `Timelock has not expired yet. Refund will be available at ${new Date(timelock * 1000).toISOString()}.`,
+        evmRefundData: {
+          to: refundData.to,
+          data: refundData.data,
+          timelockExpired,
+          timelockExpiry: timelock,
+        },
+      };
+    }
+
+    // Non-WBTC source: use coordinator refund (swap WBTC back to source token)
     const response = await this.#apiClient.GET(
       "/swap/{id}/refund-and-swap-calldata",
       {

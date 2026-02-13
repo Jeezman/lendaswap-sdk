@@ -134,9 +134,11 @@ export async function evmFundSwap(
   }
 
   // Detect coordinator mode
-  // For evm_to_arkade/evm_to_bitcoin swaps, always use coordinator (source token needs DEX swap to WBTC)
+  // For evm_to_arkade/evm_to_bitcoin swaps with non-WBTC source, use coordinator (needs DEX swap to WBTC)
+  // For WBTC-sourced swaps or evm_to_lightning, use direct HTLCErc20
   // For evm_to_btc swaps, can optionally use coordinator via USE_COORDINATOR=1
-  const useCoordinator = swap.direction === "evm_to_arkade" || swap.direction === "evm_to_bitcoin" || swap.direction === "evm_to_lightning" || process.env.USE_COORDINATOR === "1";
+  const isWbtcSource = sourceTokenDisplay.toLowerCase() === "wbtc";
+  const useCoordinator = !isWbtcSource && (swap.direction === "evm_to_arkade" || swap.direction === "evm_to_bitcoin") || process.env.USE_COORDINATOR === "1";
 
   // Create EVM wallet
   const evmWallet = createEvmWallet(evmMnemonic, chainName);
@@ -237,6 +239,139 @@ export async function evmFundSwap(
       console.log("");
       console.log(`  executeAndCreate TX: ${txHash}`);
 
+    } else if (swap.direction === "evm_to_lightning" || swap.direction === "evm_to_bitcoin" || swap.direction === "evm_to_arkade") {
+      // ── Direct HTLCErc20.create (build calldata locally) ──
+      // Used for evm_to_lightning (always) and evm_to_bitcoin/evm_to_arkade when source is WBTC
+      const evmSwap = swap as typeof swap & {
+        evm_htlc_address: string;
+        hash_lock?: string;        // evm_to_lightning uses this
+        evm_hash_lock?: string;    // evm_to_bitcoin uses this
+        source_amount: number;
+        source_token: { token_id: string };
+        client_evm_address: string;
+        server_evm_address: string;
+        evm_refund_locktime: number;
+      };
+
+      // Get hash lock from either field
+      const hashLock = evmSwap.hash_lock || evmSwap.evm_hash_lock;
+      if (!hashLock) {
+        throw new Error("No hash_lock or evm_hash_lock found in swap response");
+      }
+
+      const htlcAddressHex = evmSwap.evm_htlc_address as `0x${string}`;
+      const sourceTokenAddress = evmSwap.source_token.token_id as `0x${string}`;
+
+      console.log(`HTLC Address: ${htlcAddressHex}`);
+      console.log(`Hash Lock: ${hashLock}`);
+      console.log(`Refund Locktime: ${evmSwap.evm_refund_locktime}`);
+      console.log("");
+
+      // Build calldata locally
+      const approveCallData = encodeApproveCallData(
+        sourceTokenAddress,
+        htlcAddressHex,
+        amountNeeded,
+      );
+
+      const createCallData = encodeHtlcErc20CreateCallData(htlcAddressHex, {
+        preimageHash: hashLock,
+        amount: amountNeeded,
+        token: sourceTokenAddress,
+        sender: evmSwap.client_evm_address, // User can refund
+        claimer: evmSwap.server_evm_address, // Server claims with preimage
+        timelock: evmSwap.evm_refund_locktime,
+      });
+
+      // Step 1: Check and approve if needed
+      console.log("Step 1: Checking token allowance...");
+
+      const currentAllowance = await evmWallet.publicClient.readContract({
+        address: sourceTokenAddress,
+        abi: ERC20_ABI,
+        functionName: "allowance",
+        args: [evmWallet.address as `0x${string}`, htlcAddressHex],
+      });
+
+      console.log(`  Current allowance: ${currentAllowance}`);
+      console.log(`  Amount needed: ${amountNeeded}`);
+
+      if (currentAllowance < amountNeeded) {
+        console.log("  Allowance insufficient, need to approve.");
+        console.log("");
+
+        const confirmApprove = await confirm("Send approve transaction?");
+        if (!confirmApprove) {
+          console.log("Cancelled.");
+          return;
+        }
+
+        console.log("  Sending approve transaction...");
+
+        const approveTxHash = await evmWallet.walletClient.sendTransaction({
+          to: approveCallData.to as `0x${string}`,
+          data: approveCallData.data as `0x${string}`,
+          chain: evmWallet.chain,
+          account: evmWallet.account,
+        });
+
+        console.log(`  Approve TX: ${approveTxHash}`);
+        console.log("  Waiting for confirmation...");
+
+        const approveReceipt = await evmWallet.publicClient.waitForTransactionReceipt({
+          hash: approveTxHash,
+        });
+
+        if (approveReceipt.status !== "success") {
+          throw new Error("Approve transaction failed");
+        }
+
+        console.log("  Approve confirmed!");
+      } else {
+        console.log("  Allowance sufficient, skipping approval.");
+      }
+
+      console.log("");
+
+      // Step 2: Create the HTLC
+      console.log("Step 2: Creating HTLCErc20...");
+      console.log(`  This will lock ${sourceAmountDisplay} ${sourceTokenDisplay} in the HTLC.`);
+      console.log("");
+
+      const confirmFund = await confirm("Send create transaction?");
+      if (!confirmFund) {
+        console.log("Cancelled.");
+        return;
+      }
+
+      console.log("  Sending create transaction...");
+
+      const createTxHash = await evmWallet.walletClient.sendTransaction({
+        to: createCallData.to as `0x${string}`,
+        data: createCallData.data as `0x${string}`,
+        chain: evmWallet.chain,
+        account: evmWallet.account,
+      });
+
+      console.log(`  Create TX: ${createTxHash}`);
+      console.log("  Waiting for confirmation...");
+
+      const createReceipt = await evmWallet.publicClient.waitForTransactionReceipt({
+        hash: createTxHash,
+      });
+
+      if (createReceipt.status !== "success") {
+        throw new Error("Create transaction failed");
+      }
+
+      console.log("  Create confirmed!");
+      console.log("");
+
+      console.log("=".repeat(60));
+      console.log("SWAP FUNDED SUCCESSFULLY!");
+      console.log("=".repeat(60));
+      console.log("");
+      console.log(`  Create TX: ${createTxHash}`);
     } else {
       throw Error("Unsupported funding combination")
     }
