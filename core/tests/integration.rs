@@ -2,12 +2,17 @@
 //!
 //! Run with: cargo test --test integration -- --nocapture --ignored
 
-use lendaswap_core::api::{EvmChain, TokenId};
+use lendaswap_core::ApiClient;
+use lendaswap_core::Client;
+use lendaswap_core::ExtendedSwapStorageData;
+use lendaswap_core::ExtendedVtxoSwapStorageData;
+use lendaswap_core::Network;
+use lendaswap_core::StorageFuture;
+use lendaswap_core::SwapStorage;
+use lendaswap_core::WalletStorage;
+use lendaswap_core::api::EvmChain;
+use lendaswap_core::api::TokenId;
 use lendaswap_core::storage::VtxoSwapStorage;
-use lendaswap_core::{
-    ApiClient, Client, ExtendedSwapStorageData, ExtendedVtxoSwapStorageData, Network,
-    StorageFuture, SwapStorage, WalletStorage,
-};
 use rust_decimal_macros::dec;
 use std::collections::HashMap;
 use std::sync::RwLock;

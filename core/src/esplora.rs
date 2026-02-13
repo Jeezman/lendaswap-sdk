@@ -7,14 +7,19 @@
 //!
 //! Uses reqwest directly for WASM compatibility instead of esplora-client.
 
+use crate::Error;
+use crate::Result;
+use bitcoin::Address;
+use bitcoin::Amount;
+use bitcoin::Network;
+use bitcoin::OutPoint;
+use bitcoin::Transaction;
+use bitcoin::Txid;
 use bitcoin::consensus::encode;
-use bitcoin::{Address, Amount, Network, OutPoint, Transaction, Txid};
 use log::debug;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::str::FromStr;
-
-use crate::{Error, Result};
 
 /// Esplora API response for a transaction output.
 #[derive(Debug, Deserialize)]

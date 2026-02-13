@@ -2,13 +2,17 @@
 //!
 //! This module provides BIP39/BIP32 key derivation for Lendaswap swaps.
 
-use crate::error::{Error, Result};
+use crate::error::Error;
+use crate::error::Result;
 use crate::types::SwapParams;
 use anyhow::Context;
-use bitcoin::bip32::{DerivationPath, Xpriv, Xpub};
+use bitcoin::bip32::DerivationPath;
+use bitcoin::bip32::Xpriv;
+use bitcoin::bip32::Xpub;
 use bitcoin::key::Secp256k1;
 use bitcoin::secp256k1::PublicKey;
-use sha2::{Digest, Sha256};
+use sha2::Digest;
+use sha2::Sha256;
 use std::str::FromStr;
 
 /// BIP-85 prefix for signing keys.
@@ -33,7 +37,8 @@ impl HdWallet {
     /// * `network` - Bitcoin network to use
     /// * `word_count` - Number of words (12, 15, 18, 21, or 24)
     pub fn generate(network: bitcoin::Network, word_count: usize) -> Result<Self> {
-        use bip39::{Language, Mnemonic};
+        use bip39::Language;
+        use bip39::Mnemonic;
         use rand::rngs::OsRng;
 
         let mnemonic = Mnemonic::generate_in_with(&mut OsRng, Language::English, word_count)
@@ -62,9 +67,11 @@ impl HdWallet {
     ///
     /// Derivation path: `m/{SIGNING_PREFIX}'/{LSW_IDENTIFIER}'/{index}'`
     pub fn derive_swap_params(&self, index: u32) -> Result<SwapParams> {
-        use bitcoin::bip32::{DerivationPath, Xpriv};
+        use bitcoin::bip32::DerivationPath;
+        use bitcoin::bip32::Xpriv;
         use bitcoin::secp256k1::Secp256k1;
-        use sha2::{Digest, Sha256};
+        use sha2::Digest;
+        use sha2::Sha256;
 
         let secp = Secp256k1::new();
         let seed = self.mnemonic.to_seed("");
@@ -89,7 +96,8 @@ impl HdWallet {
         let preimage = tagged_hash(PREIMAGE_TAG, &secret_key.secret_bytes());
 
         // preimage_hash = SHA256(preimage)
-        // For EVM HTLCs, this is used directly. For Bitcoin HTLCs, HASH160 is computed from preimage.
+        // For EVM HTLCs, this is used directly. For Bitcoin HTLCs, HASH160 is computed from
+        // preimage.
         let preimage_hash = Sha256::digest(preimage).into();
 
         // Derive user ID

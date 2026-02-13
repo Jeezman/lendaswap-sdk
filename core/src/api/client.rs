@@ -1,15 +1,33 @@
 //! HTTP client for the Lendaswap backend API.
 
-use crate::error::{Error, Result};
-
-use super::types::{
-    ApiError, ArkadeToEvmSwapCreateResponse, ArkadeToEvmSwapRequest, BtcToArkadeSwapRequest,
-    BtcToArkadeSwapResponse, BtcToEvmSwapRequest, BtcToEvmSwapResponse, ClaimGelatoRequest,
-    CreateVtxoSwapRequest, EstimateVtxoSwapRequest, EstimateVtxoSwapResponse, EvmChain,
-    EvmToArkadeSwapRequest, EvmToBtcSwapResponse, EvmToLightningSwapRequest, GetSwapResponse,
-    OnchainToEvmSwapRequest, OnchainToEvmSwapResponse, QuoteRequest, QuoteResponse,
-    RecoverSwapsRequest, RecoverSwapsResponse, TokenInfo, TokenInfos, Version, VtxoSwapResponse,
-};
+use super::types::ApiError;
+use super::types::ArkadeToEvmSwapCreateResponse;
+use super::types::ArkadeToEvmSwapRequest;
+use super::types::BtcToArkadeSwapRequest;
+use super::types::BtcToArkadeSwapResponse;
+use super::types::BtcToEvmSwapRequest;
+use super::types::BtcToEvmSwapResponse;
+use super::types::ClaimGelatoRequest;
+use super::types::CreateVtxoSwapRequest;
+use super::types::EstimateVtxoSwapRequest;
+use super::types::EstimateVtxoSwapResponse;
+use super::types::EvmChain;
+use super::types::EvmToArkadeSwapRequest;
+use super::types::EvmToBtcSwapResponse;
+use super::types::EvmToLightningSwapRequest;
+use super::types::GetSwapResponse;
+use super::types::OnchainToEvmSwapRequest;
+use super::types::OnchainToEvmSwapResponse;
+use super::types::QuoteRequest;
+use super::types::QuoteResponse;
+use super::types::RecoverSwapsRequest;
+use super::types::RecoverSwapsResponse;
+use super::types::TokenInfo;
+use super::types::TokenInfos;
+use super::types::Version;
+use super::types::VtxoSwapResponse;
+use crate::error::Error;
+use crate::error::Result;
 
 /// Lendaswap API client.
 #[derive(Debug, Clone)]
@@ -330,7 +348,8 @@ impl ApiClient {
 #[cfg(test)]
 pub mod tests {
     use crate::ApiClient;
-    use crate::api::{QuoteRequest, TokenId};
+    use crate::api::QuoteRequest;
+    use crate::api::TokenId;
 
     #[ignore]
     #[tokio::test]

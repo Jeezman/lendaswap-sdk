@@ -1,7 +1,11 @@
 //! Shared types for the Lendaswap Client SDK.
 
-use bitcoin::secp256k1::{PublicKey, SecretKey};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use bitcoin::secp256k1::PublicKey;
+use bitcoin::secp256k1::SecretKey;
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
+use serde::Serializer;
 
 /// Serde module for serializing `[u8; 32]` as hex strings.
 mod hex_bytes32 {

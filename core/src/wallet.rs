@@ -3,10 +3,13 @@
 //! This module provides the high-level wallet API that combines HD key derivation
 //! and VHTLC operations with pluggable storage.
 
-use crate::error::{Error, Result};
+use crate::error::Error;
+use crate::error::Result;
 use crate::hd_wallet::HdWallet;
-use crate::storage::{WalletStorage, WalletStorageExt};
-use crate::types::{Network, SwapParams};
+use crate::storage::WalletStorage;
+use crate::storage::WalletStorageExt;
+use crate::types::Network;
+use crate::types::SwapParams;
 
 /// Main wallet struct with injected storage.
 ///

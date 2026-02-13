@@ -7,7 +7,8 @@
 //! - `WalletStorage`: Typed storage for wallet data (mnemonic, key index)
 //! - `SwapStorage`: Typed storage specifically for swap data
 
-use crate::client::{ExtendedSwapStorageData, ExtendedVtxoSwapStorageData};
+use crate::client::ExtendedSwapStorageData;
+use crate::client::ExtendedVtxoSwapStorageData;
 use crate::error::Result;
 use std::future::Future;
 use std::pin::Pin;

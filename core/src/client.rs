@@ -1,22 +1,47 @@
-use crate::api::{
-    ArkadeToEvmSwapCreateResponse, ArkadeToEvmSwapRequest, BtcToArkadeSwapRequest,
-    BtcToArkadeSwapResponse, BtcToEvmSwapRequest, BtcToEvmSwapResponse, CreateVtxoSwapRequest,
-    EstimateVtxoSwapResponse, EvmChain, EvmToArkadeSwapRequest, EvmToBtcSwapResponse,
-    EvmToLightningSwapRequest, GetSwapResponse, OnchainToEvmSwapRequest, OnchainToEvmSwapResponse,
-    QuoteRequest, QuoteResponse, TokenId, TokenInfo, Version, VtxoSwapResponse,
-};
+use crate::ApiClient;
+use crate::Error;
+use crate::Network;
+use crate::SwapParams;
+use crate::VhtlcAmounts;
+use crate::Wallet;
+use crate::api::ArkadeToEvmSwapCreateResponse;
+use crate::api::ArkadeToEvmSwapRequest;
+use crate::api::BtcToArkadeSwapRequest;
+use crate::api::BtcToArkadeSwapResponse;
+use crate::api::BtcToEvmSwapRequest;
+use crate::api::BtcToEvmSwapResponse;
+use crate::api::CreateVtxoSwapRequest;
+use crate::api::EstimateVtxoSwapResponse;
+use crate::api::EvmChain;
+use crate::api::EvmToArkadeSwapRequest;
+use crate::api::EvmToBtcSwapResponse;
+use crate::api::EvmToLightningSwapRequest;
+use crate::api::GetSwapResponse;
+use crate::api::OnchainToEvmSwapRequest;
+use crate::api::OnchainToEvmSwapResponse;
+use crate::api::QuoteRequest;
+use crate::api::QuoteResponse;
+use crate::api::TokenId;
+use crate::api::TokenInfo;
+use crate::api::Version;
+use crate::api::VtxoSwapResponse;
 use crate::esplora::EsploraClient;
-use crate::onchain_htlc::{
-    build_htlc_scripts, build_refund_transaction, compute_hash_lock, htlc_to_taproot_address,
-};
-use crate::storage::{SwapStorage, VtxoSwapStorage, WalletStorage};
+use crate::onchain_htlc::build_htlc_scripts;
+use crate::onchain_htlc::build_refund_transaction;
+use crate::onchain_htlc::compute_hash_lock;
+use crate::onchain_htlc::htlc_to_taproot_address;
+use crate::storage::SwapStorage;
+use crate::storage::VtxoSwapStorage;
+use crate::storage::WalletStorage;
 use crate::types::SwapData;
-use crate::{ApiClient, Error, Network, SwapParams, VhtlcAmounts, Wallet, vhtlc, vtxo_swap};
+use crate::vhtlc;
+use crate::vtxo_swap;
 use ark_rs::core::ArkAddress;
 use bitcoin::Address;
 use log::info;
 use rust_decimal::Decimal;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::str::FromStr;
 
 /// Extended swap data that combines the API response with client-side swap parameters.
@@ -430,7 +455,8 @@ impl<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> Client<S, SS, VSS>
     ) -> crate::Result<BtcToArkadeSwapResponse> {
         let swap_params = self.wallet.derive_swap_params().await?;
 
-        // For BTC-to-Arkade swaps, we use HASH160 (matching Bitcoin's OP_HASH160 and Arkade VHTLCs).
+        // For BTC-to-Arkade swaps, we use HASH160 (matching Bitcoin's OP_HASH160 and Arkade
+        // VHTLCs).
         let hash_lock = compute_hash_lock(&swap_params.preimage);
 
         let request = BtcToArkadeSwapRequest {
@@ -516,8 +542,10 @@ impl<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> Client<S, SS, VSS>
     /// * `target_address` - User's EVM address to receive tokens
     /// * `evm_chain_id` - Target EVM chain ID (1, 137, 42161)
     /// * `token_address` - ERC-20 token contract address
-    /// * `source_amount` - Amount of BTC to send in satoshis (mutually exclusive with `target_amount`)
-    /// * `target_amount` - Amount of target token to receive in smallest unit (mutually exclusive with `source_amount`)
+    /// * `source_amount` - Amount of BTC to send in satoshis (mutually exclusive with
+    ///   `target_amount`)
+    /// * `target_amount` - Amount of target token to receive in smallest unit (mutually exclusive
+    ///   with `source_amount`)
     /// * `referral_code` - Optional referral code
     pub async fn create_arkade_to_evm_swap_generic(
         &self,

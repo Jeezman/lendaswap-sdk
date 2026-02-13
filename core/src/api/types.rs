@@ -3,7 +3,8 @@
 //! These types match the backend API schema and are used for request/response serialization.
 
 use rust_decimal::Decimal;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
@@ -119,9 +120,11 @@ pub enum SwapStatus {
     /// - → `Expired`: No funding within 30 minutes
     Pending,
 
-    /// Client's tx has been seen but not confirmed. This is mostly relevant for on-chain transactions but not for Arkade or Lightning
+    /// Client's tx has been seen but not confirmed. This is mostly relevant for on-chain
+    /// transactions but not for Arkade or Lightning
     ///
-    /// Server has received and verified the BTC payment. We are still waiting for this transaction to be confirmed
+    /// Server has received and verified the BTC payment. We are still waiting for this transaction
+    /// to be confirmed
     ///
     /// **Transitions:**
     /// - → `ClientFunded`: Client sends BTC to server and confirmed

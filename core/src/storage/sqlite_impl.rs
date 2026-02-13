@@ -4,18 +4,28 @@
 //! via sqlx. Suitable for native applications (CLI tools, Flutter apps, Node.js
 //! via napi-rs, etc.).
 
-use super::{
-    ExtendedSwapStorageData, ExtendedVtxoSwapStorageData, StorageFuture, SwapStorage,
-    VtxoSwapStorage, WalletStorage,
-};
-use crate::api::{
-    ArkadeToEvmSwapResponse, BtcToArkadeSwapResponse, BtcToEvmSwapResponse, EvmToBtcSwapResponse,
-    GetSwapResponse, OnchainToEvmSwapResponse, SwapCommonFields, SwapStatus, TokenId,
-    VtxoSwapResponse, VtxoSwapStatus,
-};
+use super::ExtendedSwapStorageData;
+use super::ExtendedVtxoSwapStorageData;
+use super::StorageFuture;
+use super::SwapStorage;
+use super::VtxoSwapStorage;
+use super::WalletStorage;
+use crate::api::ArkadeToEvmSwapResponse;
+use crate::api::BtcToArkadeSwapResponse;
+use crate::api::BtcToEvmSwapResponse;
+use crate::api::EvmToBtcSwapResponse;
+use crate::api::GetSwapResponse;
+use crate::api::OnchainToEvmSwapResponse;
+use crate::api::SwapCommonFields;
+use crate::api::SwapStatus;
+use crate::api::TokenId;
+use crate::api::VtxoSwapResponse;
+use crate::api::VtxoSwapStatus;
 use crate::types::SwapParams;
 use sqlx::Row;
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
+use sqlx::sqlite::SqliteConnectOptions;
+use sqlx::sqlite::SqlitePool;
+use sqlx::sqlite::SqlitePoolOptions;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -580,7 +590,8 @@ impl SqliteStorage {
     // =========================================================================
 
     fn parse_swap_params(row: &sqlx::sqlite::SqliteRow) -> Result<SwapParams, crate::Error> {
-        use bitcoin::secp256k1::{PublicKey, SecretKey};
+        use bitcoin::secp256k1::PublicKey;
+        use bitcoin::secp256k1::SecretKey;
 
         let secret_key_hex: String = row.get("secret_key");
         let public_key_hex: String = row.get("public_key");
@@ -623,7 +634,8 @@ impl SqliteStorage {
     }
 
     fn parse_swap_params_vtxo(row: &sqlx::sqlite::SqliteRow) -> Result<SwapParams, crate::Error> {
-        use bitcoin::secp256k1::{PublicKey, SecretKey};
+        use bitcoin::secp256k1::PublicKey;
+        use bitcoin::secp256k1::SecretKey;
 
         let secret_key_hex: String = row.get("secret_key");
         let public_key_hex: String = row.get("public_key");
@@ -1368,7 +1380,9 @@ impl VtxoSwapStorage for SqliteStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
+    use bitcoin::secp256k1::PublicKey;
+    use bitcoin::secp256k1::Secp256k1;
+    use bitcoin::secp256k1::SecretKey;
 
     // =========================================================================
     // Test Helper - Database Setup

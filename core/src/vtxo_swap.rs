@@ -6,23 +6,35 @@
 
 use crate::SwapParams;
 use crate::api::VtxoSwapResponse;
-use crate::error::{Error, Result};
+use crate::error::Error;
+use crate::error::Result;
 use crate::types::Network;
+use ark_rs::core::ArkAddress;
 use ark_rs::core::VTXO_CONDITION_KEY;
-use ark_rs::core::send::{
-    OffchainTransactions, VtxoInput, build_offchain_transactions, sign_ark_transaction,
-    sign_checkpoint_transaction,
-};
-use ark_rs::core::server::{GetVtxosRequest, parse_sequence_number};
-use ark_rs::core::vhtlc::{VhtlcOptions, VhtlcScript};
-use ark_rs::core::{ArkAddress, VtxoList};
+use ark_rs::core::VtxoList;
+use ark_rs::core::send::OffchainTransactions;
+use ark_rs::core::send::VtxoInput;
+use ark_rs::core::send::build_offchain_transactions;
+use ark_rs::core::send::sign_ark_transaction;
+use ark_rs::core::send::sign_checkpoint_transaction;
+use ark_rs::core::server::GetVtxosRequest;
+use ark_rs::core::server::parse_sequence_number;
+use ark_rs::core::vhtlc::VhtlcOptions;
+use ark_rs::core::vhtlc::VhtlcScript;
+use bitcoin::Amount;
+use bitcoin::PublicKey;
+use bitcoin::Txid;
+use bitcoin::VarInt;
+use bitcoin::XOnlyPublicKey;
 use bitcoin::absolute::LockTime;
 use bitcoin::consensus::Encodable;
 use bitcoin::hashes::Hash;
-use bitcoin::key::{Keypair, Secp256k1};
+use bitcoin::key::Keypair;
+use bitcoin::key::Secp256k1;
+use bitcoin::psbt;
+use bitcoin::secp256k1;
 use bitcoin::secp256k1::schnorr;
 use bitcoin::taproot::LeafVersion;
-use bitcoin::{Amount, PublicKey, Txid, VarInt, XOnlyPublicKey, psbt, secp256k1};
 
 /// Claim the server's VHTLC in a VTXO swap.
 ///

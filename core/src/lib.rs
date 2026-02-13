@@ -34,12 +34,21 @@ pub mod vtxo_swap;
 pub mod wallet;
 
 pub use api::ApiClient;
-pub use client::{Client, ClientBuilder, ExtendedSwapStorageData, ExtendedVtxoSwapStorageData};
-pub use error::{Error, Result};
+pub use client::Client;
+pub use client::ClientBuilder;
+pub use client::ExtendedSwapStorageData;
+pub use client::ExtendedVtxoSwapStorageData;
+pub use error::Error;
+pub use error::Result;
 pub use hd_wallet::HdWallet;
-pub use storage::{StorageFuture, SwapStorage, VtxoSwapStorage, WalletStorage, WalletStorageExt};
-
+pub use storage::StorageFuture;
+pub use storage::SwapStorage;
+pub use storage::VtxoSwapStorage;
+pub use storage::WalletStorage;
+pub use storage::WalletStorageExt;
 #[cfg(feature = "sqlite")]
 pub use storage::sqlite::SqliteStorage;
-pub use types::{Network, SwapParams, VhtlcAmounts};
+pub use types::Network;
+pub use types::SwapParams;
+pub use types::VhtlcAmounts;
 pub use wallet::Wallet;

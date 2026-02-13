@@ -12,24 +12,42 @@
 //! - Hashlock script path: server claims with preimage
 //! - Timelock script path: user refunds after locktime
 
+use crate::Error;
+use crate::Result;
 use ark_rs::core::UNSPENDABLE_KEY;
+use bitcoin::Address;
+use bitcoin::Amount;
+use bitcoin::Network;
+use bitcoin::OutPoint;
+use bitcoin::ScriptBuf;
+use bitcoin::Sequence;
+use bitcoin::TapLeafHash;
+use bitcoin::TapSighashType;
+use bitcoin::Transaction;
+use bitcoin::TxIn;
+use bitcoin::TxOut;
+use bitcoin::Witness;
 use bitcoin::absolute::LockTime;
-use bitcoin::hashes::{Hash, ripemd160, sha256};
-use bitcoin::key::{PublicKey, Secp256k1};
-use bitcoin::opcodes::all::{
-    OP_CHECKSIG, OP_CHECKSIGVERIFY, OP_CLTV, OP_DROP, OP_EQUAL, OP_HASH160,
-};
+use bitcoin::hashes::Hash;
+use bitcoin::hashes::ripemd160;
+use bitcoin::hashes::sha256;
+use bitcoin::key::PublicKey;
+use bitcoin::key::Secp256k1;
+use bitcoin::opcodes::all::OP_CHECKSIG;
+use bitcoin::opcodes::all::OP_CHECKSIGVERIFY;
+use bitcoin::opcodes::all::OP_CLTV;
+use bitcoin::opcodes::all::OP_DROP;
+use bitcoin::opcodes::all::OP_EQUAL;
+use bitcoin::opcodes::all::OP_HASH160;
 use bitcoin::script::Builder;
-use bitcoin::secp256k1::{Message, XOnlyPublicKey};
+use bitcoin::secp256k1::Message;
+use bitcoin::secp256k1::XOnlyPublicKey;
 use bitcoin::sighash::SighashCache;
-use bitcoin::taproot::{ControlBlock, LeafVersion, TaprootBuilder, TaprootSpendInfo};
+use bitcoin::taproot::ControlBlock;
+use bitcoin::taproot::LeafVersion;
+use bitcoin::taproot::TaprootBuilder;
+use bitcoin::taproot::TaprootSpendInfo;
 use bitcoin::transaction::Version;
-use bitcoin::{
-    Address, Amount, Network, OutPoint, ScriptBuf, Sequence, TapLeafHash, TapSighashType,
-    Transaction, TxIn, TxOut, Witness,
-};
-
-use crate::{Error, Result};
 
 /// Build the hashlock tapscript for server claim.
 ///
