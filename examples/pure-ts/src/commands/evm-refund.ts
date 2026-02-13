@@ -62,8 +62,8 @@ export async function evmRefundSwap(
 
   const swap = storedSwap.response;
 
-  if (swap.direction !== "evm_to_btc" && swap.direction !== "evm_to_arkade" && swap.direction !== "evm_to_bitcoin") {
-    console.error(`This command is for EVM-sourced swaps (evm_to_btc, evm_to_arkade, evm_to_bitcoin), got: ${swap.direction}`);
+  if (swap.direction !== "evm_to_btc" && swap.direction !== "evm_to_arkade" && swap.direction !== "evm_to_bitcoin" && swap.direction !== "evm_to_lightning") {
+    console.error(`This command is for EVM-sourced swaps (evm_to_btc, evm_to_arkade, evm_to_bitcoin, evm_to_lightning), got: ${swap.direction}`);
     process.exit(1);
   }
 
@@ -71,7 +71,7 @@ export async function evmRefundSwap(
   let chainName: ReturnType<typeof getChainFromToken>;
   let sourceTokenDisplay: string;
 
-  if (swap.direction === "evm_to_arkade" || swap.direction === "evm_to_bitcoin") {
+  if (swap.direction === "evm_to_arkade" || swap.direction === "evm_to_bitcoin" || swap.direction === "evm_to_lightning") {
     // Generic endpoint swaps have evm_chain_id and source_token as TokenSummary
     const evmSwap = swap as typeof swap & {
       evm_chain_id: number;

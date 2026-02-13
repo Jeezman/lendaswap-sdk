@@ -104,6 +104,8 @@ const APPROVE_SELECTOR = "0x095ea7b3";
 const REFUND_SWAP_SELECTOR = "0xfe2510ee";
 // HTLCErc20.create(bytes32,uint256,address,address,address,uint256)
 const HTLC_ERC20_CREATE_SELECTOR = "0x06799dee";
+// HTLCErc20.refund(bytes32,uint256,address,address,uint256)
+const HTLC_ERC20_REFUND_SELECTOR = "0x36504721";
 
 /**
  * Converts a UUID string to a bytes32 hex string (right-padded with zeros).
@@ -277,6 +279,74 @@ export function encodeRefundSwapCallData(
     to: htlcAddress,
     data,
     functionSignature: "refundSwap(bytes32)",
+  };
+}
+
+/**
+ * Parameters for HTLCErc20.refund function.
+ */
+export interface HtlcErc20RefundParams {
+  preimageHash: string;
+  amount: bigint | number;
+  token: string;
+  claimAddress: string;
+  timelock: number;
+}
+
+/**
+ * Result of encoding HTLCErc20.refund call data.
+ */
+export interface HtlcErc20RefundCallData {
+  to: string;
+  data: string;
+  functionSignature: string;
+}
+
+/**
+ * Encodes the call data for HTLCErc20.refund function.
+ *
+ * This is for refunding tokens from the HTLCErc20 contract after the timelock has expired.
+ *
+ * @param htlcAddress - The HTLCErc20 contract address
+ * @param params - The refund parameters
+ * @returns The encoded refund call data
+ *
+ * @example
+ * ```ts
+ * const refundData = encodeHtlcErc20RefundCallData(htlcAddress, {
+ *   preimageHash: "0x...",
+ *   amount: 100000000n,
+ *   token: "0x...",
+ *   claimAddress: "0x...",
+ *   timelock: 1234567890,
+ * });
+ * // Use with viem:
+ * await walletClient.sendTransaction({ to: refundData.to, data: refundData.data });
+ * ```
+ */
+export function encodeHtlcErc20RefundCallData(
+  htlcAddress: string,
+  params: HtlcErc20RefundParams,
+): HtlcErc20RefundCallData {
+  const preimageHashEncoded = normalizeBytes32(params.preimageHash);
+  const amountEncoded = encodeUint256(BigInt(params.amount));
+  const tokenEncoded = normalizeAddress(params.token);
+  const claimAddressEncoded = normalizeAddress(params.claimAddress);
+  const timelockEncoded = encodeUint256(BigInt(params.timelock));
+
+  const data = [
+    HTLC_ERC20_REFUND_SELECTOR,
+    preimageHashEncoded,
+    amountEncoded,
+    tokenEncoded,
+    claimAddressEncoded,
+    timelockEncoded,
+  ].join("");
+
+  return {
+    to: htlcAddress,
+    data,
+    functionSignature: "refund(bytes32,uint256,address,address,uint256)",
   };
 }
 

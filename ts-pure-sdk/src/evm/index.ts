@@ -30,9 +30,12 @@ export {
   encodeApproveCallData,
   encodeCreateSwapCallData,
   encodeHtlcErc20CreateCallData,
+  encodeHtlcErc20RefundCallData,
   encodeRefundSwapCallData,
   type HtlcErc20CreateCallData,
   type HtlcErc20CreateParams,
+  type HtlcErc20RefundCallData,
+  type HtlcErc20RefundParams,
   type RefundSwapCallData,
   uuidToBytes32,
 } from "./htlc.js";

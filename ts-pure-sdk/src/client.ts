@@ -47,7 +47,7 @@ import {
   type LightningToEvmSwapGenericResult,
 } from "./create";
 import { broadcastTransaction, findOutputByAddress } from "./esplora.js";
-import { encodeApproveCallData, encodeRefundSwapCallData } from "./evm";
+import { encodeApproveCallData, encodeRefundSwapCallData, encodeHtlcErc20RefundCallData } from "./evm";
 import {
   buildArkadeClaim,
   type ClaimGaslessResult,
@@ -1421,6 +1421,11 @@ export class Client {
       return this.#buildEvmToBitcoinRefund(id, swap);
     }
 
+    // EVM-to-Lightning uses coordinator refund (same pattern as EVM-to-Arkade)
+    if (direction === "evm_to_lightning") {
+      return this.#buildEvmToLightningRefund(id, swap);
+    }
+
     return {
       success: false,
       message: `Refund not supported for direction: ${direction}.`,
@@ -2134,6 +2139,53 @@ export class Client {
       evmRefundData: {
         to: coordinator_address,
         data: calldata,
+        timelockExpired,
+        timelockExpiry: timelock,
+      },
+    };
+  }
+
+  /**
+   * Builds refund data for an EVM-to-Lightning swap (direct HTLCErc20 refund).
+   * Uses encodeHtlcErc20RefundCallData to call refund on the HTLCErc20 contract.
+   * @internal
+   */
+  async #buildEvmToLightningRefund(
+    _id: string,
+    swap: GetSwapResponse,
+  ): Promise<RefundResult> {
+    const evmSwap = swap as {
+      evm_htlc_address: string;
+      evm_refund_locktime: number;
+      hash_lock: string;
+      source_amount: number;
+      source_token: { token_id: string };
+      server_evm_address: string;
+      direction: "evm_to_lightning";
+    };
+    const htlcAddress = evmSwap.evm_htlc_address;
+    const timelock = evmSwap.evm_refund_locktime;
+
+    const now = Math.floor(Date.now() / 1000);
+    const timelockExpired = now >= timelock;
+
+    // HTLCErc20.refund(preimageHash, amount, token, claimAddress, timelock)
+    const refundData = encodeHtlcErc20RefundCallData(htlcAddress, {
+      preimageHash: evmSwap.hash_lock,
+      amount: BigInt(evmSwap.source_amount),
+      token: evmSwap.source_token.token_id,
+      claimAddress: evmSwap.server_evm_address, // The server would have been the claimer
+      timelock: timelock,
+    });
+
+    return {
+      success: true,
+      message: timelockExpired
+        ? "EVM refund calldata ready. Submit this transaction with your EVM wallet."
+        : `Timelock has not expired yet. Refund will be available at ${new Date(timelock * 1000).toISOString()}.`,
+      evmRefundData: {
+        to: refundData.to,
+        data: refundData.data,
         timelockExpired,
         timelockExpiry: timelock,
       },
