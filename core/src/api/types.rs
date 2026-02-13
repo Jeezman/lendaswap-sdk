@@ -940,7 +940,7 @@ pub struct ArkadeToEvmSwapRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArkadeToEvmSwapCreateResponse {
     pub id: Uuid,
-    pub status: String,
+    pub status: SwapStatus,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
     pub evm_chain_id: u64,
