@@ -646,6 +646,22 @@ export class Client {
     return data;
   }
 
+  /**
+   * Gets the current Median Time Past (MTP) and tip block height.
+   * @returns A promise that resolves to the MTP timestamp and tip height.
+   * @throws Error if the request fails or MTP is not yet available.
+   */
+  async getMtp(): Promise<{ mtp: number; tip_height: number }> {
+    const { data, error } = await this.#apiClient.GET("/mtp");
+    if (error) {
+      throw new Error(`Failed to get MTP: ${JSON.stringify(error)}`);
+    }
+    if (!data) {
+      throw new Error("MTP not available yet");
+    }
+    return data;
+  }
+
   // =========================================================================
   // Tokens & Asset Pairs
   // =========================================================================
