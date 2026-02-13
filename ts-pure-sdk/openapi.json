@@ -1623,7 +1623,7 @@
             "$ref": "#/components/schemas/TokenInfo",
             "description": "Source token info"
           },
-          "status": { "type": "string" },
+          "status": { "$ref": "#/components/schemas/SwapStatus" },
           "target_amount": {
             "type": "integer",
             "format": "int64",
@@ -2185,7 +2185,7 @@
             "minimum": 0
           },
           "source_token": { "$ref": "#/components/schemas/TokenInfo" },
-          "status": { "type": "string" },
+          "status": { "$ref": "#/components/schemas/SwapStatus" },
           "target_token": { "$ref": "#/components/schemas/TokenInfo" },
           "unilateral_claim_delay": { "type": "integer", "format": "int64" },
           "unilateral_refund_delay": { "type": "integer", "format": "int64" },
@@ -2424,7 +2424,7 @@
             "description": "Source token amount in smallest units"
           },
           "source_token": { "$ref": "#/components/schemas/TokenInfo" },
-          "status": { "type": "string" },
+          "status": { "$ref": "#/components/schemas/SwapStatus" },
           "target_token": { "$ref": "#/components/schemas/TokenInfo" },
           "wbtc_address": {
             "type": "string",
