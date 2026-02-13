@@ -77,6 +77,9 @@ export {
   deriveEvmAddress,
   encodeApproveCallData,
   encodeCreateSwapCallData,
+  encodeHtlcErc20CreateCallData,
+  type HtlcErc20CreateCallData,
+  type HtlcErc20CreateParams,
   signEvmDigest,
 } from "./evm/index.js";
 export {

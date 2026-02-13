@@ -30,6 +30,7 @@ import {
   createEvmToArkadeSwapGeneric,
   createEvmToBitcoinSwap,
   createEvmToLightningSwap,
+  createEvmToLightningSwapGeneric,
   createLightningToEvmSwap,
   createLightningToEvmSwapGeneric,
   type EvmToArkadeSwapGenericOptions,
@@ -38,6 +39,8 @@ import {
   type EvmToArkadeSwapResult,
   type EvmToBitcoinSwapOptions,
   type EvmToBitcoinSwapResult,
+  type EvmToLightningSwapGenericOptions,
+  type EvmToLightningSwapGenericResult,
   type EvmToLightningSwapOptions,
   type EvmToLightningSwapResult,
   type LightningToEvmSwapGenericOptions,
@@ -2419,6 +2422,34 @@ export class Client {
     options: EvmToLightningSwapOptions,
   ): Promise<EvmToLightningSwapResult> {
     return createEvmToLightningSwap(options, this.#getCreateContext());
+  }
+
+  /**
+   * Creates a new EVM to Lightning swap using the chain-agnostic generic endpoint.
+   *
+   * This allows users to swap any ERC-20 token from any supported EVM chain
+   * to pay a Lightning invoice.
+   *
+   * @param options - The swap options including Lightning invoice, chain ID, and token address.
+   * @returns The swap response and parameters for storage.
+   * @throws Error if the swap creation fails.
+   *
+   * @example
+   * ```ts
+   * const result = await client.createEvmToLightningSwapGeneric({
+   *   lightningInvoice: "lnbc...",
+   *   evmChainId: 137, // Polygon
+   *   tokenAddress: "0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6", // WBTC
+   *   userAddress: "0x1234...",
+   * });
+   * console.log("HTLC contract:", result.response.evm_htlc_address);
+   * console.log("Swap ID:", result.response.id);
+   * ```
+   */
+  async createEvmToLightningSwapGeneric(
+    options: EvmToLightningSwapGenericOptions,
+  ): Promise<EvmToLightningSwapGenericResult> {
+    return createEvmToLightningSwapGeneric(options, this.#getCreateContext());
   }
 
   // =========================================================================

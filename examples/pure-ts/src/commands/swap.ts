@@ -70,14 +70,15 @@ export async function createSwap(
     process.exit(1);
   }
 
-  const amountNum = parseFloat(amount);
-  if (isNaN(amountNum)) {
+  // Parse the swap direction first (before numeric validation)
+  const swapType = parseSwapType(from, to);
+
+  // For evm-to-lightning, amount is actually the bolt11 invoice, not a number
+  const amountNum = swapType === "evm-to-lightning" ? 0 : parseFloat(amount);
+  if (swapType !== "evm-to-lightning" && isNaN(amountNum)) {
     console.error("Error: amount must be a number");
     process.exit(1);
   }
-
-  // Parse the swap direction
-  const swapType = parseSwapType(from, to);
 
   if (!swapType) {
     console.error(`Unsupported swap direction: ${from} -> ${to}`);
@@ -235,24 +236,27 @@ export async function createSwap(
         process.exit(1);
       }
 
-      const sourceChain = parseSourceChain(from);
-      if (!sourceChain) {
-        console.error(`Unsupported source token: ${from}`);
+      // Look up token info from the map
+      const tokenInfo = EVM_TOKEN_MAP[from];
+      if (!tokenInfo) {
+        console.error(`Unknown source token: ${from}`);
+        console.error(`Supported tokens: ${Object.keys(EVM_TOKEN_MAP).join(", ")}`);
         process.exit(1);
       }
 
-      console.log(`  Source Chain: ${sourceChain}`);
+      console.log(`  Chain ID: ${tokenInfo.evmChainId}`);
+      console.log(`  Token Address: ${tokenInfo.tokenAddress}`);
       console.log("");
 
       // #region evm-to-lightning
-      const result = await client.createEvmToLightningSwap({
-        sourceChain,
-        sourceToken: from,
-        bolt11Invoice,
+      const result = await client.createEvmToLightningSwapGeneric({
+        lightningInvoice: bolt11Invoice,
+        evmChainId: tokenInfo.evmChainId,
+        tokenAddress: tokenInfo.tokenAddress,
         userAddress: evmUserAddress,
       });
 
-      console.log("HTLC contract:", result.response.htlc_address_evm);
+      console.log("HTLC contract:", result.response.evm_htlc_address);
       // ... "0x1234...abcd"
       console.log("Swap ID:", result.response.id);
       // ... "550e8400-e29b-41d4-a716-446655440000"
@@ -262,20 +266,20 @@ export async function createSwap(
       status = result.response.status;
       keyIndex = result.swapParams.keyIndex;
       sourceAmount = result.response.source_amount;
-      sourceDecimals = 6; // USDC/USDT have 6 decimals
-      sourceSymbol = result.response.source_token.replace(/_.*$/, "").toUpperCase();
-      targetAmount = result.response.target_amount;
+      sourceDecimals = result.response.source_token.decimals;
+      sourceSymbol = result.response.source_token.symbol;
+      targetAmount = result.response.btc_expected_sats;
       targetDecimals = 0; // sats
       targetSymbol = "sats";
       paymentInfo = [
-        `1. Approve token spend:`,
-        `   Token contract: ${result.response.source_token_address}`,
-        `   HTLC contract:  ${result.response.htlc_address_evm}`,
+        `1. Fund via SDK CLI:`,
+        `   npm run evm-fund -- ${result.response.id}`,
         ``,
-        `2. Fund the HTLC (call createSwap or similar on the contract)`,
-        `   HTLC Address: ${result.response.htlc_address_evm}`,
+        `   This will:`,
+        `   - Approve ${sourceSymbol} to HTLCErc20 contract`,
+        `   - Lock tokens in the HTLC`,
         ``,
-        `Once funded, the server will pay the Lightning invoice.`,
+        `Once funded, the server will pay your Lightning invoice.`,
       ].join("\n");
 
     } else if (swapType === "evm-to-bitcoin") {

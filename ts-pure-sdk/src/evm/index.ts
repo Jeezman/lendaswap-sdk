@@ -29,7 +29,10 @@ export {
   type CreateSwapParams,
   encodeApproveCallData,
   encodeCreateSwapCallData,
+  encodeHtlcErc20CreateCallData,
   encodeRefundSwapCallData,
+  type HtlcErc20CreateCallData,
+  type HtlcErc20CreateParams,
   type RefundSwapCallData,
   uuidToBytes32,
 } from "./htlc.js";

@@ -65,6 +65,36 @@ export interface RefundSwapCallData {
   functionSignature: string;
 }
 
+/**
+ * Parameters for creating an HTLCErc20 swap (new contract).
+ */
+export interface HtlcErc20CreateParams {
+  /** Hash lock (SHA256 of preimage, 32 bytes hex with 0x prefix) */
+  preimageHash: string;
+  /** Amount of tokens (in token's smallest unit) */
+  amount: bigint;
+  /** Token contract address */
+  token: string;
+  /** Address that can refund (usually the sender/user) */
+  sender: string;
+  /** Address that can claim with preimage (usually the server) */
+  claimer: string;
+  /** Unix timestamp after which refund is possible */
+  timelock: number;
+}
+
+/**
+ * Result of encoding HTLCErc20 create call data.
+ */
+export interface HtlcErc20CreateCallData {
+  /** The HTLC contract address to call */
+  to: string;
+  /** The encoded call data */
+  data: string;
+  /** Human-readable function signature */
+  functionSignature: string;
+}
+
 // Function selectors (first 4 bytes of keccak256 hash of function signature)
 // createSwap(bytes32,address,address,address,uint256,bytes32,uint256,uint24,uint256)
 const CREATE_SWAP_SELECTOR = "0x9a4efe51";
@@ -72,6 +102,8 @@ const CREATE_SWAP_SELECTOR = "0x9a4efe51";
 const APPROVE_SELECTOR = "0x095ea7b3";
 // refundSwap(bytes32)
 const REFUND_SWAP_SELECTOR = "0xfe2510ee";
+// HTLCErc20.create(bytes32,uint256,address,address,address,uint256)
+const HTLC_ERC20_CREATE_SELECTOR = "0x06799dee";
 
 /**
  * Converts a UUID string to a bytes32 hex string (right-padded with zeros).
@@ -245,6 +277,57 @@ export function encodeRefundSwapCallData(
     to: htlcAddress,
     data,
     functionSignature: "refundSwap(bytes32)",
+  };
+}
+
+/**
+ * Encodes the call data for HTLCErc20.create function.
+ *
+ * This is for the new HTLCErc20 contract used in EVM-to-Lightning swaps.
+ *
+ * @param htlcAddress - The HTLCErc20 contract address
+ * @param params - The create parameters
+ * @returns The encoded create call data
+ *
+ * @example
+ * ```ts
+ * const createData = encodeHtlcErc20CreateCallData(htlcAddress, {
+ *   preimageHash: "0x...",
+ *   amount: 100000000n,
+ *   token: "0x...",
+ *   sender: "0x...",
+ *   claimer: "0x...",
+ *   timelock: Math.floor(Date.now() / 1000) + 3600,
+ * });
+ * // Use with viem:
+ * await walletClient.sendTransaction({ to: createData.to, data: createData.data });
+ * ```
+ */
+export function encodeHtlcErc20CreateCallData(
+  htlcAddress: string,
+  params: HtlcErc20CreateParams,
+): HtlcErc20CreateCallData {
+  const preimageHashEncoded = normalizeBytes32(params.preimageHash);
+  const amountEncoded = encodeUint256(params.amount);
+  const tokenEncoded = normalizeAddress(params.token);
+  const senderEncoded = normalizeAddress(params.sender);
+  const claimerEncoded = normalizeAddress(params.claimer);
+  const timelockEncoded = encodeUint256(BigInt(params.timelock));
+
+  const data = [
+    HTLC_ERC20_CREATE_SELECTOR,
+    preimageHashEncoded,
+    amountEncoded,
+    tokenEncoded,
+    senderEncoded,
+    claimerEncoded,
+    timelockEncoded,
+  ].join("");
+
+  return {
+    to: htlcAddress,
+    data,
+    functionSignature: "create(bytes32,uint256,address,address,address,uint256)",
   };
 }
 
