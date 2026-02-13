@@ -907,13 +907,12 @@ export class Client {
    *
    * Reads swap data and preimage from local storage. The claim method
    * depends on the swap direction and target chain:
-   * - **Arkade-to-EVM**: Gasless claim via server (destination set at swap creation time)
-   * - **Polygon/Arbitrum**: Uses Gelato Relay for gasless execution
-   * - **Ethereum**: Returns call data for manual claiming
+   * - **Arkade/Lightning-to-EVM**: Gasless claim via server
+   * - **Other EVM swaps**: Returns call data for manual claiming
    * - **Arkade**: Claims via Arkade protocol
    *
    * @param id - The UUID of the swap.
-   * @param _options - Deprecated. For Arkade-to-EVM, destination is now set at swap creation.
+   * @param _options - Deprecated. For Arkade/Lightning-to-EVM, destination is set at swap creation.
    * @returns A ClaimResult with the outcome.
    *
    * @example

@@ -2,8 +2,8 @@
  * Redeem module for Lendaswap swaps.
  *
  * Provides redeem/claim logic for completing swaps:
- * - Gelato relay for gasless EVM claims (Polygon, Arbitrum)
- * - Manual claiming with call data for Ethereum
+ * - Server-side gasless claims for Arkade/Lightning-to-EVM swaps
+ * - Manual claiming with call data for other EVM swaps
  * - Arkade VHTLC claiming for EVM-to-Arkade swaps
  * - Coordinator redeemAndExecute for Arkade-to-EVM swaps
  */
@@ -45,9 +45,8 @@ export { getChainFromTokenId } from "./types.js";
  * Claims a swap by revealing the preimage.
  *
  * The claim method depends on the swap direction and target chain:
- * - **Arkade-to-EVM**: Returns coordinator data for `redeemAndExecute` (user must sign EIP-712 and submit tx)
- * - **Polygon/Arbitrum**: Uses Gelato Relay for gasless execution
- * - **Ethereum**: Returns call data for manual claiming
+ * - **Arkade/Lightning-to-EVM**: Server-side gasless claim via coordinator
+ * - **Other EVM swaps**: Returns call data for manual claiming
  * - **Arkade**: Returns data needed for `buildArkadeClaim()`
  *
  * @param id - The UUID of the swap.
@@ -62,18 +61,14 @@ export { getChainFromTokenId } from "./types.js";
  * const result = await claim(swapId, storedSwap.preimage, ctx, "0x1234...");
  * if (result.success) {
  *   if (result.coordinatorClaimData) {
- *     // Arkade-to-EVM: build EIP-712 sig and call redeemAndExecute
- *     const digest = buildRedeemDigest({ ... result.coordinatorClaimData });
- *     // Sign digest with EVM wallet, then encodeRedeemAndExecute(...)
+ *     // Arkade/Lightning-to-EVM: gasless claim via server
+ *     console.log("TX Hash:", result.txHash);
  *   } else if (result.chain === "arkade") {
  *     // Arkade claim needs user's keys
  *     await buildArkadeClaim({ ...result.arkadeClaimData, ... });
- *   } else if (result.chain === "ethereum") {
- *     // Manual EVM claim
- *     console.log("Call data:", result.ethereumClaimData.callData);
  *   } else {
- *     // Gelato relay (Polygon/Arbitrum)
- *     console.log("TX Hash:", result.txHash);
+ *     // Manual EVM claim
+ *     console.log("Call data:", result.ethereumClaimData?.callData);
  *   }
  * }
  * ```

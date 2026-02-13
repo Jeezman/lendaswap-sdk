@@ -81,9 +81,9 @@ export interface ClaimResult {
   message: string;
   /** The chain the swap targets */
   chain?: ClaimChain;
-  /** Gelato task ID (for Polygon/Arbitrum claims) */
+  /** Task ID (deprecated, kept for backwards compatibility) */
   taskId?: string;
-  /** Transaction hash (for Polygon/Arbitrum claims) */
+  /** Transaction hash */
   txHash?: string;
   /** Data for manual Ethereum claims */
   ethereumClaimData?: EthereumClaimData;

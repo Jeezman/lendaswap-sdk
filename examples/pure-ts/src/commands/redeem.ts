@@ -131,11 +131,11 @@ export async function redeemSwap(
       console.log(`  TX Hash:      ${result.txHash}`);
       console.log(`  Message:      ${result.message}`);
 
-    } else if (swap.direction === "arkade_to_evm") {
-      // Arkade-to-EVM - gasless claim via server
-      const arkadeSwap = swap as { target_evm_address?: string; client_evm_address?: string };
-      const targetAddr = arkadeSwap.target_evm_address ?? arkadeSwap.client_evm_address ?? "unknown";
-      console.log(`  Direction:    arkade_to_evm (gasless)`);
+    } else if (swap.direction === "arkade_to_evm" || swap.direction === "lightning_to_evm") {
+      // Arkade/Lightning-to-EVM - gasless claim via server
+      const evmSwap = swap as { target_evm_address?: string; client_evm_address?: string };
+      const targetAddr = evmSwap.target_evm_address ?? evmSwap.client_evm_address ?? "unknown";
+      console.log(`  Direction:    ${swap.direction} (gasless)`);
       console.log(`  TX Hash:      ${result.txHash}`);
       console.log(`  Target:       ${targetAddr}`);
       console.log("");
@@ -143,13 +143,12 @@ export async function redeemSwap(
       console.log("");
       console.log("=".repeat(60));
       console.log("");
-      console.log("The server has submitted the redeemAndExecute transaction.");
+      console.log("The server has submitted the claim transaction.");
       console.log("Use 'npm run watch -- " + swapId + "' to monitor until completion.");
 
     } else {
-      // Polygon/Arbitrum - gasless claim via Gelato
+      // Generic EVM claim
       console.log(`  Chain:        ${result.chain}`);
-      console.log(`  Gelato Task:  ${result.taskId}`);
       console.log(`  TX Hash:      ${result.txHash}`);
       console.log("");
       console.log(`  Message:      ${result.message}`);
