@@ -199,6 +199,26 @@
         }
       }
     },
+    "/mtp": {
+      "get": {
+        "tags": ["mtp"],
+        "summary": "Return the current cached Median Time Past (MTP) and tip height.",
+        "operationId": "get_mtp",
+        "responses": {
+          "200": {
+            "description": "Return the current MTP and tip height",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MtpResponse" }
+              }
+            }
+          },
+          "503": {
+            "description": "MTP not available yet (cache not populated)"
+          }
+        }
+      }
+    },
     "/quote": {
       "get": {
         "tags": ["quote"],
@@ -3077,6 +3097,24 @@
           }
         }
       },
+      "MtpResponse": {
+        "type": "object",
+        "required": ["mtp", "tip_height"],
+        "properties": {
+          "mtp": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The Median Time Past (Unix timestamp in seconds).",
+            "minimum": 0
+          },
+          "tip_height": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The tip block height when MTP was last calculated.",
+            "minimum": 0
+          }
+        }
+      },
       "PolygonToLightningSwapRequest": {
         "type": "object",
         "required": [
@@ -3653,6 +3691,10 @@
       "description": "Get available EVM tokens from 1inch."
     },
     { "name": "health", "description": "Health check endpoint." },
+    {
+      "name": "mtp",
+      "description": "Bitcoin Median Time Past (MTP) information."
+    },
     {
       "name": "websocket",
       "description": "WebSocket endpoints for real-time data streaming."
