@@ -5,10 +5,7 @@
  * all original swap parameters for verification.
  */
 
-import type {
-  BtcToEvmSwapResponse,
-  GetSwapResponse,
-} from "../api/client.js";
+import type { BtcToEvmSwapResponse, GetSwapResponse } from "../api/client.js";
 import type { ClaimResult } from "./types.js";
 
 /**
@@ -47,7 +44,8 @@ export function buildEthereumClaimData(
   if (!params) {
     return {
       success: false,
-      message: "Could not extract redeem parameters from swap response. Missing amount, token, sender, or timelock.",
+      message:
+        "Could not extract redeem parameters from swap response. Missing amount, token, sender, or timelock.",
       chain,
     };
   }
@@ -57,7 +55,9 @@ export function buildEthereumClaimData(
   while (normalizedSecret.startsWith("0x0x")) {
     normalizedSecret = normalizedSecret.slice(2);
   }
-  normalizedSecret = normalizedSecret.startsWith("0x") ? normalizedSecret : `0x${normalizedSecret}`;
+  normalizedSecret = normalizedSecret.startsWith("0x")
+    ? normalizedSecret
+    : `0x${normalizedSecret}`;
 
   // Encode the call data for redeem(bytes32,uint256,address,address,uint256)
   const callData = encodeRedeemCallData(
@@ -70,15 +70,15 @@ export function buildEthereumClaimData(
 
   return {
     success: true,
-    message:
-      `${chain.charAt(0).toUpperCase() + chain.slice(1)} claims require manual execution. Use the provided call data to submit the transaction.`,
+    message: `${chain.charAt(0).toUpperCase() + chain.slice(1)} claims require manual execution. Use the provided call data to submit the transaction.`,
     chain,
     ethereumClaimData: {
       contractAddress,
       callData,
       swapId: id, // Keep for reference (not used in contract)
       secret: normalizedSecret,
-      functionSignature: "redeem(bytes32 preimage, uint256 amount, address token, address sender, uint256 timelock)",
+      functionSignature:
+        "redeem(bytes32 preimage, uint256 amount, address token, address sender, uint256 timelock)",
       // Additional params for manual construction
       amount: params.amount,
       token: params.token,
@@ -90,16 +90,18 @@ export function buildEthereumClaimData(
 
 /**
  * Extracts redeem parameters from a swap response.
- * 
+ *
  * Note: Lightning-to-EVM and Arkade-to-EVM swaps use the gasless claim path
  * and don't go through this function.
  */
-function getRedeemParams(swap: GetSwapResponse): {
-  amount: bigint;
-  token: string;
-  sender: string;
-  timelock: bigint;
-} | undefined {
+function getRedeemParams(swap: GetSwapResponse):
+  | {
+      amount: bigint;
+      token: string;
+      sender: string;
+      timelock: bigint;
+    }
+  | undefined {
   // BTC-to-EVM swaps (BtcToEvmSwapResponse) - legacy type
   if ("htlc_address_evm" in swap) {
     // These swaps use different field names - not supported for manual redeem
@@ -223,7 +225,7 @@ function normalizeBytes32(input: string): string {
  */
 function normalizeAddress(address: string): string {
   // Remove 0x prefix if present
-  let hex = address.startsWith("0x") ? address.slice(2) : address;
+  const hex = address.startsWith("0x") ? address.slice(2) : address;
 
   // Addresses are 20 bytes (40 hex chars), pad to 32 bytes (64 hex chars)
   return hex.padStart(64, "0").toLowerCase();

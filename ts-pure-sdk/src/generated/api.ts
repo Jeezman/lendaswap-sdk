@@ -254,6 +254,31 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/swap/evm/lightning": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Create a chain-agnostic EVM-to-Lightning swap.
+     * @description Flow:
+     *     1. User provides their Lightning invoice (they want to receive BTC)
+     *     2. Server prepares Boltz submarine swap to pay the invoice
+     *     3. User funds EVM HTLCErc20 with tokens
+     *     4. Server pays Lightning invoice via Boltz (gets preimage)
+     *     5. Server claims EVM HTLCErc20 using preimage
+     */
+    post: operations["create_evm_to_lightning_swap_generic"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/swap/lightning/arbitrum": {
     parameters: {
       query?: never;
@@ -282,6 +307,23 @@ export interface paths {
     put?: never;
     /** Create a new Lightning to Ethereum swap request */
     post: operations["lightning_to_ethereum_swap"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/swap/lightning/evm": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Create a chain-agnostic Lightning-to-EVM swap. */
+    post: operations["create_lightning_evm_swap"];
     delete?: never;
     options?: never;
     head?: never;
@@ -1258,6 +1300,76 @@ export interface components {
       /** @description User's EVM address sending tokens */
       user_address_evm: string;
     };
+    /**
+     * @description Request to create an EVM-to-Lightning swap.
+     *
+     *     User sends any ERC-20 token on EVM, receives BTC via Lightning.
+     *     The hash_lock is derived from the Lightning invoice's payment hash.
+     */
+    EvmToLightningSwapRequest: {
+      /**
+       * Format: int64
+       * @description Numeric EVM chain ID: 1 (Ethereum), 137 (Polygon), 42161 (Arbitrum).
+       */
+      evm_chain_id: number;
+      /**
+       * @description User's Lightning BOLT11 invoice to receive payment.
+       *     The payment hash from this invoice becomes the HTLC hash_lock.
+       */
+      lightning_invoice: string;
+      /** @description Optional referral code for tracking. */
+      referral_code?: string | null;
+      /** @description ERC-20 contract address of the source token on the EVM chain. */
+      token_address: string;
+      /** @description User's EVM address (sender of the ERC-20 token). */
+      user_address: string;
+      /** @description User ID derived from wallet for recovery purposes. */
+      user_id: string;
+    };
+    /** @description EVM → Lightning swap response */
+    EvmToLightningSwapResponse: {
+      arkade_server_pk: string;
+      /** Format: int64 */
+      btc_expected_sats: number;
+      chain: string;
+      client_evm_address: string;
+      /** @description User's Lightning invoice to receive payment */
+      client_lightning_invoice: string;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: int64 */
+      evm_chain_id: number;
+      evm_claim_txid?: string | null;
+      /** Format: int64 */
+      evm_expected_sats: number;
+      evm_fund_txid?: string | null;
+      evm_htlc_address: string;
+      /** Format: int64 */
+      evm_refund_locktime: number;
+      /** Format: int64 */
+      fee_sats: number;
+      hash_lock: string;
+      id: string;
+      /** @description Whether the Lightning payment has been made */
+      lightning_paid: boolean;
+      network: string;
+      receiver_pk: string;
+      sender_pk: string;
+      server_evm_address: string;
+      /** Format: int64 */
+      source_amount: number;
+      source_token: components["schemas"]["TokenInfo"];
+      status: components["schemas"]["SwapStatus"];
+      target_token: components["schemas"]["TokenInfo"];
+      /** Format: int64 */
+      unilateral_claim_delay: number;
+      /** Format: int64 */
+      unilateral_refund_delay: number;
+      /** Format: int64 */
+      unilateral_refund_without_receiver_delay: number;
+      /** Format: int64 */
+      vhtlc_refund_locktime: number;
+    };
     EvmTokenInfo: {
       address: string;
       /** Format: int32 */
@@ -1300,6 +1412,14 @@ export interface components {
       | (components["schemas"]["EvmToBitcoinSwapResponse"] & {
           /** @enum {string} */
           direction: "evm_to_bitcoin";
+        })
+      | (components["schemas"]["LightningToEvmSwapResponse"] & {
+          /** @enum {string} */
+          direction: "lightning_to_evm";
+        })
+      | (components["schemas"]["EvmToLightningSwapResponse"] & {
+          /** @enum {string} */
+          direction: "evm_to_lightning";
         });
     LightningToArbitrumSwapRequest: {
       /**
@@ -1360,6 +1480,98 @@ export interface components {
       target_token: components["schemas"]["TokenId"];
       /** @description User ID derived from wallet for recovery purposes */
       user_id: string;
+    };
+    /**
+     * @description Chain-agnostic request for Lightning-to-EVM swaps.
+     *
+     *     The caller specifies the target chain via `evm_chain_id` and the token
+     *     via its ERC-20 contract `token_address`. This endpoint supports any token
+     *     reachable through 1inch aggregation.
+     */
+    LightningToEvmSwapRequest: {
+      /**
+       * Format: int64
+       * @description How many sats the user wants to send (mutually exclusive with `amount_out`).
+       *     Value is in satoshis (smallest BTC unit).
+       */
+      amount_in?: number | null;
+      /**
+       * Format: int64
+       * @description How much target token the user wants to receive (mutually exclusive with `amount_in`).
+       *     Value is in the target token's smallest unit (e.g. for USDC with 6 decimals, 1000000 = 1 USDC).
+       */
+      amount_out?: number | null;
+      /** @description EVM address that will sign the HTLC claim (SDK-derived for gasless claims). */
+      claiming_address: string;
+      /**
+       * Format: int64
+       * @description Numeric EVM chain ID: 1 (Ethereum), 137 (Polygon), 42161 (Arbitrum).
+       */
+      evm_chain_id: number;
+      /** @description Hash lock provided by the client (32-byte hex string with 0x prefix). */
+      hash_lock: string;
+      /** @description Optional referral code for tracking. */
+      referral_code?: string | null;
+      /** @description Refund public key used to generate the Arkade VHTLC. */
+      refund_pk: string;
+      /** @description EVM address where tokens are swept after the claim (user's final destination). */
+      target_address: string;
+      /** @description ERC-20 contract address of the desired token on the target chain. */
+      token_address: string;
+      /** @description User ID derived from wallet for recovery purposes. */
+      user_id: string;
+    };
+    /** @description Lightning → EVM swap response */
+    LightningToEvmSwapResponse: {
+      arkade_server_pk: string;
+      /** @description Lightning invoice to pay */
+      boltz_invoice: string;
+      /** @description Boltz swap ID */
+      boltz_swap_id: string;
+      /** @description Server's claim transaction ID on Arkade (Boltz VHTLC claim) */
+      btc_claim_txid?: string | null;
+      /** Format: int64 */
+      btc_expected_sats: number;
+      chain: string;
+      /** @description EVM address that will sign the HTLC claim */
+      client_evm_address: string;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: int64 */
+      evm_chain_id: number;
+      evm_claim_txid?: string | null;
+      evm_coordinator_address: string;
+      /** Format: int64 */
+      evm_expected_sats: number;
+      evm_fund_txid?: string | null;
+      evm_htlc_address: string;
+      /** Format: int64 */
+      evm_refund_locktime: number;
+      /** Format: int64 */
+      fee_sats: number;
+      hash_lock: string;
+      id: string;
+      network: string;
+      receiver_pk: string;
+      sender_pk: string;
+      server_evm_address: string;
+      source_token: components["schemas"]["TokenInfo"];
+      status: components["schemas"]["SwapStatus"];
+      /** Format: int64 */
+      target_amount?: number | null;
+      /** @description EVM address where tokens are swept after the claim */
+      target_evm_address?: string | null;
+      target_token: components["schemas"]["TokenInfo"];
+      /** Format: int64 */
+      unilateral_claim_delay: number;
+      /** Format: int64 */
+      unilateral_refund_delay: number;
+      /** Format: int64 */
+      unilateral_refund_without_receiver_delay: number;
+      /** Format: int64 */
+      vhtlc_refund_locktime: number;
+      /** @description WBTC token contract address on the target EVM chain */
+      wbtc_address: string;
     };
     LightningToPolygonSwapRequest: {
       /**
@@ -2280,6 +2492,48 @@ export interface operations {
       };
     };
   };
+  create_evm_to_lightning_swap_generic: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["EvmToLightningSwapRequest"];
+      };
+    };
+    responses: {
+      /** @description Swap created successfully */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EvmToLightningSwapResponse"];
+        };
+      };
+      /** @description Bad request - invalid parameters */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal server error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
   create_lightning_to_arbitrum_swap: {
     parameters: {
       query?: never;
@@ -2342,6 +2596,48 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["BtcToEvmSwapResponse"];
+        };
+      };
+      /** @description Bad request - invalid parameters */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal server error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  create_lightning_evm_swap: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["LightningToEvmSwapRequest"];
+      };
+    };
+    responses: {
+      /** @description Swap created successfully */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LightningToEvmSwapResponse"];
         };
       };
       /** @description Bad request - invalid parameters */

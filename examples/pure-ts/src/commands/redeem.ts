@@ -164,14 +164,19 @@ export async function redeemSwap(
     // amountsForSwap only applies to VHTLC-based swaps that lock into Arkade
     const vhtlcDirections = ["evm_to_arkade", "btc_to_arkade", "evm_to_btc", "btc_to_evm"];
     if (vhtlcDirections.includes(swap.direction)) {
-      const amounts = await client.amountsForSwap(swapId);
+      try {
+        const amounts = await client.amountsForSwap(swapId);
 
-      console.log("Spendable:", amounts.spendable, "sats");
-      // ... 100000 "sats"
-      console.log("Spent:", amounts.spent, "sats");
-      // ... 0 "sats"
-      console.log("Recoverable:", amounts.recoverable, "sats");
-      // ... 0 "sats"
+        console.log("Spendable:", amounts.spendable, "sats");
+        // ... 100000 "sats"
+        console.log("Spent:", amounts.spent, "sats");
+        // ... 0 "sats"
+        console.log("Recoverable:", amounts.recoverable, "sats");
+        // ... 0 "sats"
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.warn("Could not fetch VHTLC amounts:", msg);
+      }
     }
     // #endregion check-vhtlc-amounts
 

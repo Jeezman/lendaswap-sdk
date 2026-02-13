@@ -32,8 +32,6 @@ import {
   createEvmToLightningSwap,
   createLightningToEvmSwap,
   createLightningToEvmSwapGeneric,
-  type LightningToEvmSwapGenericOptions,
-  type LightningToEvmSwapGenericResult,
   type EvmToArkadeSwapGenericOptions,
   type EvmToArkadeSwapGenericResult,
   type EvmToArkadeSwapOptions,
@@ -42,6 +40,8 @@ import {
   type EvmToBitcoinSwapResult,
   type EvmToLightningSwapOptions,
   type EvmToLightningSwapResult,
+  type LightningToEvmSwapGenericOptions,
+  type LightningToEvmSwapGenericResult,
 } from "./create";
 import { broadcastTransaction, findOutputByAddress } from "./esplora.js";
 import { encodeApproveCallData, encodeRefundSwapCallData } from "./evm";
@@ -1378,7 +1378,7 @@ export class Client {
     }
 
     // Bitcoin on-chain swaps require on-chain refund transaction
-    if (direction === "onchain_to_evm") {
+    if (direction === "bitcoin_to_evm") {
       return this.#buildOnchainRefund(id, swap, options);
     }
 
