@@ -57,7 +57,8 @@ export function signEvmDigest(
   const digestBytes = hexToBytes(digest.replace(/^0x/, ""));
 
   // sign returns a RecoveredSignature object
-  const sigObj = secp256k1.sign(digestBytes, keyBytes, { prehash: false });
+  const sigBytes = secp256k1.sign(digestBytes, keyBytes, { prehash: false });
+  const sigObj = secp256k1.Signature.fromBytes(sigBytes);
 
   const r = sigObj.r.toString(16).padStart(64, "0");
   const s = sigObj.s.toString(16).padStart(64, "0");
