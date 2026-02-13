@@ -1616,7 +1616,7 @@ export class Client {
 
     // Ensure we have an on-chain funded swap
     if (
-      swap.direction !== "onchain_to_evm" &&
+      swap.direction !== "bitcoin_to_evm" &&
       swap.direction !== "btc_to_arkade"
     ) {
       return {
