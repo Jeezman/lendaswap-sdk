@@ -11,14 +11,22 @@ export type ClaimChain = "polygon" | "arbitrum" | "ethereum" | "arkade";
 export interface EthereumClaimData {
   /** The HTLC contract address */
   contractAddress: string;
-  /** The encoded call data for claimSwap(bytes32,bytes32) */
+  /** The encoded call data for redeem() */
   callData: string;
-  /** The swap ID (bytes32) */
+  /** The swap ID (UUID, for reference only - not used in contract call) */
   swapId: string;
   /** The secret/preimage (bytes32) */
   secret: string;
   /** Human-readable function signature */
   functionSignature: string;
+  /** Token amount locked in HTLC (for manual claim construction) */
+  amount?: bigint;
+  /** ERC20 token address (for manual claim construction) */
+  token?: string;
+  /** Sender address who created the HTLC (for manual claim construction) */
+  sender?: string;
+  /** Refund timelock timestamp (for manual claim construction) */
+  timelock?: bigint;
 }
 
 /** Data needed for Arkade-to-EVM coordinator claims (redeemAndExecute) */

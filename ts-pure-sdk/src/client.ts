@@ -1,7 +1,6 @@
 import {
   type ApiClient,
   type ArkadeToEvmSwapResponse,
-  type BitcoinToEvmSwapResponse,
   type BtcToArkadeSwapResponse,
   type BtcToEvmSwapResponse,
   type Chain,
@@ -10,6 +9,7 @@ import {
   type EvmToBitcoinSwapResponse,
   type EvmToBtcSwapResponse,
   type GetSwapResponse,
+  type LightningToEvmSwapResponse,
   type QuoteResponse,
   type TokenInfos,
 } from "./api/client.js";
@@ -31,6 +31,9 @@ import {
   createEvmToBitcoinSwap,
   createEvmToLightningSwap,
   createLightningToEvmSwap,
+  createLightningToEvmSwapGeneric,
+  type LightningToEvmSwapGenericOptions,
+  type LightningToEvmSwapGenericResult,
   type EvmToArkadeSwapGenericOptions,
   type EvmToArkadeSwapGenericResult,
   type EvmToArkadeSwapOptions,
@@ -947,15 +950,15 @@ export class Client {
     const swap = storedSwap.response;
     const secret = storedSwap.preimage;
 
-    // Arkade-to-EVM and Bitcoin-to-EVM: use gasless claim via server (SDK signs internally)
+    // EVM-targeted swaps: use gasless claim via server (SDK signs internally)
     // The destination is always the stored target_evm_address (set at swap creation time)
     if (
       swap.direction === "arkade_to_evm" ||
-      swap.direction === "bitcoin_to_evm"
+      swap.direction === "lightning_to_evm"
     ) {
       const evmSwap = swap as (
         | ArkadeToEvmSwapResponse
-        | BitcoinToEvmSwapResponse
+        | LightningToEvmSwapResponse
       ) & {
         direction: string;
       };
@@ -1084,16 +1087,16 @@ export class Client {
 
     const swap = (await this.getSwap(id, {
       updateStorage: true,
-    })) as (ArkadeToEvmSwapResponse | BitcoinToEvmSwapResponse) & {
+    })) as (ArkadeToEvmSwapResponse | LightningToEvmSwapResponse) & {
       direction: string;
     };
 
     if (
       swap.direction !== "arkade_to_evm" &&
-      swap.direction !== "bitcoin_to_evm"
+      swap.direction !== "lightning_to_evm"
     ) {
       throw new Error(
-        `Expected arkade_to_evm or bitcoin_to_evm swap, got ${swap.direction}. claimViaGasless is for EVM-targeted swaps.`,
+        `Expected arkade_to_evm or lightning_to_evm swap, got ${swap.direction}. claimViaGasless is for EVM-targeted swaps.`,
       );
     }
 
@@ -1132,7 +1135,7 @@ export class Client {
       baseUrl: this.#config.baseUrl,
       preimage: stored.preimage,
       secretKey: hexToBytes(stored.secretKey),
-      swap: swap as ArkadeToEvmSwapResponse | BitcoinToEvmSwapResponse,
+      swap,
       destination,
       dexCalldata,
     });
@@ -1376,7 +1379,7 @@ export class Client {
     }
 
     // Bitcoin on-chain swaps require on-chain refund transaction
-    if (direction === "bitcoin_to_evm") {
+    if (direction === "onchain_to_evm") {
       return this.#buildOnchainRefund(id, swap, options);
     }
 
@@ -1614,7 +1617,7 @@ export class Client {
 
     // Ensure we have an on-chain funded swap
     if (
-      swap.direction !== "bitcoin_to_evm" &&
+      swap.direction !== "onchain_to_evm" &&
       swap.direction !== "btc_to_arkade"
     ) {
       return {
@@ -1641,8 +1644,13 @@ export class Client {
       serverPubKeyFull = arkadeSwap.server_vhtlc_pk;
       networkStr = arkadeSwap.network;
     } else {
-      const onchainSwap = swap as BitcoinToEvmSwapResponse & {
-        direction: "bitcoin_to_evm";
+      // OnchainToEvmSwapResponse (on-chain Bitcoin to EVM)
+      const onchainSwap = swap as unknown as {
+        btc_htlc_address: string;
+        btc_refund_locktime: number;
+        btc_hash_lock: string;
+        btc_server_pk: string;
+        network: string;
       };
       btcHtlcAddress = onchainSwap.btc_htlc_address;
       btcRefundLocktime = onchainSwap.btc_refund_locktime;
@@ -2119,6 +2127,7 @@ export class Client {
   #getCreateContext(): CreateSwapContext {
     return {
       apiClient: this.#apiClient,
+      baseUrl: this.#config.baseUrl,
       deriveSwapParams: () => this.deriveSwapParams(),
       storeSwap: (swapId, swapParams, response) =>
         this.#storeSwap(swapId, swapParams, response),
@@ -2216,6 +2225,18 @@ export class Client {
     options: BtcToEvmSwapOptions,
   ): Promise<BtcToEvmSwapResult> {
     return createLightningToEvmSwap(options, this.#getCreateContext());
+  }
+
+  /**
+   * Creates a new Lightning to EVM swap using the generic chain-agnostic endpoint.
+   *
+   * @param options - The swap options including evmChainId and tokenAddress.
+   * @returns The swap response and parameters for storage.
+   */
+  async createLightningToEvmSwapGeneric(
+    options: LightningToEvmSwapGenericOptions,
+  ): Promise<LightningToEvmSwapGenericResult> {
+    return createLightningToEvmSwapGeneric(options, this.#getCreateContext());
   }
 
   /**

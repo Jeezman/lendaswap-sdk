@@ -16,6 +16,57 @@ import type {
 } from "../api/client.js";
 import type { SwapParams } from "../signer";
 
+// Placeholder types until OpenAPI spec is regenerated
+// These match the Rust API response types
+
+/** Response from Lightning-to-EVM swap creation */
+export interface LightningToEvmSwapResponse {
+  id: string;
+  status: string;
+  hash_lock: string;
+  evm_chain_id: number;
+  evm_chain_name: string;
+  target_address: string;
+  claiming_address: string;
+  token_address: string;
+  token_symbol: string;
+  token_decimals: number;
+  amount_in_sats: number;
+  amount_out_token: string;
+  ln_invoice: string;
+  ln_invoice_amount_sats: number;
+  timelock: number;
+  htlc_erc20_address: string;
+  server_btc_receive_address: string;
+  created_at: string;
+  updated_at: string;
+  dex_calldata?: {
+    to: string;
+    data: string;
+    value: string;
+  };
+}
+
+/** Response from EVM-to-Lightning swap creation */
+export interface EvmToLightningSwapResponse {
+  id: string;
+  status: string;
+  hash_lock: string;
+  evm_chain_id: number;
+  evm_chain_name: string;
+  user_address: string;
+  token_address: string;
+  token_symbol: string;
+  token_decimals: number;
+  amount_in_token: string;
+  amount_out_sats: number;
+  lightning_invoice: string;
+  timelock: number;
+  htlc_erc20_address: string;
+  created_at: string;
+  updated_at: string;
+}
+
 /** Supported EVM chains for swaps */
 export type EvmChain = "polygon" | "arbitrum" | "ethereum" | string;
 
@@ -112,7 +163,7 @@ export interface EvmToArkadeSwapResult {
   swapParams: SwapParams;
 }
 
-/** Options for creating an EVM to Lightning swap */
+/** Options for creating an EVM to Lightning swap (chain-specific - deprecated) */
 export interface EvmToLightningSwapOptions {
   /** Source EVM chain */
   sourceChain: EvmChain;
@@ -130,6 +181,52 @@ export interface EvmToLightningSwapOptions {
 export interface EvmToLightningSwapResult {
   /** The swap response from the API */
   response: EvmToBtcSwapResponse;
+  /** The swap parameters used (for storage/recovery) */
+  swapParams: SwapParams;
+}
+
+/** Options for creating a Lightning-to-EVM swap via the generic endpoint */
+export interface LightningToEvmSwapGenericOptions {
+  /** EVM address where tokens are swept after the claim (user's final destination) */
+  targetAddress: string;
+  /** Numeric EVM chain ID: 1 (Ethereum), 137 (Polygon), 42161 (Arbitrum) */
+  evmChainId: number;
+  /** ERC-20 contract address of the desired token on the target chain */
+  tokenAddress: string;
+  /** Amount in satoshis to send (mutually exclusive with amountOut) */
+  amountIn?: number;
+  /** Amount of target token to receive in smallest unit (mutually exclusive with amountIn) */
+  amountOut?: number;
+  /** Optional referral code */
+  referralCode?: string;
+}
+
+/** Result of creating a Lightning-to-EVM swap via the generic endpoint */
+export interface LightningToEvmSwapGenericResult {
+  /** The swap response from the API */
+  response: LightningToEvmSwapResponse;
+  /** The swap parameters used (for storage/recovery) */
+  swapParams: SwapParams;
+}
+
+/** Options for creating an EVM-to-Lightning swap via the generic endpoint */
+export interface EvmToLightningSwapGenericOptions {
+  /** User's Lightning invoice to receive payment. Amount is derived from the invoice. */
+  lightningInvoice: string;
+  /** Numeric EVM chain ID: 1 (Ethereum), 137 (Polygon), 42161 (Arbitrum) */
+  evmChainId: number;
+  /** ERC-20 contract address of the source token on the EVM chain */
+  tokenAddress: string;
+  /** User's EVM address (sender of the ERC-20 token) */
+  userAddress: string;
+  /** Optional referral code */
+  referralCode?: string;
+}
+
+/** Result of creating an EVM-to-Lightning swap via the generic endpoint */
+export interface EvmToLightningSwapGenericResult {
+  /** The swap response from the API */
+  response: EvmToLightningSwapResponse;
   /** The swap parameters used (for storage/recovery) */
   swapParams: SwapParams;
 }
@@ -218,6 +315,8 @@ export interface ArkadeToEvmSwapResult {
 export interface CreateSwapContext {
   /** The API client for making requests */
   apiClient: ApiClient;
+  /** The base URL for the API (for endpoints not yet in OpenAPI spec) */
+  baseUrl: string;
   /** Function to derive swap parameters (auto-increments key index) */
   deriveSwapParams: () => Promise<SwapParams>;
   /** Function to store the swap in storage (if configured) */

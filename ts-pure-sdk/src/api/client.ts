@@ -60,6 +60,10 @@ export type EvmToBitcoinSwapRequest =
 export type EvmToBitcoinSwapResponse =
   components["schemas"]["EvmToBitcoinSwapResponse"];
 
+// Lightning-to-EVM (generic endpoint) types
+export type LightningToEvmSwapResponse =
+  components["schemas"]["LightningToEvmSwapResponse"];
+
 export interface ApiClientOptions {
   baseUrl: string;
   apiKey?: string;

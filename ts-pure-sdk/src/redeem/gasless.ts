@@ -7,10 +7,15 @@
 
 import type {
   ArkadeToEvmSwapResponse,
-  BitcoinToEvmSwapResponse,
+  LightningToEvmSwapResponse,
 } from "../api/client.js";
 import { buildRedeemDigest, signEvmDigest } from "../evm";
 import type { ClaimGaslessResult } from "./types.js";
+
+/** Swap types that support gasless claiming */
+export type GaslessSwapResponse =
+  | ArkadeToEvmSwapResponse
+  | LightningToEvmSwapResponse;
 
 /** Parameters for a gasless claim */
 export interface GaslessClaimParams {
@@ -21,7 +26,7 @@ export interface GaslessClaimParams {
   /** The secret key for EVM signing (raw bytes) */
   secretKey: Uint8Array;
   /** The swap data from the server */
-  swap: ArkadeToEvmSwapResponse | BitcoinToEvmSwapResponse;
+  swap: GaslessSwapResponse;
   /** The EVM address where tokens should be sent */
   destination: string;
   /** Pre-fetched DEX calldata (for non-WBTC targets) */

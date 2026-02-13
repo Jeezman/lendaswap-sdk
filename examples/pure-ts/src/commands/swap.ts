@@ -28,6 +28,8 @@ const EVM_TOKEN_MAP: Record<string, { tokenAddress: string; evmChainId: number }
   usdt_pol: {tokenAddress: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F", evmChainId: 137},
   usdt_arb: {tokenAddress: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9", evmChainId: 42161},
   usdt_eth: {tokenAddress: "0xdAC17F958D2ee523a2206206994597C13D831ec7", evmChainId: 1},
+  // WBTC for regtest/mainnet testing
+  wbtc_pol: {tokenAddress: "0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6", evmChainId: 137},
 };
 
 export async function createSwap(
@@ -370,36 +372,35 @@ export async function createSwap(
       ].join("\n");
 
     } else if (swapType === "lightning") {
-      const targetChain = parseTargetChain(to);
-      if (!targetChain) {
-        console.error(`Unsupported target token: ${to}`);
+      const tokenInfo = EVM_TOKEN_MAP[to];
+      if (!tokenInfo) {
+        console.error(`Unknown target token: ${to}`);
+        console.error(`Supported tokens: ${Object.keys(EVM_TOKEN_MAP).join(", ")}`);
         process.exit(1);
       }
 
-      // #region lightning-to-evm-by-source
-      const result = await client.createLightningToEvmSwap({
+      // #region lightning-to-evm-generic
+      const result = await client.createLightningToEvmSwapGeneric({
         targetAddress: address!,
-        targetToken: to,
-        targetChain,
-        sourceAmount: Math.floor(amountNum),
+        evmChainId: tokenInfo.evmChainId,
+        tokenAddress: tokenInfo.tokenAddress,
+        amountIn: Math.floor(amountNum),
       });
 
-      console.log("Pay invoice:", result.response.ln_invoice);
-      // ... "lnbc1m1p..."
-      console.log("You will receive:", result.response.target_amount, "USDC");
-      // ... 48.25 "USDC"
-      // #endregion lightning-to-evm-by-source
+      console.log("Pay invoice:", result.response.boltz_invoice);
+      console.log("You will receive:", result.response.target_amount, to.split("_")[0].toUpperCase());
+      // #endregion lightning-to-evm-generic
 
       swapId = result.response.id;
       status = result.response.status;
       keyIndex = result.swapParams.keyIndex;
-      sourceAmount = result.response.source_amount;
+      sourceAmount = result.response.btc_expected_sats;
       sourceDecimals = 0; // sats
       sourceSymbol = "sats";
       targetAmount = result.response.target_amount;
-      targetDecimals = 6; // USDC/USDT have 6 decimals
+      targetDecimals = 8; // Response is in smallest units
       targetSymbol = to.replace(/_.*$/, "").toUpperCase();
-      paymentInfo = `Pay this Lightning Invoice:\n  ${result.response.ln_invoice}`;
+      paymentInfo = `Pay this Lightning Invoice:\n  ${result.response.boltz_invoice}`;
 
     } else if (swapType === "arkade") {
       const tokenInfo = EVM_TOKEN_MAP[to];

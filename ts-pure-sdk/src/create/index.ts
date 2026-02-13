@@ -14,8 +14,14 @@ export { createBitcoinToEvmSwap } from "./bitcoin.js";
 export { createBitcoinToArkadeSwap } from "./bitcoin-to-arkade.js";
 export { createEvmToArkadeSwapGeneric } from "./evm-to-arkade.js";
 export { createEvmToBitcoinSwap } from "./evm-to-bitcoin.js";
-export { createEvmToLightningSwap } from "./evm-to-lightning.js";
-export { createLightningToEvmSwap } from "./lightning.js";
+export {
+  createEvmToLightningSwap,
+  createEvmToLightningSwapGeneric,
+} from "./evm-to-lightning.js";
+export {
+  createLightningToEvmSwap,
+  createLightningToEvmSwapGeneric,
+} from "./lightning.js";
 export type {
   ArkadeToEvmSwapOptions,
   ArkadeToEvmSwapResult,
@@ -34,6 +40,12 @@ export type {
   EvmToArkadeSwapResult,
   EvmToBitcoinSwapOptions,
   EvmToBitcoinSwapResult,
+  EvmToLightningSwapGenericOptions,
+  EvmToLightningSwapGenericResult,
   EvmToLightningSwapOptions,
   EvmToLightningSwapResult,
+  EvmToLightningSwapResponse,
+  LightningToEvmSwapGenericOptions,
+  LightningToEvmSwapGenericResult,
+  LightningToEvmSwapResponse,
 } from "./types.js";

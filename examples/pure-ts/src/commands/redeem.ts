@@ -92,8 +92,8 @@ export async function redeemSwap(
       console.log("");
       console.log(`  Contract Address:   ${result.ethereumClaimData.contractAddress}`);
       console.log(`  Function:           ${result.ethereumClaimData.functionSignature}`);
-      console.log(`  Swap ID (bytes32):  0x${result.ethereumClaimData.swapId}`);
-      console.log(`  Secret (bytes32):   0x${result.ethereumClaimData.secret}`);
+      console.log(`  Swap ID:            ${result.ethereumClaimData.swapId}`);
+      console.log(`  Secret (bytes32):   ${result.ethereumClaimData.secret}`);
       console.log("");
       console.log("  Call Data (hex):");
       console.log(`  ${result.ethereumClaimData.callData}`);

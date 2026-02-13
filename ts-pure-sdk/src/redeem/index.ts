@@ -107,7 +107,6 @@ export async function claim(
         )
       : getChainFromTokenId(swap.target_token as string);
 
-  console.log(`asd: ${swap.target_token}`);
   if (!chain) {
     return {
       success: false,
@@ -131,13 +130,8 @@ export async function claim(
     return buildArkadeClaimData(arkadeSwap);
   }
 
-  // Ethereum claims return data for manual execution
-  if (chain === "ethereum") {
-    return buildEthereumClaimData(id, secret, swap);
-  }
-
-  // Polygon and Arbitrum - return manual claim data (same as Ethereum)
-  return buildEthereumClaimData(id, secret, swap);
+  // EVM claims (Ethereum, Polygon, Arbitrum) return data for manual execution
+  return buildEthereumClaimData(id, secret, swap, chain);
 }
 
 /**
