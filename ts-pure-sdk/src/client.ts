@@ -82,6 +82,7 @@ export type {
   BitcoinToArkadeSwapOptions,
   BitcoinToArkadeSwapResult,
   BitcoinToEvmSwapOptions,
+  BitcoinToEvmSwapResponse,
   BitcoinToEvmSwapResult,
   BtcToEvmSwapOptions,
   BtcToEvmSwapResult,
@@ -95,8 +96,9 @@ export type {
   EvmToLightningSwapOptions,
   EvmToLightningSwapResult,
 } from "./create/index.js";
-import type { BitcoinToEvmSwapResponse } from "./create/types.js";
-export type { BitcoinToEvmSwapResponse } from "./create/types.js";
+
+import type { BitcoinToEvmSwapResponse } from "./create";
+
 // Re-export coordinator utilities for Arkade-to-EVM redeemAndExecute flow
 export {
   buildExecuteAndCreateCalls,

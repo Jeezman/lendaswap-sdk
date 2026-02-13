@@ -327,7 +327,8 @@ export function encodeHtlcErc20CreateCallData(
   return {
     to: htlcAddress,
     data,
-    functionSignature: "create(bytes32,uint256,address,address,address,uint256)",
+    functionSignature:
+      "create(bytes32,uint256,address,address,address,uint256)",
   };
 }
 
