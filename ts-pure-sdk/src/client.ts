@@ -95,6 +95,7 @@ export type {
   EvmToLightningSwapOptions,
   EvmToLightningSwapResult,
 } from "./create/index.js";
+import type { BitcoinToEvmSwapResponse } from "./create/types.js";
 export type { BitcoinToEvmSwapResponse } from "./create/types.js";
 // Re-export coordinator utilities for Arkade-to-EVM redeemAndExecute flow
 export {
@@ -956,11 +957,13 @@ export class Client {
     // The destination is always the stored target_evm_address (set at swap creation time)
     if (
       swap.direction === "arkade_to_evm" ||
-      swap.direction === "lightning_to_evm"
+      swap.direction === "lightning_to_evm" ||
+      swap.direction === "bitcoin_to_evm"
     ) {
       const evmSwap = swap as (
         | ArkadeToEvmSwapResponse
         | LightningToEvmSwapResponse
+        | BitcoinToEvmSwapResponse
       ) & {
         direction: string;
       };
@@ -1095,7 +1098,8 @@ export class Client {
 
     if (
       swap.direction !== "arkade_to_evm" &&
-      swap.direction !== "lightning_to_evm"
+      swap.direction !== "lightning_to_evm" &&
+      swap.direction !== "bitcoin_to_evm"
     ) {
       throw new Error(
         `Expected arkade_to_evm or lightning_to_evm swap, got ${swap.direction}. claimViaGasless is for EVM-targeted swaps.`,

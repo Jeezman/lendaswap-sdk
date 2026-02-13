@@ -84,10 +84,11 @@ export async function redeemSwap(
     console.log("");
 
     if (result.ethereumClaimData) {
-      // Ethereum swap - manual claim required
-      console.log("  Chain:              ethereum");
+      // EVM swap - manual claim required (use evm-claim to submit)
+      const chain = (swap as { chain?: string }).chain ?? "unknown";
+      console.log(`  Chain:              ${chain}`);
       console.log("");
-      console.log("  This swap targets Ethereum and requires manual claiming.");
+      console.log(`  This swap targets ${chain} and requires manual claiming.`);
       console.log("  Use the following data to call the HTLC contract:");
       console.log("");
       console.log(`  Contract Address:   ${result.ethereumClaimData.contractAddress}`);
@@ -100,8 +101,10 @@ export async function redeemSwap(
       console.log("");
       console.log("=".repeat(60));
       console.log("");
-      console.log("Use this call data with your Ethereum wallet to claim the swap.");
-      console.log("Example using cast:");
+      console.log("Use 'evm-claim' to submit the transaction, or manually with cast:");
+      console.log(`  npm run evm-claim -- ${swapId}`);
+      console.log("");
+      console.log("Or manually:");
       console.log(`  cast send ${result.ethereumClaimData.contractAddress} ${result.ethereumClaimData.callData} --private-key <YOUR_KEY>`);
     } else if (swap.direction === "evm_to_bitcoin") {
       // EVM-to-Bitcoin - on-chain BTC claim

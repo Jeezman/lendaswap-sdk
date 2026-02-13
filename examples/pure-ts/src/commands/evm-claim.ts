@@ -1,13 +1,12 @@
 /**
  * Claim an EVM HTLC for BTC-to-EVM swaps.
  *
- * This command is used for swaps to Ethereum mainnet where Gelato
- * relay is not available. The user must submit the claim transaction
- * themselves using the preimage from the swap.
+ * Submits the claim transaction on-chain using the caller's EVM wallet.
+ * Works for any EVM chain (Polygon, Arbitrum, Ethereum).
  */
 
 import type { Client } from "@lendasat/lendaswap-sdk-pure";
-import { createEvmWallet, getChainFromToken } from "../evm/wallet.js";
+import { createEvmWallet, type EvmChainName } from "../evm/wallet.js";
 
 export async function evmClaimSwap(
   client: Client,
@@ -19,9 +18,6 @@ export async function evmClaimSwap(
     console.error("");
     console.error("Example:");
     console.error("  tsx src/index.ts evm-claim 12345678-1234-1234-1234-123456789abc");
-    console.error("");
-    console.error("Note: This is for BTC-to-EVM swaps on Ethereum mainnet.");
-    console.error("For Polygon/Arbitrum swaps, use 'redeem' instead (uses Gelato).");
     console.error("");
     console.error("Environment:");
     console.error("  EVM_MNEMONIC must be set to your EVM wallet mnemonic");
@@ -49,27 +45,28 @@ export async function evmClaimSwap(
 
   const swap = storedSwap.response;
 
-  if (swap.direction !== "btc_to_evm") {
+  if (swap.direction !== "btc_to_evm" && swap.direction !== "bitcoin_to_evm") {
     console.error(`This command is for BTC-to-EVM swaps, got: ${swap.direction}`);
     console.error("For EVM-to-BTC swaps, the server claims automatically.");
     process.exit(1);
   }
 
-  // Check if the target is Ethereum (where Gelato isn't available)
-  const chainName = getChainFromToken(swap.target_token);
-  if (!chainName) {
-    console.error(`Could not determine chain from token: ${swap.target_token}`);
+  // Use the chain field from the API response directly
+  const swapChain = (swap as { chain?: string }).chain;
+  if (!swapChain) {
+    console.error("Could not determine chain from swap response (missing 'chain' field).");
     process.exit(1);
   }
 
-  if (chainName !== "ethereum") {
-    console.log(`Target chain is ${chainName}, which supports Gelato relay.`);
-    console.log("Use 'redeem' command instead for automatic claiming via Gelato.");
+  const chainName = swapChain.toLowerCase() as EvmChainName;
+  if (!["polygon", "arbitrum", "ethereum"].includes(chainName)) {
+    console.error(`Unsupported chain: ${swapChain}`);
     process.exit(1);
   }
 
-  console.log(`Chain: ${chainName}`);
-  console.log(`Target Token: ${swap.target_token}`);
+  console.log(`Chain: ${swapChain}`);
+  const targetToken = (swap.target_token as { token_id?: string })?.token_id ?? swap.target_token;
+  console.log(`Target Token: ${targetToken}`);
   console.log(`Status: ${swap.status}`);
   console.log("");
 
@@ -82,7 +79,7 @@ export async function evmClaimSwap(
   }
 
   if (!claimResult.ethereumClaimData) {
-    console.error("Error: No Ethereum claim data available.");
+    console.error("Error: No EVM claim data available.");
     process.exit(1);
   }
 
