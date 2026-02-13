@@ -859,10 +859,11 @@ export class Client {
       swap.direction !== "btc_to_evm" &&
       swap.direction !== "evm_to_btc" &&
       swap.direction !== "btc_to_arkade" &&
-      swap.direction !== "arkade_to_evm"
+      swap.direction !== "arkade_to_evm" &&
+      swap.direction !== "evm_to_arkade"
     ) {
       throw new Error(
-        `amountsForSwap only applies to btc_to_evm, evm_to_btc, btc_to_arkade, or arkade_to_evm swaps, got ${swap.direction}`,
+        `amountsForSwap only applies to VHTLC-based swaps, got ${swap.direction}`,
       );
     }
 
@@ -870,9 +871,14 @@ export class Client {
     let vhtlcAddress: string | undefined;
     if (swap.direction === "btc_to_arkade") {
       vhtlcAddress = (swap as BtcToArkadeSwapResponse).arkade_vhtlc_address;
-    } else if (swap.direction === "arkade_to_evm") {
+    } else if (
+      swap.direction === "arkade_to_evm" ||
+      swap.direction === "evm_to_arkade"
+    ) {
       vhtlcAddress = (
-        swap as ArkadeToEvmSwapResponse & { direction: "arkade_to_evm" }
+        swap as
+          | (ArkadeToEvmSwapResponse & { direction: "arkade_to_evm" })
+          | (EvmToArkadeSwapResponse & { direction: "evm_to_arkade" })
       ).btc_vhtlc_address;
     } else {
       vhtlcAddress = (swap as BtcToEvmSwapResponse | EvmToBtcSwapResponse)
