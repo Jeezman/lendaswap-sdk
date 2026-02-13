@@ -2143,7 +2143,7 @@ export class Client {
   async #storeSwap(
     swapId: string,
     swapParams: SwapParams,
-    response: GetSwapResponse,
+    response: Record<string, unknown>,
   ): Promise<void> {
     if (!this.#swapStorage) return;
 
@@ -2151,7 +2151,7 @@ export class Client {
       version: SWAP_STORAGE_VERSION,
       swapId,
       keyIndex: swapParams.keyIndex,
-      response,
+      response: response as GetSwapResponse,
       publicKey: bytesToHex(swapParams.publicKey),
       preimage: bytesToHex(swapParams.preimage),
       preimageHash: bytesToHex(swapParams.preimageHash),

@@ -84,7 +84,7 @@ export async function createLightningToEvmSwapGeneric(
   await ctx.storeSwap(data.id, swapParams, {
     ...data,
     direction: "lightning_to_evm",
-  } as any);
+  });
 
   return { response: data, swapParams };
 }

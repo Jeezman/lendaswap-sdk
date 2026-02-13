@@ -4,7 +4,6 @@
  * Supports swapping tokens from any EVM chain to pay a Lightning invoice.
  */
 
-import type { GetSwapResponse } from "../api/client.js";
 import { bytesToHex } from "../signer/index.js";
 import type {
   CreateSwapContext,
@@ -79,7 +78,7 @@ export async function createEvmToLightningSwapGeneric(
   await ctx.storeSwap(data.id, swapParams, {
     ...data,
     direction: "evm_to_lightning",
-  } as any);
+  });
 
   return { response: data, swapParams };
 }
@@ -172,7 +171,7 @@ export async function createEvmToLightningSwap(
   await ctx.storeSwap(response.id, swapParams, {
     ...response,
     direction: "evm_to_btc",
-  } as GetSwapResponse);
+  });
 
   return { response, swapParams };
 }

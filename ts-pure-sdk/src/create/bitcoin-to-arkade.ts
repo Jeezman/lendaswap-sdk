@@ -6,7 +6,6 @@
  */
 
 import { ripemd160 } from "@noble/hashes/legacy";
-import type { GetSwapResponse } from "../api/client.js";
 import { bytesToHex } from "../signer/index.js";
 import type {
   BitcoinToArkadeSwapOptions,
@@ -78,7 +77,7 @@ export async function createBitcoinToArkadeSwap(
   await ctx.storeSwap(response.id, swapParams, {
     ...response,
     direction: "btc_to_arkade",
-  } as GetSwapResponse);
+  });
 
   return { response, swapParams };
 }

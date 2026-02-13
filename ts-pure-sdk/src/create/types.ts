@@ -11,7 +11,6 @@ import type {
   BtcToEvmSwapResponse,
   EvmToArkadeGenericSwapResponse,
   EvmToBtcSwapResponse,
-  GetSwapResponse,
   TokenId,
 } from "../api/client.js";
 import type { SwapParams } from "../signer";
@@ -323,6 +322,6 @@ export interface CreateSwapContext {
   storeSwap: (
     swapId: string,
     swapParams: SwapParams,
-    response: GetSwapResponse,
+    response: Record<string, unknown>,
   ) => Promise<void>;
 }

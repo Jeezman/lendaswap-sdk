@@ -5,7 +5,6 @@
  * via Taproot HTLC.
  */
 
-import type { GetSwapResponse } from "../api/client.js";
 import { bytesToHex } from "../signer/index.js";
 import type {
   CreateSwapContext,
@@ -78,7 +77,7 @@ export async function createEvmToBitcoinSwap(
   await ctx.storeSwap(data.id, swapParams, {
     ...data,
     direction: "evm_to_bitcoin",
-  } as unknown as GetSwapResponse);
+  });
 
   return { response: data, swapParams };
 }

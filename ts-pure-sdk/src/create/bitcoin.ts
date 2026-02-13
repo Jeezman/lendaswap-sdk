@@ -2,7 +2,6 @@
  * Bitcoin (on-chain) to EVM swap creation via the generic endpoint.
  */
 
-import type { GetSwapResponse } from "../api/client.js";
 import { deriveEvmAddress } from "../evm/signing.js";
 import { bytesToHex } from "../signer/index.js";
 import type {
@@ -75,7 +74,7 @@ export async function createBitcoinToEvmSwap(
   await ctx.storeSwap(data.id, swapParams, {
     ...data,
     direction: "bitcoin_to_evm",
-  } as unknown as GetSwapResponse);
+  });
 
   return { response: data, swapParams };
 }
