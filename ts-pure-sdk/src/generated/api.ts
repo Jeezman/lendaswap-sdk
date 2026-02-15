@@ -963,42 +963,6 @@ export interface components {
       /** @description User ID derived from wallet for recovery purposes. */
       user_id: string;
     };
-    /** @description Response after creating an EVM-to-Arkade swap. */
-    EvmToArkadeGenericSwapResponse: {
-      arkade_server_pk: string;
-      /** Format: int64 */
-      btc_expected_sats: number;
-      btc_vhtlc_address: string;
-      chain: string;
-      /** Format: int64 */
-      evm_chain_id: number;
-      /** Format: int64 */
-      evm_expected_sats: number;
-      evm_htlc_address: string;
-      /** Format: int64 */
-      evm_refund_locktime: number;
-      /** Format: int64 */
-      fee_sats: number;
-      hash_lock: string;
-      id: string;
-      network: string;
-      receiver_pk: string;
-      sender_pk: string;
-      server_evm_address: string;
-      /** Format: int64 */
-      source_amount: number;
-      source_token: components["schemas"]["TokenInfo"];
-      status: components["schemas"]["SwapStatus"];
-      target_token: components["schemas"]["TokenInfo"];
-      /** Format: int64 */
-      unilateral_claim_delay: number;
-      /** Format: int64 */
-      unilateral_refund_delay: number;
-      /** Format: int64 */
-      unilateral_refund_without_receiver_delay: number;
-      /** Format: int64 */
-      vhtlc_refund_locktime: number;
-    };
     /** @description EVM → Arkade (generic) swap response */
     EvmToArkadeSwapResponse: {
       arkade_server_pk: string;
@@ -2170,7 +2134,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": components["schemas"]["EvmToArkadeGenericSwapResponse"];
+          "application/json": components["schemas"]["EvmToArkadeSwapResponse"];
         };
       };
       /** @description Bad request - invalid parameters */

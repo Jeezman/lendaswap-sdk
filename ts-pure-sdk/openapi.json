@@ -454,7 +454,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EvmToArkadeGenericSwapResponse"
+                  "$ref": "#/components/schemas/EvmToArkadeSwapResponse"
                 }
               }
             }
@@ -1812,79 +1812,6 @@
           "user_id": {
             "type": "string",
             "description": "User ID derived from wallet for recovery purposes."
-          }
-        }
-      },
-      "EvmToArkadeGenericSwapResponse": {
-        "type": "object",
-        "description": "Response after creating an EVM-to-Arkade swap.",
-        "required": [
-          "id",
-          "status",
-          "evm_chain_id",
-          "chain",
-          "source_token",
-          "target_token",
-          "source_amount",
-          "evm_expected_sats",
-          "btc_expected_sats",
-          "fee_sats",
-          "hash_lock",
-          "evm_htlc_address",
-          "server_evm_address",
-          "evm_refund_locktime",
-          "btc_vhtlc_address",
-          "sender_pk",
-          "receiver_pk",
-          "arkade_server_pk",
-          "vhtlc_refund_locktime",
-          "unilateral_claim_delay",
-          "unilateral_refund_delay",
-          "unilateral_refund_without_receiver_delay",
-          "network"
-        ],
-        "properties": {
-          "arkade_server_pk": { "type": "string" },
-          "btc_expected_sats": { "type": "integer", "format": "int64" },
-          "btc_vhtlc_address": { "type": "string" },
-          "chain": { "type": "string" },
-          "evm_chain_id": {
-            "type": "integer",
-            "format": "int64",
-            "minimum": 0
-          },
-          "evm_expected_sats": { "type": "integer", "format": "int64" },
-          "evm_htlc_address": { "type": "string" },
-          "evm_refund_locktime": {
-            "type": "integer",
-            "format": "int64",
-            "minimum": 0
-          },
-          "fee_sats": { "type": "integer", "format": "int64" },
-          "hash_lock": { "type": "string" },
-          "id": { "type": "string" },
-          "network": { "type": "string" },
-          "receiver_pk": { "type": "string" },
-          "sender_pk": { "type": "string" },
-          "server_evm_address": { "type": "string" },
-          "source_amount": {
-            "type": "integer",
-            "format": "int64",
-            "minimum": 0
-          },
-          "source_token": { "$ref": "#/components/schemas/TokenInfo" },
-          "status": { "$ref": "#/components/schemas/SwapStatus" },
-          "target_token": { "$ref": "#/components/schemas/TokenInfo" },
-          "unilateral_claim_delay": { "type": "integer", "format": "int64" },
-          "unilateral_refund_delay": { "type": "integer", "format": "int64" },
-          "unilateral_refund_without_receiver_delay": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "vhtlc_refund_locktime": {
-            "type": "integer",
-            "format": "int64",
-            "minimum": 0
           }
         }
       },
