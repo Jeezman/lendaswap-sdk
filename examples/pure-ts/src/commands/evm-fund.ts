@@ -138,7 +138,9 @@ export async function evmFundSwap(
   // For WBTC-sourced swaps or evm_to_lightning, use direct HTLCErc20
   // For evm_to_btc swaps, can optionally use coordinator via USE_COORDINATOR=1
   const isWbtcSource = sourceTokenDisplay.toLowerCase() === "wbtc";
-  const useCoordinator = !isWbtcSource && (swap.direction === "evm_to_arkade" || swap.direction === "evm_to_bitcoin") || process.env.USE_COORDINATOR === "1";
+  // All EVM-sourced swaps use coordinator to swap source token → WBTC and lock into HTLC
+  // (unless source is already WBTC, then direct HTLC is used)
+  const useCoordinator = !isWbtcSource || process.env.USE_COORDINATOR === "1";
 
   // Create EVM wallet
   const evmWallet = createEvmWallet(evmMnemonic, chainName);

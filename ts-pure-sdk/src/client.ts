@@ -2548,28 +2548,20 @@ export class Client {
 
     if (
       swap.direction !== "evm_to_arkade" &&
-      swap.direction !== "evm_to_bitcoin"
+      swap.direction !== "evm_to_bitcoin" &&
+      swap.direction !== "evm_to_lightning"
     ) {
       throw new Error(
-        `Expected evm_to_btc/evm_to_arkade/evm_to_bitcoin swap, got ${swap.direction}. Coordinator fund call data method is for EVM-sourced swaps via coordinator.`,
+        `Expected evm_to_arkade/evm_to_bitcoin/evm_to_lightning swap, got ${swap.direction}. Coordinator fund call data method is for EVM-sourced swaps via coordinator.`,
       );
     }
 
     // Get source amount based on swap direction
-    // For evm_to_arkade/evm_to_bitcoin: source_amount is already in smallest units (integer)
-    // For evm_to_btc: source_amount is in human-readable units (decimal)
-    let exactAmount: bigint;
-    if (
-      swap.direction === "evm_to_arkade" ||
-      swap.direction === "evm_to_bitcoin"
-    ) {
-      const evmSwap = swap as GetSwapResponse & {
-        source_amount: number;
-      };
-      exactAmount = BigInt(evmSwap.source_amount);
-    } else {
-      throw new Error("Unsupported swap direction");
-    }
+    // All EVM-sourced swaps: source_amount is already in smallest units (integer)
+    const evmSwap = swap as GetSwapResponse & {
+      source_amount: number;
+    };
+    const exactAmount = BigInt(evmSwap.source_amount);
 
     // Fetch coordinator funding calldata from server
     const baseUrl = this.#config.baseUrl.replace(/\/$/, "");
