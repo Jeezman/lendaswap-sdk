@@ -528,10 +528,12 @@ export interface components {
       receiver_pk: string;
       sender_pk: string;
       server_evm_address: string;
+      /** Format: int64 */
+      source_amount: number;
       source_token: components["schemas"]["TokenInfo"];
       status: components["schemas"]["SwapStatus"];
       /** Format: int64 */
-      target_amount?: number | null;
+      target_amount: number;
       /** @description EVM address where tokens are swept after the claim (user's final destination). */
       target_evm_address?: string | null;
       target_token: components["schemas"]["TokenInfo"];
@@ -1352,10 +1354,12 @@ export interface components {
       receiver_pk: string;
       sender_pk: string;
       server_evm_address: string;
+      /** Format: int64 */
+      source_amount: number;
       source_token: components["schemas"]["TokenInfo"];
       status: components["schemas"]["SwapStatus"];
       /** Format: int64 */
-      target_amount?: number | null;
+      target_amount: number;
       /** @description EVM address where tokens are swept after the claim */
       target_evm_address?: string | null;
       target_token: components["schemas"]["TokenInfo"];

@@ -17,6 +17,7 @@ export type {
   EvmToBitcoinSwapResponse,
   EvmToLightningSwapResponse,
   GetSwapResponse,
+  LightningToEvmSwapResponse,
   // Types
   paths,
   QuoteResponse,

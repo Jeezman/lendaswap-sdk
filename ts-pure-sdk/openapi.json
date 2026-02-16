@@ -1051,8 +1051,10 @@
           "created_at",
           "chain",
           "evm_chain_id",
+          "source_amount",
           "btc_expected_sats",
           "evm_expected_sats",
+          "target_amount",
           "btc_vhtlc_address",
           "evm_htlc_address",
           "evm_coordinator_address",
@@ -1095,9 +1097,10 @@
           "receiver_pk": { "type": "string" },
           "sender_pk": { "type": "string" },
           "server_evm_address": { "type": "string" },
+          "source_amount": { "type": "integer", "format": "int64" },
           "source_token": { "$ref": "#/components/schemas/TokenInfo" },
           "status": { "$ref": "#/components/schemas/SwapStatus" },
-          "target_amount": { "type": ["integer", "null"], "format": "int64" },
+          "target_amount": { "type": "integer", "format": "int64" },
           "target_evm_address": {
             "type": ["string", "null"],
             "description": "EVM address where tokens are swept after the claim (user's final destination)."
@@ -2463,6 +2466,8 @@
           "evm_chain_id",
           "btc_expected_sats",
           "evm_expected_sats",
+          "source_amount",
+          "target_amount",
           "boltz_invoice",
           "boltz_swap_id",
           "evm_htlc_address",
@@ -2512,9 +2517,10 @@
           "receiver_pk": { "type": "string" },
           "sender_pk": { "type": "string" },
           "server_evm_address": { "type": "string" },
+          "source_amount": { "type": "integer", "format": "int64" },
           "source_token": { "$ref": "#/components/schemas/TokenInfo" },
           "status": { "$ref": "#/components/schemas/SwapStatus" },
-          "target_amount": { "type": ["integer", "null"], "format": "int64" },
+          "target_amount": { "type": "integer", "format": "int64" },
           "target_evm_address": {
             "type": ["string", "null"],
             "description": "EVM address where tokens are swept after the claim"
