@@ -7,7 +7,6 @@
 //! that can be implemented for any backend (localStorage, IndexedDB, filesystem, etc.).
 
 // Allow some lints at crate level - these are tedious to fix individually
-#![allow(unused_qualifications)]
 
 //! # Example
 //!

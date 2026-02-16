@@ -678,7 +678,6 @@ impl SqliteStorage {
     }
 
     #[allow(deprecated)] // sats_receive is deprecated but needed for backward compatibility
-    #[allow(clippy::unwrap_used)] // swap_id from DB should always be valid UUID
     async fn load_btc_to_evm(
         &self,
         swap_id: &str,
@@ -697,7 +696,7 @@ impl SqliteStorage {
         let target_token_str: String = row.get("target_token");
 
         let common = SwapCommonFields {
-            id: Uuid::parse_str(swap_id).unwrap(),
+            id: Uuid::parse_str(swap_id).expect("swap_id from DB is valid UUID"),
             status: parse_swap_status(&status_str),
             hash_lock: row.get("hash_lock"),
             fee_sats: row.get("fee_sats"),
@@ -743,7 +742,6 @@ impl SqliteStorage {
     }
 
     #[allow(deprecated)] // sats_receive is deprecated but needed for backward compatibility
-    #[allow(clippy::unwrap_used)] // swap_id from DB should always be valid UUID
     async fn load_evm_to_btc(
         &self,
         swap_id: &str,
@@ -762,7 +760,7 @@ impl SqliteStorage {
         let target_token_str: String = row.get("target_token");
 
         let common = SwapCommonFields {
-            id: Uuid::parse_str(swap_id).unwrap(),
+            id: Uuid::parse_str(swap_id).expect("swap_id from DB is valid UUID"),
             status: parse_swap_status(&status_str),
             hash_lock: row.get("hash_lock"),
             fee_sats: row.get("fee_sats"),
@@ -814,7 +812,6 @@ impl SqliteStorage {
         })
     }
 
-    #[allow(clippy::unwrap_used)] // swap_id from DB should always be valid UUID
     async fn load_btc_to_arkade(
         &self,
         swap_id: &str,
@@ -833,7 +830,7 @@ impl SqliteStorage {
         let target_token_str: String = row.get("target_token");
 
         let response = BtcToArkadeSwapResponse {
-            id: Uuid::parse_str(swap_id).unwrap(),
+            id: Uuid::parse_str(swap_id).expect("swap_id from DB is valid UUID"),
             status: parse_swap_status(&status_str),
             btc_htlc_address: row.get("btc_htlc_address"),
             asset_amount: row.get("asset_amount"),
@@ -872,7 +869,6 @@ impl SqliteStorage {
         })
     }
 
-    #[allow(clippy::unwrap_used)] // swap_id from DB should always be valid UUID
     async fn load_onchain_to_evm(
         &self,
         swap_id: &str,
@@ -891,7 +887,7 @@ impl SqliteStorage {
         let target_token_str: String = row.get("target_token");
 
         let response = OnchainToEvmSwapResponse {
-            id: Uuid::parse_str(swap_id).unwrap(),
+            id: Uuid::parse_str(swap_id).expect("swap_id from DB is valid UUID"),
             status: parse_swap_status(&status_str),
             btc_htlc_address: row.get("btc_htlc_address"),
             fee_sats: row.get("fee_sats"),
@@ -926,7 +922,6 @@ impl SqliteStorage {
         })
     }
 
-    #[allow(clippy::unwrap_used)] // swap_id from DB should always be valid UUID
     async fn load_arkade_to_evm(
         &self,
         swap_id: &str,
@@ -945,7 +940,7 @@ impl SqliteStorage {
         let target_token_str: String = row.get("target_token");
 
         let response = ArkadeToEvmSwapResponse {
-            id: Uuid::parse_str(swap_id).unwrap(),
+            id: Uuid::parse_str(swap_id).expect("swap_id from DB is valid UUID"),
             status: parse_swap_status(&status_str),
             fee_sats: row.get("fee_sats"),
             hash_lock: row.get("hash_lock"),
@@ -1003,7 +998,6 @@ impl SqliteStorage {
         })
     }
 
-    #[allow(clippy::unwrap_used)] // swap_id from DB should always be valid UUID
     async fn load_vtxo_swap(
         &self,
         swap_id: &str,
@@ -1020,7 +1014,7 @@ impl SqliteStorage {
         let created_at_str: String = row.get("created_at");
 
         let response = VtxoSwapResponse {
-            id: Uuid::parse_str(swap_id).unwrap(),
+            id: Uuid::parse_str(swap_id).expect("swap_id from DB is valid UUID"),
             status: parse_vtxo_swap_status(&status_str),
             created_at: OffsetDateTime::parse(
                 &created_at_str,
@@ -1390,6 +1384,7 @@ mod tests {
     use bitcoin::secp256k1::PublicKey;
     use bitcoin::secp256k1::Secp256k1;
     use bitcoin::secp256k1::SecretKey;
+    use std::path::Path;
 
     // =========================================================================
     // Test Helper - Database Setup
@@ -1418,7 +1413,7 @@ mod tests {
     async fn create_test_storage() -> SqliteStorage {
         match std::env::var(TEST_DB_PATH_ENV) {
             Ok(path) => {
-                if let Some(parent) = std::path::Path::new(&path).parent() {
+                if let Some(parent) = Path::new(&path).parent() {
                     let _ = std::fs::create_dir_all(parent);
                 }
                 SqliteStorage::open(&path)
