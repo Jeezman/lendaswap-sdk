@@ -1,17 +1,12 @@
 import type { Chain, TokenId, TokenInfo } from "./api/client.js";
 
 /** A token identifier: either a plain string TokenId or a TokenInfo object. */
-export type TokenInput = TokenId | TokenInfo;
-
-/** Extracts the string TokenId from a TokenInput. */
-function toTokenId(token: TokenInput): TokenId {
-  return typeof token === "string" ? token : token.token_id;
-}
+export type TokenInput = TokenId;
 
 // Well-known token ID constants
-export const BTC_LIGHTNING: TokenId = "btc_lightning";
-export const BTC_ARKADE: TokenId = "btc_arkade";
-export const BTC_ONCHAIN: TokenId = "btc_onchain";
+export const BTC_LIGHTNING: TokenId = "btc";
+export const BTC_ARKADE: TokenId = "btc";
+export const BTC_ONCHAIN: TokenId = "btc";
 
 // Well-known TokenInfo constants
 export const BTC_LIGHTNING_INFO: TokenInfo = {
@@ -68,38 +63,26 @@ export function isEvmToken(chain: string): boolean {
 }
 
 /** Returns true if the chain is Ethereum. */
-export function isEthereumToken(chain: string): boolean {
-  return chain.toLowerCase() === "ethereum";
+export function isEthereumToken(c: string): boolean {
+  return c === "ethereum" || c === "1";
 }
 
 /** Returns true if the chain is Polygon. */
-export function isPolygonToken(chain: string): boolean {
-  return chain.toLowerCase() === "polygon";
+export function isPolygonToken(c: string): boolean {
+  return c === "polygon" || c === "137";
 }
 
 /** Returns true if the chain is Arbitrum. */
 export function isArbitrumToken(chain: string): boolean {
-  return chain.toLowerCase() === "arbitrum";
-}
-
-/** Resolves a TokenInput to its Chain value. */
-export function tokenChain(token: TokenInput): Chain {
-  const id = toTokenId(token);
-  if (id === BTC_LIGHTNING) return "Lightning";
-  if (id === BTC_ARKADE) return "Arkade";
-  if (id === BTC_ONCHAIN) return "Bitcoin";
-  if (id.endsWith("_eth")) return "Ethereum";
-  if (id.endsWith("_pol")) return "Polygon";
-  if (id.endsWith("_arb")) return "Arbitrum";
-  return "Bitcoin";
+  return chain === "arbitrum" || chain === "42161";
 }
 
 /** Normalizes any chain string to its canonical PascalCase Chain value. */
 export function toChain(str: string): Chain {
   const c = str.toLowerCase();
-  if (c === "ethereum") return "Ethereum";
-  if (c === "polygon") return "Polygon";
-  if (c === "arbitrum") return "Arbitrum";
+  if (c === "ethereum" || c === "1") return "1";
+  if (c === "polygon" || c === "137") return "137";
+  if (c === "arbitrum" || c === "42161") return "42161";
   if (c === "lightning") return "Lightning";
   if (c === "arkade") return "Arkade";
   if (c === "bitcoin") return "Bitcoin";

@@ -828,16 +828,11 @@ export interface components {
       user_address_evm: string;
     };
     /**
-     * @description Supported blockchain networks
+     * @description Supported blockchain networks.
+     *     EVM chains serialize to their chain ID as a string (e.g. "137" for Polygon).
      * @enum {string}
      */
-    Chain:
-      | "Arkade"
-      | "Lightning"
-      | "Bitcoin"
-      | "Polygon"
-      | "Ethereum"
-      | "Arbitrum";
+    Chain: "Arkade" | "Lightning" | "Bitcoin" | "137" | "1" | "42161";
     ClaimGaslessRequest: {
       /** @description EVM address where tokens should be sent */
       destination: string;
@@ -1602,17 +1597,8 @@ export interface components {
       | "clientinvalidfunded"
       | "clientfundedtoolate"
       | "clientredeemedandclientrefunded";
-    /** @description Token identifier. Known values: btc_lightning, btc_arkade, btc_onchain, wbtc_eth, wbtc_pol, wbtc_arb. Other tokens (e.g., usdc_pol, usdt_eth) are also valid. */
-    TokenId:
-      | (
-          | "btc_lightning"
-          | "btc_arkade"
-          | "btc_onchain"
-          | "wbtc_eth"
-          | "wbtc_pol"
-          | "wbtc_arb"
-        )
-      | string;
+    /** @description Token identifier. Known values: btc, 0x123456 */
+    TokenId: "btc" | string;
     TokenInfo: {
       chain: components["schemas"]["Chain"];
       /** Format: int32 */

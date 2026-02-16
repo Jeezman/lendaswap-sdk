@@ -140,6 +140,5 @@ export {
   isPolygonToken,
   type TokenInput,
   toChain,
-  tokenChain,
 } from "./tokens.js";
 export { getUsdPrices } from "./usd-price";
