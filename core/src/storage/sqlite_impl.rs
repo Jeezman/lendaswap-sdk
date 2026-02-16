@@ -1993,6 +1993,7 @@ mod tests {
                 GetSwapResponse::EvmToBtc(r) => r.common.id.to_string(),
                 GetSwapResponse::BtcToArkade(r) => r.id.to_string(),
                 GetSwapResponse::OnchainToEvm(r) => r.id.to_string(),
+                GetSwapResponse::ArkadeToEvm(r) => r.id.to_string(),
             })
             .collect();
         assert!(swap_ids.contains(&id1), "Missing BtcToEvm swap");
