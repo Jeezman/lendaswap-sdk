@@ -52,6 +52,7 @@ export const CONFIG = {
   apiKey: process.env.LENDASWAP_API_KEY,
   dbPath: process.env.LENDASWAP_DB_PATH || path.join(os.homedir(), ".lendaswap", "data.db"),
   esploraUrl: process.env.ESPLORA_URL, // Optional, defaults by network
+  arkadeUrl: process.env.ARKADE_URL, // Optional, for regtest/custom Arkade servers
 };
 
 // Ensure the database directory exists
@@ -86,6 +87,10 @@ async function createClient(): Promise<Client> {
 
   if (CONFIG.esploraUrl) {
     builder = builder.withEsploraUrl(CONFIG.esploraUrl);
+  }
+
+  if (CONFIG.arkadeUrl) {
+    builder = builder.withArkadeServerUrl(CONFIG.arkadeUrl);
   }
 
   return builder.build();
