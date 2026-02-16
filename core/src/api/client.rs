@@ -346,6 +346,7 @@ impl ApiClient {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 pub mod tests {
     use crate::ApiClient;
     use crate::api::QuoteRequest;

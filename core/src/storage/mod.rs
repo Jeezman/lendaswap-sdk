@@ -247,6 +247,7 @@ pub mod sqlite {
 
 /// In-memory wallet storage implementation for testing.
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 pub mod memory {
     use super::*;
     use std::sync::RwLock;

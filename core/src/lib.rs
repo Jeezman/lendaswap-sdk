@@ -5,7 +5,10 @@
 //! This crate provides the core wallet logic that can be used in both native Rust
 //! applications and WebAssembly environments. Storage is abstracted through traits
 //! that can be implemented for any backend (localStorage, IndexedDB, filesystem, etc.).
-//!
+
+// Allow some lints at crate level - these are tedious to fix individually
+#![allow(unused_qualifications)]
+
 //! # Example
 //!
 //! ```rust,ignore

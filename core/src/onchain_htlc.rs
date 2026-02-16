@@ -135,8 +135,7 @@ pub fn build_htlc_scripts(
 /// Generate Taproot address from HTLC scripts.
 pub fn htlc_to_taproot_address(htlc: &HtlcScripts, network: Network) -> Address {
     let key = htlc.spend_info.output_key();
-    let script = hex::encode(key.serialize());
-    dbg!(script);
+    log::debug!("HTLC output key: {}", hex::encode(key.serialize()));
     Address::p2tr_tweaked(key, network)
 }
 
@@ -254,6 +253,7 @@ pub fn compute_hash_lock(secret: &[u8; 32]) -> [u8; 20] {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::dbg_macro)]
 mod tests {
     use super::*;
     use bitcoin::secp256k1::SecretKey;

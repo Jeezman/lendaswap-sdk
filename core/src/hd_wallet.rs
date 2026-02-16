@@ -180,6 +180,7 @@ fn tagged_hash(tag: &str, data: &[u8]) -> [u8; 32] {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use bitcoin::Network;

@@ -754,7 +754,7 @@ pub struct BtcToArkadeSwapRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BtcToArkadeSwapResponse {
     /// Swap ID.
-    pub id: uuid::Uuid,
+    pub id: Uuid,
     /// Current status of the swap.
     pub status: SwapStatus,
     /// P2WSH HTLC address for user to send on-chain BTC.
@@ -786,7 +786,7 @@ pub struct BtcToArkadeSwapResponse {
     pub network: String,
     /// Timestamp of when the swap was created.
     #[serde(with = "time::serde::rfc3339")]
-    pub created_at: time::OffsetDateTime,
+    pub created_at: OffsetDateTime,
 
     // VHTLC parameters for client-side claim
     /// Server's VHTLC public key (sender in the VHTLC).
@@ -835,7 +835,7 @@ pub struct OnchainToEvmSwapRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OnchainToEvmSwapResponse {
     /// Swap ID.
-    pub id: uuid::Uuid,
+    pub id: Uuid,
     /// Current status of the swap.
     pub status: SwapStatus,
     /// On-chain Bitcoin HTLC address (Taproot P2TR).
@@ -866,7 +866,7 @@ pub struct OnchainToEvmSwapResponse {
     pub network: String,
     /// Timestamp of when the swap was created.
     #[serde(with = "time::serde::rfc3339")]
-    pub created_at: time::OffsetDateTime,
+    pub created_at: OffsetDateTime,
     /// EVM chain (e.g., "Polygon", "Ethereum").
     pub chain: String,
     /// Client's EVM address (where tokens will be received).

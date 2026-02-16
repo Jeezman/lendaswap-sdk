@@ -678,6 +678,7 @@ impl SqliteStorage {
     }
 
     #[allow(deprecated)] // sats_receive is deprecated but needed for backward compatibility
+    #[allow(clippy::unwrap_used)] // swap_id from DB should always be valid UUID
     async fn load_btc_to_evm(
         &self,
         swap_id: &str,
@@ -742,6 +743,7 @@ impl SqliteStorage {
     }
 
     #[allow(deprecated)] // sats_receive is deprecated but needed for backward compatibility
+    #[allow(clippy::unwrap_used)] // swap_id from DB should always be valid UUID
     async fn load_evm_to_btc(
         &self,
         swap_id: &str,
@@ -812,6 +814,7 @@ impl SqliteStorage {
         })
     }
 
+    #[allow(clippy::unwrap_used)] // swap_id from DB should always be valid UUID
     async fn load_btc_to_arkade(
         &self,
         swap_id: &str,
@@ -869,6 +872,7 @@ impl SqliteStorage {
         })
     }
 
+    #[allow(clippy::unwrap_used)] // swap_id from DB should always be valid UUID
     async fn load_onchain_to_evm(
         &self,
         swap_id: &str,
@@ -922,6 +926,7 @@ impl SqliteStorage {
         })
     }
 
+    #[allow(clippy::unwrap_used)] // swap_id from DB should always be valid UUID
     async fn load_arkade_to_evm(
         &self,
         swap_id: &str,
@@ -998,6 +1003,7 @@ impl SqliteStorage {
         })
     }
 
+    #[allow(clippy::unwrap_used)] // swap_id from DB should always be valid UUID
     async fn load_vtxo_swap(
         &self,
         swap_id: &str,
@@ -1378,6 +1384,7 @@ impl VtxoSwapStorage for SqliteStorage {
 // =========================================================================
 #[allow(deprecated)]
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use bitcoin::secp256k1::PublicKey;

@@ -684,6 +684,7 @@ impl<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> Client<S, SS, VSS>
     ///
     /// This applies to swaps where the client funds the Arkade VHTLC
     /// (BtcToEvm and ArkadeToEvm directions).
+    #[allow(clippy::wildcard_enum_match_arm)]
     pub async fn amounts_for_swap(&self, swap_id: &str) -> crate::Result<VhtlcAmounts> {
         let swap_data = self.load_swap_data_from_storage(swap_id).await?;
         match &swap_data.response {
@@ -741,6 +742,7 @@ impl<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> Client<S, SS, VSS>
     /// (BtcToEvm and ArkadeToEvm directions). It does not apply to swaps funded
     /// with Lightning, since the user's Lightning wallet is responsible for
     /// refunding the Lightning HTLC.
+    #[allow(clippy::wildcard_enum_match_arm)]
     pub async fn refund_vhtlc(&self, swap_id: &str, refund_address: &str) -> crate::Result<String> {
         let swap_data = self.load_swap_data_from_storage(swap_id).await?;
         let refund_address = ArkAddress::from_str(refund_address)
@@ -849,6 +851,7 @@ impl<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> Client<S, SS, VSS>
     /// # Arguments
     /// * `swap_id` - The swap ID
     /// * `refund_address` - The Bitcoin address to receive the refunded funds
+    #[allow(clippy::wildcard_enum_match_arm)]
     pub async fn refund_onchain_htlc(
         &self,
         swap_id: &str,

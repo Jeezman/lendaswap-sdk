@@ -135,9 +135,8 @@ impl EsploraClient {
                     if !outspend.spent {
                         debug!("Found unspent UTXO: {}:{}", txid, vout);
                         return Ok(Some((outpoint, Amount::from_sat(output.value))));
-                    } else {
-                        debug!("UTXO {}:{} is already spent", txid, vout);
                     }
+                    debug!("UTXO {}:{} is already spent", txid, vout);
                 }
             }
         }

@@ -2,6 +2,8 @@
 //!
 //! Run with: cargo test --test integration -- --nocapture --ignored
 
+#![allow(clippy::unwrap_used, clippy::print_stdout, clippy::dbg_macro)]
+
 use lendaswap_core::ApiClient;
 use lendaswap_core::Client;
 use lendaswap_core::ExtendedSwapStorageData;

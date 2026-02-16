@@ -130,6 +130,7 @@ impl<S: WalletStorage> Wallet<S> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use crate::storage::memory::MemoryWalletStorage;
