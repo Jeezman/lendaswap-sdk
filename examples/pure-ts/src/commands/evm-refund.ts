@@ -30,12 +30,18 @@ export async function evmRefundSwap(
   client: Client,
   swapId: string | undefined,
   evmMnemonic: string | undefined,
+  directMode: boolean = false,
 ): Promise<void> {
   if (!swapId) {
-    console.error("Usage: tsx src/index.ts evm-refund <swap-id>");
+    console.error("Usage: tsx src/index.ts evm-refund <swap-id> [--direct]");
+    console.error("");
+    console.error("Options:");
+    console.error("  --direct    Return WBTC directly instead of swapping back to original token");
+    console.error("              (useful when DEX calldata is stale, e.g., on Anvil forks)");
     console.error("");
     console.error("Example:");
     console.error("  tsx src/index.ts evm-refund 12345678-1234-1234-1234-123456789abc");
+    console.error("  tsx src/index.ts evm-refund 12345678-1234-1234-1234-123456789abc --direct");
     console.error("");
     console.error("Environment:");
     console.error("  EVM_MNEMONIC must be set to your EVM wallet mnemonic");
@@ -105,7 +111,12 @@ export async function evmRefundSwap(
 
   // #region check-evm-htlc
   // Get refund call data via refundSwap (handles both direct HTLC and coordinator refunds)
-  const result = await client.refundSwap(swapId);
+  const mode = directMode ? "direct" : "swap-back";
+  if (directMode) {
+    console.log("Mode: direct (returning WBTC instead of swapping back)");
+    console.log("");
+  }
+  const result = await client.refundSwap(swapId, { mode });
 
   if (!result.success || !result.evmRefundData) {
     console.error(`Refund not available: ${result.message}`);

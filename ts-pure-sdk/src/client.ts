@@ -169,8 +169,18 @@ export interface ArkadeRefundOptions {
   arkadeServerUrl?: string;
 }
 
+/** Options for EVM refund via coordinator */
+export interface EvmRefundOptions {
+  /**
+   * Refund mode:
+   * - "swap-back" (default): Swap WBTC back to original token via DEX
+   * - "direct": Return WBTC directly (useful when DEX calldata is stale)
+   */
+  mode?: "swap-back" | "direct";
+}
+
 /** General refund options — the method picks the right variant based on swap type */
-export type RefundOptions = OnchainRefundOptions | ArkadeRefundOptions;
+export type RefundOptions = OnchainRefundOptions | ArkadeRefundOptions | EvmRefundOptions;
 
 /** Options for Arkade (off-chain) claim */
 export interface ArkadeClaimOptions {
@@ -1356,22 +1366,25 @@ export class Client {
 
     // Bitcoin on-chain swaps require on-chain refund transaction
     if (direction === "bitcoin_to_evm") {
-      return this.#buildOnchainRefund(id, swap, options);
+      return this.#buildOnchainRefund(id, swap, options as OnchainRefundOptions | undefined);
     }
 
     // EVM-sourced swaps return calldata for manual execution
     if (direction === "evm_to_arkade") {
-      return this.#buildEvmToArkadeRefund(id, swap);
+      const evmOptions = options as EvmRefundOptions | undefined;
+      return this.#buildEvmToArkadeRefund(id, swap, evmOptions?.mode);
     }
 
     // EVM-to-Bitcoin uses coordinator refund (same pattern as EVM-to-Arkade)
     if (direction === "evm_to_bitcoin") {
-      return this.#buildEvmToBitcoinRefund(id, swap);
+      const evmOptions = options as EvmRefundOptions | undefined;
+      return this.#buildEvmToBitcoinRefund(id, swap, evmOptions?.mode);
     }
 
     // EVM-to-Lightning uses coordinator refund (same pattern as EVM-to-Arkade)
     if (direction === "evm_to_lightning") {
-      return this.#buildEvmToLightningRefund(id, swap);
+      const evmOptions = options as EvmRefundOptions | undefined;
+      return this.#buildEvmToLightningRefund(id, swap, evmOptions?.mode);
     }
 
     return {
@@ -1956,6 +1969,7 @@ export class Client {
   async #buildEvmToArkadeRefund(
     id: string,
     swap: GetSwapResponse,
+    mode: "swap-back" | "direct" = "swap-back",
   ): Promise<RefundResult> {
     const evmSwap = swap as EvmToArkadeSwapResponse & {
       direction: "evm_to_arkade";
@@ -1965,13 +1979,15 @@ export class Client {
     const now = Math.floor(Date.now() / 1000);
     const timelockExpired = now >= timelock;
 
-    // Fetch coordinator refund calldata from server (default mode: swap-back)
+    // Fetch coordinator refund calldata from server
+    // - "swap-back": swap WBTC back to original token via DEX (default)
+    // - "direct": return WBTC directly (useful when DEX calldata is stale)
     const response = await this.#apiClient.GET(
       "/swap/{id}/refund-and-swap-calldata",
       {
         params: {
           path: { id },
-          query: { mode: "swap-back" },
+          query: { mode },
         },
       },
     );
@@ -2007,6 +2023,7 @@ export class Client {
   async #buildEvmToBitcoinRefund(
     id: string,
     swap: GetSwapResponse,
+    mode: "swap-back" | "direct" = "swap-back",
   ): Promise<RefundResult> {
     const evmSwap = swap as EvmToBitcoinSwapResponse & {
       direction: "evm_to_bitcoin";
@@ -2047,13 +2064,15 @@ export class Client {
       };
     }
 
-    // Non-WBTC source: use coordinator refund (swap WBTC back to source token)
+    // Non-WBTC source: use coordinator refund
+    // - "swap-back": swap WBTC back to original token via DEX (default)
+    // - "direct": return WBTC directly (useful when DEX calldata is stale)
     const response = await this.#apiClient.GET(
       "/swap/{id}/refund-and-swap-calldata",
       {
         params: {
           path: { id },
-          query: { mode: "swap-back" },
+          query: { mode },
         },
       },
     );
@@ -2089,6 +2108,7 @@ export class Client {
   async #buildEvmToLightningRefund(
     _id: string,
     swap: GetSwapResponse,
+    _mode?: "swap-back" | "direct", // Not used - EVM-to-Lightning uses direct HTLCErc20 refund
   ): Promise<RefundResult> {
     const evmSwap = swap as {
       evm_htlc_address: string;
