@@ -995,11 +995,7 @@ export class Client {
     }
 
     // Check if target is Arkade (handle both string "btc_arkade" and TokenInfo object)
-    const isArkadeTarget =
-      swap.target_token === "btc_arkade" ||
-      (typeof swap.target_token === "object" &&
-        swap.target_token !== null &&
-        (swap.target_token as { symbol: string }).symbol === "BTC");
+    const isArkadeTarget = swap.target_token.chain === "Arkade";
 
     if (isArkadeTarget) {
       // Determine destination address based on swap direction

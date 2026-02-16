@@ -12,6 +12,7 @@ export type {
   ClaimGaslessRequest,
   ClaimGaslessResponse,
   components,
+  EvmToArkadeSwapResponse,
   EvmToBitcoinSwapRequest,
   EvmToBitcoinSwapResponse,
   GetSwapResponse,
@@ -122,8 +123,11 @@ export {
 // Token helpers and constants
 export {
   BTC_ARKADE,
+  BTC_ARKADE_INFO,
   BTC_LIGHTNING,
+  BTC_LIGHTNING_INFO,
   BTC_ONCHAIN,
+  BTC_ONCHAIN_INFO,
   isArbitrumToken,
   isArkade,
   isBtc,
@@ -132,8 +136,8 @@ export {
   isEvmToken,
   isLightning,
   isPolygonToken,
-  type NetworkName,
-  networkName,
   type TokenInput,
+  toChain,
+  tokenChain,
 } from "./tokens.js";
 export { getUsdPrices } from "./usd-price";

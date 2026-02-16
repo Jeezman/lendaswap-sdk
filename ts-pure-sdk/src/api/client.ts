@@ -39,8 +39,6 @@ export type BitcoinToEvmSwapResponse =
 // EVM-to-Arkade (generic endpoint) types
 export type EvmToArkadeGenericSwapRequest =
   components["schemas"]["EvmToArkadeGenericSwapRequest"];
-export type EvmToArkadeGenericSwapResponse =
-  components["schemas"]["EvmToArkadeGenericSwapResponse"];
 
 // EVM-to-Bitcoin (generic endpoint) types
 export type EvmToBitcoinSwapRequest =

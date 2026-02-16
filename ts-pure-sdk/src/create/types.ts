@@ -8,7 +8,7 @@ import type {
   EvmToBitcoinSwapResponse as ApiEvmToBitcoinSwapResponse,
   ArkadeToEvmSwapResponse,
   BtcToArkadeSwapResponse,
-  EvmToArkadeGenericSwapResponse,
+  EvmToArkadeSwapResponse,
   TokenId,
 } from "../api/client.js";
 import type { SwapParams } from "../signer";
@@ -147,7 +147,7 @@ export interface EvmToArkadeSwapOptions {
 /** Result of creating an EVM to Arkade swap */
 export interface EvmToArkadeSwapResult {
   /** The swap response from the API */
-  response: EvmToArkadeGenericSwapResponse;
+  response: EvmToArkadeSwapResponse;
   /** The swap parameters used (for storage/recovery) */
   swapParams: SwapParams;
 }
@@ -233,7 +233,7 @@ export interface EvmToArkadeSwapGenericOptions {
 /** Result of creating an EVM-to-Arkade swap via the generic endpoint */
 export interface EvmToArkadeSwapGenericResult {
   /** The swap response from the API */
-  response: EvmToArkadeGenericSwapResponse;
+  response: EvmToArkadeSwapResponse;
   /** The swap parameters used (for storage/recovery) */
   swapParams: SwapParams;
 }

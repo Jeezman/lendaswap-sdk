@@ -756,8 +756,8 @@ export interface components {
        * @description Amount user must send in satoshis
        */
       source_amount: number;
-      /** @description Source token (always btc_onchain for this swap type) */
-      source_token: components["schemas"]["TokenId"];
+      /** @description Source token info */
+      source_token: components["schemas"]["TokenInfo"];
       /** @description Current status of the swap */
       status: components["schemas"]["SwapStatus"];
       /**
@@ -767,8 +767,8 @@ export interface components {
       target_amount: number;
       /** @description User's target Arkade address */
       target_arkade_address: string;
-      /** @description Target token (always btc_arkade for this swap type) */
-      target_token: components["schemas"]["TokenId"];
+      /** @description Target token info */
+      target_token: components["schemas"]["TokenInfo"];
       /**
        * Format: int64
        * @description Unilateral claim delay in seconds

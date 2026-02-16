@@ -1461,8 +1461,8 @@
             "minimum": 0
           },
           "source_token": {
-            "$ref": "#/components/schemas/TokenId",
-            "description": "Source token (always btc_onchain for this swap type)"
+            "$ref": "#/components/schemas/TokenInfo",
+            "description": "Source token info"
           },
           "status": {
             "$ref": "#/components/schemas/SwapStatus",
@@ -1479,8 +1479,8 @@
             "description": "User's target Arkade address"
           },
           "target_token": {
-            "$ref": "#/components/schemas/TokenId",
-            "description": "Target token (always btc_arkade for this swap type)"
+            "$ref": "#/components/schemas/TokenInfo",
+            "description": "Target token info"
           },
           "unilateral_claim_delay": {
             "type": "integer",
