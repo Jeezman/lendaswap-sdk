@@ -41,22 +41,22 @@ export const BTC_ONCHAIN_INFO: TokenInfo = {
 const EVM_CHAINS = ["ethereum", "polygon", "arbitrum"] as const;
 
 /** Returns true if the token is Bitcoin on Lightning. */
-export function isLightning(token: TokenInput): boolean {
-  return toTokenId(token) === BTC_LIGHTNING;
+export function isLightning(token: TokenInfo): boolean {
+  return token.chain === "Lightning";
 }
 
 /** Returns true if the token is Bitcoin on Arkade. */
-export function isArkade(token: TokenInput): boolean {
-  return toTokenId(token) === BTC_ARKADE;
+export function isArkade(token: TokenInfo): boolean {
+  return token.chain === "Arkade";
 }
 
 /** Returns true if the token is Bitcoin on-chain (L1). */
-export function isBtcOnchain(token: TokenInput): boolean {
-  return toTokenId(token) === BTC_ONCHAIN;
+export function isBtcOnchain(token: TokenInfo): boolean {
+  return token.chain === "Bitcoin";
 }
 
 /** Returns true if the token is any form of Bitcoin (Lightning, Arkade, or on-chain). */
-export function isBtc(token: TokenInput): boolean {
+export function isBtc(token: TokenInfo): boolean {
   return isLightning(token) || isArkade(token) || isBtcOnchain(token);
 }
 
