@@ -46,6 +46,10 @@ export type EvmToBitcoinSwapRequest =
 export type EvmToBitcoinSwapResponse =
   components["schemas"]["EvmToBitcoinSwapResponse"];
 
+// EVM-to-Lightning (generic endpoint) types
+export type EvmToLightningSwapResponse =
+  components["schemas"]["EvmToLightningSwapResponse"];
+
 // Lightning-to-EVM (generic endpoint) types
 export type LightningToEvmSwapResponse =
   components["schemas"]["LightningToEvmSwapResponse"];

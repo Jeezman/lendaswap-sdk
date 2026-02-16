@@ -15,6 +15,7 @@ export type {
   EvmToArkadeSwapResponse,
   EvmToBitcoinSwapRequest,
   EvmToBitcoinSwapResponse,
+  EvmToLightningSwapResponse,
   GetSwapResponse,
   // Types
   paths,

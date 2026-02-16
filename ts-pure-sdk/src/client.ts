@@ -1008,8 +1008,7 @@ export class Client {
         destinationAddress = btcToArkadeSwap.target_arkade_address;
       } else if (swap.direction === "evm_to_arkade") {
         // For evm_to_arkade swaps, check if we have target_arkade_address in stored response
-        // The creation response (EvmToArkadeGenericSwapResponse) doesn't have it,
-        // but the GET response (EvmToArkadeSwapResponse) does.
+        // Check if we have target_arkade_address in the stored response.
         const storedResponse = swap as { target_arkade_address?: string };
         if (storedResponse.target_arkade_address) {
           destinationAddress = storedResponse.target_arkade_address;

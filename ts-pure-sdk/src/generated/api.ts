@@ -996,6 +996,8 @@ export interface components {
       source_amount: number;
       source_token: components["schemas"]["TokenInfo"];
       status: components["schemas"]["SwapStatus"];
+      /** Format: int64 */
+      target_amount: number;
       target_arkade_address: string;
       target_token: components["schemas"]["TokenInfo"];
       /** Format: int64 */
@@ -1046,10 +1048,7 @@ export interface components {
     /** @description EVM → Bitcoin (on-chain) swap response */
     EvmToBitcoinSwapResponse: {
       btc_claim_txid?: string | null;
-      /**
-       * Format: int64
-       * @description Expected BTC amount (in sats) user will receive
-       */
+      /** Format: int64 */
       btc_expected_sats: number;
       btc_fund_txid?: string | null;
       /** @description BTC hash lock (RIPEMD160 of EVM hash lock) */
@@ -1105,6 +1104,11 @@ export interface components {
       source_amount: number;
       source_token: components["schemas"]["TokenInfo"];
       status: components["schemas"]["SwapStatus"];
+      /**
+       * Format: int64
+       * @description Expected BTC amount (in sats) user will receive
+       */
+      target_amount: number;
       target_token: components["schemas"]["TokenInfo"];
       /** @description WBTC token contract address on the EVM chain */
       wbtc_address: string;
@@ -1218,6 +1222,8 @@ export interface components {
       source_amount: number;
       source_token: components["schemas"]["TokenInfo"];
       status: components["schemas"]["SwapStatus"];
+      /** Format: int64 */
+      target_amount: number;
       target_token: components["schemas"]["TokenInfo"];
       /** Format: int64 */
       unilateral_claim_delay: number;
