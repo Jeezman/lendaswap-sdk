@@ -21,14 +21,14 @@ function parseTokenSpec(tokenId: string): { chain: Chain; token: string } | null
   if (tokenId === "btc_arkade") return { chain: "Arkade", token: "btc" };
   if (tokenId === "btc_onchain") return { chain: "Bitcoin", token: "btc" };
 
-  // EVM tokens
+  // EVM tokens - use chain IDs as expected by the API
   const evmToken = EVM_TOKEN_MAP[tokenId];
   if (evmToken) {
     const chain: Chain =
-      tokenId.endsWith("_pol") ? "Polygon" :
-      tokenId.endsWith("_arb") ? "Arbitrum" :
-      tokenId.endsWith("_eth") ? "Ethereum" :
-      "Polygon";
+      tokenId.endsWith("_pol") ? "137" :
+      tokenId.endsWith("_arb") ? "42161" :
+      tokenId.endsWith("_eth") ? "1" :
+      "137";
     return { chain, token: evmToken.tokenAddress };
   }
 
