@@ -33,7 +33,7 @@ export const BTC_ONCHAIN_INFO: TokenInfo = {
   chain: "Bitcoin",
 };
 
-const EVM_CHAINS = ["ethereum", "polygon", "arbitrum"] as const;
+const EVM_CHAINS = ["1", "137", "42161"] as const;
 
 /** Returns true if the token is Bitcoin on Lightning. */
 export function isLightning(token: TokenInfo): boolean {
@@ -87,4 +87,17 @@ export function toChain(str: string): Chain {
   if (c === "arkade") return "Arkade";
   if (c === "bitcoin") return "Bitcoin";
   return "Bitcoin";
+}
+
+export function toChainName(chain: Chain): string {
+  switch (chain) {
+    case "1":
+      return "Ethereum";
+    case "137":
+      return "Polygon";
+    case "42161":
+      return "Arbitrum";
+    default:
+      return chain.toString();
+  }
 }
