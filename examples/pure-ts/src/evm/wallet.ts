@@ -55,6 +55,25 @@ export interface EvmWallet {
  * @param rpcUrl - Optional custom RPC URL
  * @returns The EVM wallet
  */
+/**
+ * Get chain name from token ID.
+ * Token IDs follow the pattern: `{token}_{chain}` (e.g., "usdc_pol", "wbtc_arb")
+ */
+export function getChainFromToken(tokenId: string): EvmChainName | undefined {
+  if (tokenId.endsWith("_pol")) return "polygon";
+  if (tokenId.endsWith("_arb")) return "arbitrum";
+  if (tokenId.endsWith("_eth")) return "ethereum";
+  return undefined;
+}
+
+/**
+ * Creates an EVM wallet from a mnemonic.
+ *
+ * @param mnemonic - BIP39 mnemonic phrase
+ * @param chainName - The chain to connect to
+ * @param rpcUrl - Optional custom RPC URL
+ * @returns The EVM wallet
+ */
 export function createEvmWallet(
   mnemonic: string,
   chainName: EvmChainName,
