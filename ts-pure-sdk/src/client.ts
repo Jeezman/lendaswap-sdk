@@ -180,7 +180,10 @@ export interface EvmRefundOptions {
 }
 
 /** General refund options — the method picks the right variant based on swap type */
-export type RefundOptions = OnchainRefundOptions | ArkadeRefundOptions | EvmRefundOptions;
+export type RefundOptions =
+  | OnchainRefundOptions
+  | ArkadeRefundOptions
+  | EvmRefundOptions;
 
 /** Options for Arkade (off-chain) claim */
 export interface ArkadeClaimOptions {
@@ -1366,7 +1369,11 @@ export class Client {
 
     // Bitcoin on-chain swaps require on-chain refund transaction
     if (direction === "bitcoin_to_evm") {
-      return this.#buildOnchainRefund(id, swap, options as OnchainRefundOptions | undefined);
+      return this.#buildOnchainRefund(
+        id,
+        swap,
+        options as OnchainRefundOptions | undefined,
+      );
     }
 
     // EVM-sourced swaps return calldata for manual execution

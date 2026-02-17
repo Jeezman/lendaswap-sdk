@@ -919,13 +919,6 @@
             }
           },
           {
-            "name": "source_token",
-            "in": "query",
-            "description": "Source token identifier (e.g. \"btc\" or a contract address).",
-            "required": false,
-            "schema": { "type": ["string", "null"] }
-          },
-          {
             "name": "target_chain",
             "in": "query",
             "description": "If set together with `target_token`, return only valid source tokens.",
@@ -936,13 +929,6 @@
                 { "$ref": "#/components/schemas/Chain" }
               ]
             }
-          },
-          {
-            "name": "target_token",
-            "in": "query",
-            "description": "Target token identifier (e.g. \"btc\" or a contract address).",
-            "required": false,
-            "schema": { "type": ["string", "null"] }
           }
         ],
         "responses": {

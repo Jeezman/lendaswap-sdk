@@ -1130,9 +1130,7 @@ impl<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> Client<S, SS, VSS>
     pub async fn get_vtxo_swap(&self, id: &str) -> crate::Result<ExtendedVtxoSwapStorageData> {
         let maybe_data = self.vtxo_swap_storage.get(id).await?;
         match maybe_data {
-            None => Err(Error::SwapNotFound(format!(
-                "Swap id not found {id}"
-            ))),
+            None => Err(Error::SwapNotFound(format!("Swap id not found {id}"))),
             Some(known) => {
                 let response = self.api_client.get_vtxo_swap(id).await?;
 
@@ -1196,10 +1194,11 @@ impl<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> Client<S, SS, VSS>
         let refund_ark_address = ArkAddress::from_str(refund_address)
             .map_err(|e| Error::Parse(format!("Invalid refund ark address: {}", e)))?;
 
-        let swap =
-            self.vtxo_swap_storage.get(swap_id).await?.ok_or_else(|| {
-                Error::SwapNotFound(format!("Swap id not found {swap_id}"))
-            })?;
+        let swap = self
+            .vtxo_swap_storage
+            .get(swap_id)
+            .await?
+            .ok_or_else(|| Error::SwapNotFound(format!("Swap id not found {swap_id}")))?;
 
         let txid = vtxo_swap::refund_client_vhtlc(
             &self.arkade_url,
