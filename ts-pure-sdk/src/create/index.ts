@@ -26,6 +26,8 @@ export type {
   BitcoinToEvmSwapResult,
   BtcToEvmSwapOptions,
   CreateSwapContext,
+  CreateSwapOptions,
+  CreateSwapResult,
   EvmChain,
   EvmToArkadeSwapGenericOptions,
   EvmToArkadeSwapGenericResult,

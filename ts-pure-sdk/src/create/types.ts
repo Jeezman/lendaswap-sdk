@@ -12,6 +12,7 @@ import type {
   EvmToLightningSwapResponse,
   LightningToEvmSwapResponse,
   TokenId,
+  TokenInfo,
 } from "../api/client.js";
 import type { SwapParams } from "../signer";
 
@@ -242,6 +243,29 @@ export interface ArkadeToEvmSwapResult {
   /** The swap parameters used (for storage/recovery) */
   swapParams: SwapParams;
 }
+
+/** Options for the generic `createSwap` method that routes to the correct direction. */
+export interface CreateSwapOptions {
+  sourceAsset: TokenInfo;
+  targetAsset: TokenInfo;
+  sourceAmount?: number;
+  targetAmount?: number;
+  /** Target address: EVM address, Arkade address, or Lightning invoice */
+  targetAddress: string;
+  /** EVM address of the user (required for EVM→* swaps) */
+  userAddress?: string;
+  referralCode?: string;
+}
+
+/** Union of all swap creation results returned by `createSwap`. */
+export type CreateSwapResult =
+  | ArkadeToEvmSwapResult
+  | BitcoinToEvmSwapResult
+  | BitcoinToArkadeSwapResult
+  | LightningToEvmSwapGenericResult
+  | EvmToArkadeSwapGenericResult
+  | EvmToBitcoinSwapResult
+  | EvmToLightningSwapGenericResult;
 
 /**
  * Context passed to swap creation functions.

@@ -47,6 +47,8 @@ export type {
   ClaimResult,
   ClientConfig,
   CoordinatorFundingCallData,
+  CreateSwapOptions,
+  CreateSwapResult,
   EthereumClaimData,
   EvmChain,
   EvmFundingCallData,

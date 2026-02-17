@@ -20,6 +20,8 @@ import {
   type BitcoinToEvmSwapOptions,
   type BitcoinToEvmSwapResult,
   type CreateSwapContext,
+  type CreateSwapOptions,
+  type CreateSwapResult,
   createArkadeToEvmSwapGeneric,
   createBitcoinToArkadeSwap,
   createBitcoinToEvmSwap,
@@ -64,6 +66,7 @@ import {
   type SwapStorage,
   type WalletStorage,
 } from "./storage";
+import { isArkade, isBtcOnchain, isEvmToken, isLightning } from "./tokens.js";
 
 // Re-export types from create module for backwards compatibility
 export type {
@@ -75,6 +78,8 @@ export type {
   BitcoinToEvmSwapResponse,
   BitcoinToEvmSwapResult,
   BtcToEvmSwapOptions,
+  CreateSwapOptions,
+  CreateSwapResult,
   EvmChain,
   EvmToArkadeSwapGenericOptions,
   EvmToArkadeSwapGenericResult,
@@ -2166,6 +2171,136 @@ export class Client {
     };
 
     await this.#swapStorage.store(storedSwap);
+  }
+
+  /**
+   * Creates a swap by routing to the correct direction-specific method
+   * based on `sourceAsset.chain` and `targetAsset.chain`.
+   *
+   * Supported directions:
+   * - Arkade → EVM
+   * - Lightning → EVM
+   * - Bitcoin (on-chain) → EVM
+   * - Bitcoin (on-chain) → Arkade
+   * - EVM → Arkade
+   * - EVM → Bitcoin (on-chain)
+   * - EVM → Lightning
+   *
+   * @param options - The swap options including source/target assets, amounts, and addresses.
+   * @returns The swap result (response + swapParams).
+   * @throws Error if the swap direction is unsupported or required fields are missing.
+   */
+  async createSwap(options: CreateSwapOptions): Promise<CreateSwapResult> {
+    const { sourceAsset, targetAsset } = options;
+    const sourceChain = sourceAsset.chain;
+    const targetChain = targetAsset.chain;
+
+    // Arkade → EVM
+    if (isArkade(sourceAsset) && isEvmToken(targetChain)) {
+      return this.createArkadeToEvmSwapGeneric({
+        targetAddress: options.targetAddress,
+        tokenAddress: targetAsset.token_id,
+        evmChainId: Number(targetChain),
+        sourceAmount: options.sourceAmount
+          ? BigInt(options.sourceAmount)
+          : undefined,
+        targetAmount: options.targetAmount
+          ? BigInt(options.targetAmount)
+          : undefined,
+        referralCode: options.referralCode,
+      });
+    }
+
+    // Lightning → EVM
+    if (isLightning(sourceAsset) && isEvmToken(targetChain)) {
+      return this.createLightningToEvmSwapGeneric({
+        targetAddress: options.targetAddress,
+        tokenAddress: targetAsset.token_id,
+        evmChainId: Number(targetChain),
+        amountIn: options.sourceAmount,
+        amountOut: options.targetAmount,
+        referralCode: options.referralCode,
+      });
+    }
+
+    // Bitcoin (on-chain) → EVM
+    if (isBtcOnchain(sourceAsset) && isEvmToken(targetChain)) {
+      return this.createBitcoinToEvmSwap({
+        targetAddress: options.targetAddress,
+        tokenAddress: targetAsset.token_id,
+        evmChainId: Number(targetChain),
+        sourceAmount: options.sourceAmount,
+        targetAmount: options.targetAmount,
+        referralCode: options.referralCode,
+      });
+    }
+
+    // Bitcoin (on-chain) → Arkade
+    if (isBtcOnchain(sourceAsset) && isArkade(targetAsset)) {
+      if (options.targetAmount == null) {
+        throw new Error(
+          "targetAmount (sats to receive on Arkade) is required for Bitcoin → Arkade swaps",
+        );
+      }
+      return this.createBitcoinToArkadeSwap({
+        satsReceive: options.targetAmount,
+        targetAddress: options.targetAddress,
+        referralCode: options.referralCode,
+      });
+    }
+
+    // EVM → Arkade
+    if (isEvmToken(sourceChain) && isArkade(targetAsset)) {
+      if (!options.userAddress) {
+        throw new Error("userAddress is required for EVM → Arkade swaps");
+      }
+      return this.createEvmToArkadeSwapGeneric({
+        targetAddress: options.targetAddress,
+        tokenAddress: sourceAsset.token_id,
+        evmChainId: Number(sourceChain),
+        userAddress: options.userAddress,
+        sourceAmount: options.sourceAmount
+          ? BigInt(options.sourceAmount)
+          : undefined,
+        targetAmount: options.targetAmount,
+        referralCode: options.referralCode,
+      });
+    }
+
+    // EVM → Bitcoin (on-chain)
+    if (isEvmToken(sourceChain) && isBtcOnchain(targetAsset)) {
+      if (!options.userAddress) {
+        throw new Error("userAddress is required for EVM → Bitcoin swaps");
+      }
+      return this.createEvmToBitcoinSwap({
+        tokenAddress: sourceAsset.token_id,
+        evmChainId: Number(sourceChain),
+        userAddress: options.userAddress,
+        sourceAmount: options.sourceAmount
+          ? BigInt(options.sourceAmount)
+          : undefined,
+        targetAmount: options.targetAmount,
+        referralCode: options.referralCode,
+      });
+    }
+
+    // EVM → Lightning
+    if (isEvmToken(sourceChain) && isLightning(targetAsset)) {
+      if (!options.userAddress) {
+        throw new Error("userAddress is required for EVM → Lightning swaps");
+      }
+      return this.createEvmToLightningSwapGeneric({
+        lightningInvoice: options.targetAddress,
+        evmChainId: Number(sourceChain),
+        tokenAddress: sourceAsset.token_id,
+        userAddress: options.userAddress,
+        referralCode: options.referralCode,
+      });
+    }
+
+    throw new Error(
+      `Unsupported swap direction: ${sourceChain} → ${targetChain}`,
+    );
   }
 
   /**
