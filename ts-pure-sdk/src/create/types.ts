@@ -9,60 +9,14 @@ import type {
   ArkadeToEvmSwapResponse,
   BtcToArkadeSwapResponse,
   EvmToArkadeSwapResponse,
+  EvmToLightningSwapResponse,
+  LightningToEvmSwapResponse,
   TokenId,
 } from "../api/client.js";
 import type { SwapParams } from "../signer";
 
 // Placeholder types until OpenAPI spec is regenerated
 // These match the Rust API response types
-
-/** Response from Lightning-to-EVM swap creation */
-export interface LightningToEvmSwapResponse {
-  id: string;
-  status: string;
-  hash_lock: string;
-  evm_chain_id: number;
-  evm_chain_name: string;
-  target_address: string;
-  claiming_address: string;
-  token_address: string;
-  token_symbol: string;
-  token_decimals: number;
-  amount_in_sats: number;
-  amount_out_token: string;
-  ln_invoice: string;
-  ln_invoice_amount_sats: number;
-  timelock: number;
-  htlc_erc20_address: string;
-  server_btc_receive_address: string;
-  created_at: string;
-  updated_at: string;
-  dex_calldata?: {
-    to: string;
-    data: string;
-    value: string;
-  };
-}
-
-/** Response from EVM-to-Lightning swap creation */
-export interface EvmToLightningSwapResponse {
-  id: string;
-  status: string;
-  hash_lock: string;
-  evm_chain_id: number;
-  evm_chain_name: string;
-  user_address: string;
-  token_address: string;
-  token_symbol: string;
-  token_decimals: number;
-  amount_in_token: string;
-  amount_out_sats: number;
-  lightning_invoice: string;
-  timelock: number;
-  htlc_erc20_address: string;
-  created_at: string;
-  updated_at: string;
-}
 
 /** Supported EVM chains for swaps */
 export type EvmChain = "polygon" | "arbitrum" | "ethereum" | string;

@@ -36,8 +36,6 @@ export type {
   EvmToLightningSwapGenericOptions,
   EvmToLightningSwapGenericResult,
   EvmToLightningSwapOptions,
-  EvmToLightningSwapResponse,
   LightningToEvmSwapGenericOptions,
   LightningToEvmSwapGenericResult,
-  LightningToEvmSwapResponse,
 } from "./types.js";

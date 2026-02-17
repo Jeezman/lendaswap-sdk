@@ -4,12 +4,12 @@
  * Supports swapping tokens from any EVM chain to pay a Lightning invoice.
  */
 
+import type { EvmToLightningSwapResponse } from "../api/client";
 import { bytesToHex } from "../signer/index.js";
 import type {
   CreateSwapContext,
   EvmToLightningSwapGenericOptions,
   EvmToLightningSwapGenericResult,
-  EvmToLightningSwapResponse,
 } from "./types.js";
 
 /**

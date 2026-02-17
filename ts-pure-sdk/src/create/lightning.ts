@@ -2,13 +2,13 @@
  * Lightning to EVM swap creation.
  */
 
+import type { LightningToEvmSwapResponse } from "../api/client";
 import { deriveEvmAddress } from "../evm";
 import { bytesToHex } from "../signer/index.js";
 import type {
   CreateSwapContext,
   LightningToEvmSwapGenericOptions,
   LightningToEvmSwapGenericResult,
-  LightningToEvmSwapResponse,
 } from "./types.js";
 
 /**
