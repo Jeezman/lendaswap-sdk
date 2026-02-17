@@ -1502,7 +1502,7 @@ export class Client {
       };
     }
 
-    // Find the UTXO at the HTLC address
+    // Get the HTLC output info - prefer API data over Esplora lookup
     const esploraUrl = this.#config.esploraUrl ?? DEFAULT_ESPLORA_URLS[network];
     if (!esploraUrl) {
       return {
@@ -1511,7 +1511,40 @@ export class Client {
       };
     }
 
-    const htlcOutput = await findOutputByAddress(esploraUrl, btcHtlcAddress);
+    // Try to use funding info from the API response (faster, works before confirmation)
+    const btcFundTxid = (swap as { btc_fund_txid?: string }).btc_fund_txid;
+    const btcFundVout = (swap as { btc_fund_vout?: number }).btc_fund_vout;
+
+    let htlcOutput: { txid: string; vout: number; amount: bigint } | null =
+      null;
+
+    if (btcFundTxid && btcFundVout !== undefined) {
+      // We have the funding info from the API, but we need to get the amount
+      // Query the transaction to get the output amount
+      try {
+        const txResponse = await fetch(`${esploraUrl}/tx/${btcFundTxid}`);
+        if (txResponse.ok) {
+          const txData = (await txResponse.json()) as {
+            vout: Array<{ value: number }>;
+          };
+          if (txData.vout && txData.vout[btcFundVout]) {
+            htlcOutput = {
+              txid: btcFundTxid,
+              vout: btcFundVout,
+              amount: BigInt(txData.vout[btcFundVout].value),
+            };
+          }
+        }
+      } catch {
+        // Fall through to Esplora lookup
+      }
+    }
+
+    // Fallback: query Esplora for UTXOs at the address (requires confirmation)
+    if (!htlcOutput) {
+      htlcOutput = await findOutputByAddress(esploraUrl, btcHtlcAddress);
+    }
+
     if (!htlcOutput) {
       return {
         success: false,
@@ -1720,7 +1753,7 @@ export class Client {
       };
     }
 
-    // Find the correct vout by looking up the funding transaction
+    // Get the HTLC output info - prefer API data over Esplora lookup
     const esploraUrl = this.#config.esploraUrl ?? DEFAULT_ESPLORA_URLS[network];
     if (!esploraUrl) {
       return {
@@ -1729,7 +1762,38 @@ export class Client {
       };
     }
 
-    const htlcOutput = await findOutputByAddress(esploraUrl, btcHtlcAddress);
+    // Try to use funding info from the API response (faster, works before confirmation)
+    const btcFundTxid = (swap as { btc_fund_txid?: string }).btc_fund_txid;
+    const btcFundVout = (swap as { btc_fund_vout?: number }).btc_fund_vout;
+
+    let htlcOutput: { txid: string; vout: number; amount: bigint } | null =
+      null;
+
+    if (btcFundTxid && btcFundVout !== undefined) {
+      // We have the funding info from the API, get the amount from the transaction
+      try {
+        const txResponse = await fetch(`${esploraUrl}/tx/${btcFundTxid}`);
+        if (txResponse.ok) {
+          const txData = (await txResponse.json()) as {
+            vout: Array<{ value: number }>;
+          };
+          if (txData.vout && txData.vout[btcFundVout]) {
+            htlcOutput = {
+              txid: btcFundTxid,
+              vout: btcFundVout,
+              amount: BigInt(txData.vout[btcFundVout].value),
+            };
+          }
+        }
+      } catch {
+        // Fall through to Esplora lookup
+      }
+    }
+
+    // Fallback: query Esplora for UTXOs at the address (requires confirmation)
+    if (!htlcOutput) {
+      htlcOutput = await findOutputByAddress(esploraUrl, btcHtlcAddress);
+    }
 
     if (!htlcOutput) {
       return {
