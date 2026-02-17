@@ -2,7 +2,7 @@
  * Arkade to EVM swap creation.
  */
 
-import { deriveEvmAddress } from "../evm/signing.js";
+import { deriveEvmAddress } from "../evm";
 import { bytesToHex } from "../signer/index.js";
 import type {
   ArkadeToEvmSwapOptions,
