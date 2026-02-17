@@ -90,15 +90,3 @@ export function createEvmWallet(
   };
 }
 
-/**
- * Gets the chain name from a token ID.
- *
- * @param tokenId - Token ID (e.g., "usdc_pol", "usdc_arb", "usdc_eth")
- * @returns The chain name or undefined
- */
-export function getChainFromToken(tokenId: string): EvmChainName | undefined {
-  if (tokenId.endsWith("_pol")) return "polygon";
-  if (tokenId.endsWith("_arb")) return "arbitrum";
-  if (tokenId.endsWith("_eth")) return "ethereum";
-  return undefined;
-}
