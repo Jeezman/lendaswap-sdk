@@ -111,7 +111,7 @@ Commands:
   watch <id>                         Watch a swap's status (polls backend)
   redeem <id> [destination]          Redeem a swap (when serverfunded)
   refund <id> [addr] [fee]           Refund a swap (addr/fee for on-chain)
-  evm-refund <id> [--direct]         Refund an EVM HTLC (--direct: return WBTC)
+  evm-refund <id> [--direct] [--force] Refund EVM HTLC (--direct: WBTC, --force: skip timelock check)
   evm-claim <id>                     Claim EVM tokens (BTC-to-Ethereum only)
   evm-balances                       Show EVM wallet balances (all chains)
   swaps                              List locally stored swaps
@@ -197,10 +197,11 @@ async function main(): Promise<void> {
       await refundSwap(client, swapStorage, args[1], args[2], args[3], args[4]);
       break;
     case "evm-refund": {
-      // Parse --direct flag from any position
+      // Parse --direct and --force flags from any position
       const directMode = args.includes("--direct");
-      const swapIdArg = args.find((a, i) => i > 0 && a !== "--direct");
-      await evmRefundSwap(client, swapIdArg, CONFIG.evmMnemonic, directMode);
+      const forceMode = args.includes("--force");
+      const swapIdArg = args.find((a, i) => i > 0 && !a.startsWith("--"));
+      await evmRefundSwap(client, swapIdArg, CONFIG.evmMnemonic, directMode, forceMode);
       break;
     }
     case "evm-claim":

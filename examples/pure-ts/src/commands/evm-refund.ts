@@ -31,13 +31,15 @@ export async function evmRefundSwap(
   swapId: string | undefined,
   evmMnemonic: string | undefined,
   directMode: boolean = false,
+  forceMode: boolean = false,
 ): Promise<void> {
   if (!swapId) {
-    console.error("Usage: tsx src/index.ts evm-refund <swap-id> [--direct]");
+    console.error("Usage: tsx src/index.ts evm-refund <swap-id> [--direct] [--force]");
     console.error("");
     console.error("Options:");
     console.error("  --direct    Return WBTC directly instead of swapping back to original token");
     console.error("              (useful when DEX calldata is stale, e.g., on Anvil forks)");
+    console.error("  --force     Skip client-side timelock check (for testing with time-manipulated chains)");
     console.error("");
     console.error("Example:");
     console.error("  tsx src/index.ts evm-refund 12345678-1234-1234-1234-123456789abc");
@@ -130,7 +132,7 @@ export async function evmRefundSwap(
   console.log(`Timelock Expired: ${refund.timelockExpired}`);
   console.log("");
 
-  if (!refund.timelockExpired) {
+  if (!refund.timelockExpired && !forceMode) {
     const remainingSeconds = refund.timelockExpiry - Math.floor(Date.now() / 1000);
     const hours = Math.floor(remainingSeconds / 3600);
     const minutes = Math.floor((remainingSeconds % 3600) / 60);
@@ -139,6 +141,9 @@ export async function evmRefundSwap(
     console.error("");
     console.error("You can only refund after the timelock expires.");
     process.exit(1);
+  }
+  if (forceMode && !refund.timelockExpired) {
+    console.log("⚠ Force mode: skipping client-side timelock check");
   }
 
   // Create EVM wallet
