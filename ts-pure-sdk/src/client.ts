@@ -6,6 +6,7 @@ import {
   createApiClient,
   type EvmToArkadeSwapResponse,
   type EvmToBitcoinSwapResponse,
+  type EvmToLightningSwapResponse,
   type GetSwapResponse,
   type LightningToEvmSwapResponse,
   type QuoteResponse,
@@ -2139,38 +2140,80 @@ export class Client {
   }
 
   /**
-   * Builds refund data for an EVM-to-Lightning swap (direct HTLCErc20 refund).
-   * Uses encodeHtlcErc20RefundCallData to call refund on the HTLCErc20 contract.
+   * Builds refund data for an EVM-to-Lightning swap via the coordinator.
+   *
+   * Like EVM-to-Arkade, the coordinator atomically swapped the source token to WBTC
+   * before locking in the HTLC. For refunds:
+   * - If source was WBTC: direct HTLCErc20 refund
+   * - Otherwise: use coordinator refund endpoint (swap-back or direct mode)
+   *
    * @internal
    */
   async #buildEvmToLightningRefund(
-    _id: string,
+    id: string,
     swap: GetSwapResponse,
-    _mode?: "swap-back" | "direct", // Not used - EVM-to-Lightning uses direct HTLCErc20 refund
+    mode: "swap-back" | "direct" = "swap-back",
   ): Promise<RefundResult> {
-    const evmSwap = swap as {
-      evm_htlc_address: string;
-      evm_refund_locktime: number;
-      hash_lock: string;
-      source_amount: number;
-      source_token: { token_id: string };
-      server_evm_address: string;
+    const evmSwap = swap as EvmToLightningSwapResponse & {
       direction: "evm_to_lightning";
     };
-    const htlcAddress = evmSwap.evm_htlc_address;
-    const timelock = evmSwap.evm_refund_locktime;
 
+    const timelock = evmSwap.evm_refund_locktime;
     const now = Math.floor(Date.now() / 1000);
     const timelockExpired = now >= timelock;
 
-    // HTLCErc20.refund(preimageHash, amount, token, claimAddress, timelock)
-    const refundData = encodeHtlcErc20RefundCallData(htlcAddress, {
-      preimageHash: evmSwap.hash_lock,
-      amount: BigInt(evmSwap.source_amount),
-      token: evmSwap.source_token.token_id,
-      claimAddress: evmSwap.server_evm_address, // The server would have been the claimer
-      timelock: timelock,
-    });
+    // Check if source token is WBTC - if so, use direct HTLCErc20 refund
+    const sourceSymbol = evmSwap.source_token?.symbol?.toLowerCase();
+    const isWbtcSource = sourceSymbol === "wbtc";
+
+    if (isWbtcSource) {
+      // Direct HTLCErc20 refund - no DEX swap needed
+      const htlcAddress = evmSwap.evm_htlc_address;
+      const hashLock = evmSwap.hash_lock;
+
+      const refundData = encodeHtlcErc20RefundCallData(htlcAddress, {
+        preimageHash: hashLock,
+        amount: BigInt(evmSwap.source_amount),
+        token: evmSwap.source_token.token_id,
+        claimAddress: evmSwap.server_evm_address,
+        timelock: timelock,
+      });
+
+      return {
+        success: true,
+        message: timelockExpired
+          ? "EVM refund calldata ready. Submit this transaction with your EVM wallet."
+          : `Timelock has not expired yet. Refund will be available at ${new Date(timelock * 1000).toISOString()}.`,
+        evmRefundData: {
+          to: refundData.to,
+          data: refundData.data,
+          timelockExpired,
+          timelockExpiry: timelock,
+        },
+      };
+    }
+
+    // Non-WBTC source: fetch coordinator refund calldata from server
+    // - "swap-back": swap WBTC back to original token via DEX (default)
+    // - "direct": return WBTC directly (useful when DEX calldata is stale)
+    const response = await this.#apiClient.GET(
+      "/swap/{id}/refund-and-swap-calldata",
+      {
+        params: {
+          path: { id },
+          query: { mode },
+        },
+      },
+    );
+
+    if (response.error) {
+      return {
+        success: false,
+        message: `Failed to fetch refund calldata: ${response.error.error || "Unknown error"}`,
+      };
+    }
+
+    const { coordinator_address, calldata } = response.data;
 
     return {
       success: true,
@@ -2178,8 +2221,8 @@ export class Client {
         ? "EVM refund calldata ready. Submit this transaction with your EVM wallet."
         : `Timelock has not expired yet. Refund will be available at ${new Date(timelock * 1000).toISOString()}.`,
       evmRefundData: {
-        to: refundData.to,
-        data: refundData.data,
+        to: coordinator_address,
+        data: calldata,
         timelockExpired,
         timelockExpiry: timelock,
       },
