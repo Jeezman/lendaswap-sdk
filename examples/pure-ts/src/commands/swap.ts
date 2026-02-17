@@ -105,8 +105,11 @@ export async function createSwap(
     process.exit(1);
   }
 
-  // Address is required for all swap types except arkade (SDK derives EVM address internally)
-  if (swapType !== "arkade" && !address) {
+  // Address is required for all swap types except:
+  // - arkade (SDK derives EVM address internally)
+  // - evm-to-lightning when evmMnemonic is available (can derive EVM address)
+  const canDeriveEvmAddress = swapType === "evm-to-lightning" && evmMnemonic;
+  if (swapType !== "arkade" && !address && !canDeriveEvmAddress) {
     console.error("Error: address is required for this swap type");
     console.error("Usage: tsx src/index.ts swap <from> <to> <amount> <address>");
     process.exit(1);
@@ -115,7 +118,7 @@ export async function createSwap(
   console.log(`Creating swap: ${from} -> ${to}`);
   if (swapType === "evm-to-lightning") {
     console.log(`  Invoice: ${amount.slice(0, 30)}...`);
-    console.log(`  EVM Address: ${address}`);
+    console.log(`  EVM Address: ${address || "(will derive from EVM_MNEMONIC)"}`);
   } else if (swapType === "evm-to-arkade") {
     console.log(`  Amount: ${amountNum}`);
     console.log(`  Arkade Address: ${address}`);
