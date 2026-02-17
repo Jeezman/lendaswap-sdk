@@ -48,6 +48,7 @@ export async function getVhtlcAmounts(
   params: GetVhtlcAmountsParams,
 ): Promise<VhtlcAmounts> {
   const { vhtlcAddress, network, arkadeServerUrl } = params;
+  console.log(`We are here`);
 
   // Decode the Arkade address to get the pkScript for indexer queries
   const decoded = ArkAddress.decode(vhtlcAddress);
