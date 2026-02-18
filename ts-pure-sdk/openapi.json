@@ -2674,6 +2674,7 @@
         "required": [
           "exchange_rate",
           "network_fee",
+          "gasless_network_fee",
           "protocol_fee",
           "protocol_fee_rate",
           "min_amount",
@@ -2685,6 +2686,12 @@
           "exchange_rate": {
             "type": "string",
             "description": "Exchange rate: how much of the EVM token you get/pay per BTC"
+          },
+          "gasless_network_fee": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Gasless network fee estimate (in satoshis) — covers the additional gas\nthe server pays to execute the DEX swap on behalf of the user\n(redeemAndExecute via the coordinator contract).",
+            "minimum": 0
           },
           "max_amount": {
             "type": "integer",
@@ -2701,7 +2708,7 @@
           "network_fee": {
             "type": "integer",
             "format": "int64",
-            "description": "Network fee estimate (in satoshis)",
+            "description": "Network fee estimate (in satoshis) — covers server-paid gas for HTLC\ncreate/claim + BTC mining fee when applicable.",
             "minimum": 0
           },
           "protocol_fee": {
