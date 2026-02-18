@@ -1527,7 +1527,7 @@ export class Client {
           const txData = (await txResponse.json()) as {
             vout: Array<{ value: number }>;
           };
-          if (txData.vout && txData.vout[btcFundVout]) {
+          if (txData.vout?.[btcFundVout]) {
             htlcOutput = {
               txid: btcFundTxid,
               vout: btcFundVout,
@@ -1777,7 +1777,7 @@ export class Client {
           const txData = (await txResponse.json()) as {
             vout: Array<{ value: number }>;
           };
-          if (txData.vout && txData.vout[btcFundVout]) {
+          if (txData.vout?.[btcFundVout]) {
             htlcOutput = {
               txid: btcFundTxid,
               vout: btcFundVout,
