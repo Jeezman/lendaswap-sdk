@@ -9,27 +9,28 @@
  */
 
 import {
-  type ArkProvider,
-  type IndexerProvider,
-  type NetworkName,
-  type TapLeafScript,
   ArkAddress,
+  type ArkProvider,
+  ConditionWitness,
+  type IndexerProvider,
   Intent,
+  type NetworkName,
   networks,
   RestArkProvider,
   RestIndexerProvider,
   SingleKey,
+  setArkPsbtField,
+  type TapLeafScript,
   Transaction,
   VHTLC,
-  ConditionWitness,
-  setArkPsbtField,
   VtxoTaprootTree,
 } from "@arkade-os/sdk";
-import { Address, OutScript } from "@scure/btc-signer";
-import { SigHash } from "@scure/btc-signer";
+import { Address, OutScript, SigHash } from "@scure/btc-signer";
+
 // P2A is the zero-value anchor output (OP_1 0x4e73)
 const P2A_SCRIPT = new Uint8Array([0x51, 0x02, 0x4e, 0x73]);
 const P2A = { script: P2A_SCRIPT, amount: 0n };
+
 import { ripemd160 } from "@noble/hashes/legacy";
 import { sha256 } from "@noble/hashes/sha2";
 import { base64, hex } from "@scure/base";
@@ -438,9 +439,7 @@ async function settleDelegate(
 
   if (!settleRes.ok) {
     const errBody = await settleRes.text();
-    throw new Error(
-      `Delegate settle failed: ${settleRes.status} ${errBody}`,
-    );
+    throw new Error(`Delegate settle failed: ${settleRes.status} ${errBody}`);
   }
 
   const result = (await settleRes.json()) as { commitment_txid: string };
