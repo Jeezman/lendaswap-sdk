@@ -13,18 +13,23 @@ import {
   type IndexerProvider,
   type NetworkName,
   type TapLeafScript,
-  buildForfeitTx,
+  ArkAddress,
   Intent,
   networks,
   RestArkProvider,
   RestIndexerProvider,
   SingleKey,
+  Transaction,
   VHTLC,
   ConditionWitness,
   setArkPsbtField,
   VtxoTaprootTree,
 } from "@arkade-os/sdk";
+import { Address, OutScript } from "@scure/btc-signer";
 import { SigHash } from "@scure/btc-signer";
+// P2A is the zero-value anchor output (OP_1 0x4e73)
+const P2A_SCRIPT = new Uint8Array([0x51, 0x02, 0x4e, 0x73]);
+const P2A = { script: P2A_SCRIPT, amount: 0n };
 import { ripemd160 } from "@noble/hashes/legacy";
 import { sha256 } from "@noble/hashes/sha2";
 import { base64, hex } from "@scure/base";
@@ -94,6 +99,8 @@ export interface DelegateClaimParams {
   /** Lendaswap API base URL (e.g. http://localhost:3333) */
   lendaswapApiUrl: string;
   arkadeServerUrl?: string;
+  /** Optional swap ID — enables the backend to mark swap as ClientRedeemed. */
+  swapId?: string;
 }
 
 export interface DelegateRefundParams {
@@ -188,6 +195,8 @@ export async function delegateClaim(
     lendaswapApiUrl: params.lendaswapApiUrl,
     arkadeServerUrl: params.arkadeServerUrl,
     locktime: undefined,
+    swapId: params.swapId,
+    preimage: params.preimage,
   });
 }
 
@@ -257,6 +266,8 @@ interface SettleDelegateOpts {
   lendaswapApiUrl: string;
   arkadeServerUrl: string | undefined;
   locktime: number | undefined;
+  swapId?: string;
+  preimage?: string;
 }
 
 async function settleDelegate(
@@ -286,6 +297,11 @@ async function settleDelegate(
   // Fetch cosigner pk from lendaswap backend
   const cosignerPkHex = await fetchCosignerPk(lendaswapApiUrl);
 
+  // Decode forfeit address (bech32) to pkScript
+  const btcNetwork = networks[networkName];
+  const forfeitDecoded = Address(btcNetwork).decode(serverInfo.forfeitAddress);
+  const forfeitPkScript = OutScript.encode(forfeitDecoded);
+
   // Fetch VTXOs — include all (not just spendable)
   const { vtxos: allVtxos } = await indexerProvider.getVtxos({
     scripts: [vhtlcPkScript],
@@ -305,8 +321,7 @@ async function settleDelegate(
 
   console.log(`Found ${vtxos.length} VTXO(s) totalling ${totalAmount} sats`);
 
-  // Parse destination
-  const { ArkAddress } = await import("@arkade-os/sdk");
+  // Parse destination (Ark address → taproot pkScript)
   const destAddr = ArkAddress.decode(destinationAddress);
   const destPkScript = destAddr.pkScript;
 
@@ -356,30 +371,42 @@ async function settleDelegate(
 
   const signedIntentProof = await signer.sign(intentProof);
 
-  // Build and sign forfeit PSBTs
-  const forfeitPkScript = hex.decode(serverInfo.forfeitAddress);
+  // Build and sign delegate forfeit PSBTs.
+  // Delegate forfeits have 1 input (the VTXO) with SIGHASH_ALL|ANYONECANPAY.
+  // The connector input is added later by the cosigner during batch finalization.
+  // Output amount = vtxo_amount + connector_dust (anticipating the connector).
+  const dust = serverInfo.dust;
   const signedForfeitPsbts: string[] = [];
 
   for (const v of vtxos) {
-    const forfeitInput = {
+    const vtxoAmount = BigInt(v.value);
+
+    const forfeitTx = new Transaction({
+      version: 3,
+      lockTime: 0,
+    });
+
+    forfeitTx.addInput({
       txid: hex.decode(v.txid),
       index: v.vout,
       witnessUtxo: {
         script: pkScriptBytes,
-        amount: BigInt(v.value),
+        amount: vtxoAmount,
       },
       tapLeafScript: [tapLeafScript],
-      sequence: opts.locktime ? 0xfffffffe : undefined,
       sighashType: SigHash.ALL_ANYONECANPAY,
-    };
+    });
 
-    const forfeitTx = buildForfeitTx(
-      [forfeitInput],
-      forfeitPkScript,
-      opts.locktime,
-    );
+    // Main output: VTXO amount + connector dust → forfeit address
+    forfeitTx.addOutput({
+      script: forfeitPkScript,
+      amount: vtxoAmount + dust,
+    });
 
-    // Set taproot tree on the forfeit input
+    // Anchor output (P2A)
+    forfeitTx.addOutput(P2A);
+
+    // Set taproot tree
     setArkPsbtField(forfeitTx, 0, VtxoTaprootTree, tapTree);
 
     if (witnessData) {
@@ -404,6 +431,8 @@ async function settleDelegate(
       intent_message: intentMessageJson,
       forfeit_psbts: signedForfeitPsbts,
       cosigner_pk: cosignerPkHex,
+      swap_id: opts.swapId,
+      preimage: opts.preimage,
     }),
   });
 

@@ -149,6 +149,7 @@ export async function delegateSettle(
       network,
       lendaswapApiUrl,
       arkadeServerUrl,
+      swapId,
     });
 
     console.log("=".repeat(60));
