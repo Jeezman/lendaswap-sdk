@@ -42,6 +42,7 @@ import { evmRefundSwap } from "./commands/evm-refund.js";
 import { evmClaimSwap } from "./commands/evm-claim.js";
 import { showEvmBalances } from "./commands/evm-balances.js";
 import { recoverSwaps } from "./commands/recover.js";
+import { delegateSettle } from "./commands/delegate-settle.js";
 
 // Configuration from environment variables
 export const CONFIG = {
@@ -215,6 +216,9 @@ async function main(): Promise<void> {
       break;
     case "recover":
       await recoverSwaps(client);
+      break;
+    case "delegate-settle":
+      await delegateSettle(client, swapStorage, args[1], args[2]);
       break;
     case "info":
       await showInfo(client, CONFIG);
