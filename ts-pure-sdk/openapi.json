@@ -7,6 +7,76 @@
     "version": "0.1.71"
   },
   "paths": {
+    "/api/delegate/cosigner-pk": {
+      "get": {
+        "tags": ["delegate"],
+        "summary": "Get the delegate cosigner public key.",
+        "description": "Clients need this key when preparing delegate PSBTs so the backend\ncan participate in the batch ceremony as a cosigner.",
+        "operationId": "get_cosigner_pk",
+        "responses": {
+          "200": {
+            "description": "Cosigner public key",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CosignerPkResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/delegate/settle": {
+      "post": {
+        "tags": ["delegate"],
+        "summary": "Settle a delegated batch.",
+        "description": "The client prepares and signs delegate PSBTs (intent + forfeits), then\nPOSTs them here. The backend reconstructs the `Delegate` struct and runs\nthe full Ark batch ceremony on the client's behalf.\n\nThis endpoint blocks until the batch completes (~10-30s).",
+        "operationId": "settle_delegate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SettleDelegateRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Settlement completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettleDelegateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/vtxo-swap": {
       "post": {
         "tags": ["vtxo-swap"],
@@ -1616,6 +1686,16 @@
           "tx_hash": { "type": "string", "description": "Transaction hash" }
         }
       },
+      "CosignerPkResponse": {
+        "type": "object",
+        "required": ["cosigner_pk"],
+        "properties": {
+          "cosigner_pk": {
+            "type": "string",
+            "description": "Hex-encoded compressed public key of the delegate cosigner."
+          }
+        }
+      },
       "CreateVtxoSwapRequest": {
         "type": "object",
         "required": ["vtxos", "preimage_hash", "client_pk", "user_id"],
@@ -2704,6 +2784,52 @@
           "coordinator_address": {
             "type": "string",
             "description": "The HTLCCoordinator contract address"
+          }
+        }
+      },
+      "SettleDelegateRequest": {
+        "type": "object",
+        "required": [
+          "intent_proof",
+          "intent_message",
+          "forfeit_psbts",
+          "cosigner_pk"
+        ],
+        "properties": {
+          "cosigner_pk": {
+            "type": "string",
+            "description": "Hex-encoded compressed cosigner public key (must match our static key)."
+          },
+          "forfeit_psbts": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "List of base64-encoded partial forfeit PSBTs (signed with SIGHASH_ALL|ANYONECANPAY)."
+          },
+          "intent_message": {
+            "type": "string",
+            "description": "JSON-encoded IntentMessage."
+          },
+          "intent_proof": {
+            "type": "string",
+            "description": "Base64-encoded intent proof PSBT (signed by the VTXO owner)."
+          },
+          "preimage": {
+            "type": ["string", "null"],
+            "description": "Optional hex-encoded preimage (the HTLC secret). Required together with `swap_id`."
+          },
+          "swap_id": {
+            "type": ["string", "null"],
+            "description": "Optional swap ID. When provided alongside `preimage`, the backend marks the\nswap as ClientRedeemed so the EVM claimer can proceed."
+          }
+        }
+      },
+      "SettleDelegateResponse": {
+        "type": "object",
+        "required": ["commitment_txid"],
+        "properties": {
+          "commitment_txid": {
+            "type": "string",
+            "description": "Commitment transaction ID from the batch settlement."
           }
         }
       },
