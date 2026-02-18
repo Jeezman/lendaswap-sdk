@@ -201,6 +201,8 @@ export interface EvmToBitcoinSwapOptions {
   evmChainId: number;
   /** User's EVM wallet address (sender of the ERC-20 token) */
   userAddress: string;
+  /** User's BTC address to receive claimed funds */
+  targetAddress: string;
   /** Amount of source token to send in smallest units (mutually exclusive with targetAmount) */
   sourceAmount?: bigint;
   /** Desired BTC output in sats (mutually exclusive with sourceAmount) */
@@ -283,5 +285,6 @@ export interface CreateSwapContext {
     swapId: string,
     swapParams: SwapParams,
     response: Record<string, unknown>,
+    targetAddress?: string,
   ) => Promise<void>;
 }

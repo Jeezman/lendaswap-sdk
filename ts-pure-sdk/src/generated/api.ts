@@ -1035,6 +1035,8 @@ export interface components {
       hash_lock: string;
       /** @description Optional referral code for tracking. */
       referral_code?: string | null;
+      /** @description User's target BTC address to receive claimed funds. */
+      target_address?: string | null;
       /** @description ERC-20 contract address of the source token on the EVM chain. */
       token_address: string;
       /** @description User's EVM address (sender of the ERC-20 token). */
@@ -1048,6 +1050,8 @@ export interface components {
       /** Format: int64 */
       btc_expected_sats: number;
       btc_fund_txid?: string | null;
+      /** Format: int64 */
+      btc_fund_vout?: number | null;
       /** @description BTC hash lock (RIPEMD160 of EVM hash lock) */
       btc_hash_lock: string;
       /** @description On-chain BTC Taproot HTLC address (server creates, user claims) */
@@ -1106,6 +1110,8 @@ export interface components {
        * @description Expected BTC amount (in sats) user will receive
        */
       target_amount: number;
+      /** @description User's target BTC address for receiving claimed funds */
+      target_btc_address?: string | null;
       target_token: components["schemas"]["TokenInfo"];
       /** @description WBTC token contract address on the EVM chain */
       wbtc_address: string;

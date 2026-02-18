@@ -1908,6 +1908,10 @@
             "type": ["string", "null"],
             "description": "Optional referral code for tracking."
           },
+          "target_address": {
+            "type": ["string", "null"],
+            "description": "User's target BTC address to receive claimed funds."
+          },
           "token_address": {
             "type": "string",
             "description": "ERC-20 contract address of the source token on the EVM chain."
@@ -1955,6 +1959,7 @@
           "btc_claim_txid": { "type": ["string", "null"] },
           "btc_expected_sats": { "type": "integer", "format": "int64" },
           "btc_fund_txid": { "type": ["string", "null"] },
+          "btc_fund_vout": { "type": ["integer", "null"], "format": "int64" },
           "btc_hash_lock": {
             "type": "string",
             "description": "BTC hash lock (RIPEMD160 of EVM hash lock)"
@@ -2025,6 +2030,10 @@
             "type": "integer",
             "format": "int64",
             "description": "Expected BTC amount (in sats) user will receive"
+          },
+          "target_btc_address": {
+            "type": ["string", "null"],
+            "description": "User's target BTC address for receiving claimed funds"
           },
           "target_token": { "$ref": "#/components/schemas/TokenInfo" },
           "wbtc_address": {

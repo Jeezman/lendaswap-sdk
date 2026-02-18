@@ -56,6 +56,7 @@ export async function createEvmToBitcoinSwap(
       token_address: options.tokenAddress,
       evm_chain_id: options.evmChainId,
       user_address: options.userAddress,
+      target_address: options.targetAddress,
       amount_in: options.sourceAmount
         ? Number(options.sourceAmount)
         : undefined,

@@ -63,4 +63,7 @@ export interface StoredSwap {
 
   /** Timestamp when the swap was last updated locally (ms since epoch) */
   updatedAt: number;
+
+  /** Target address for receiving funds (e.g., BTC address for EVM→Bitcoin swaps) */
+  targetAddress?: string;
 }

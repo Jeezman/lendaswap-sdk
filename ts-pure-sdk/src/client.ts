@@ -1552,8 +1552,10 @@ export class Client {
       };
     }
 
-    // Determine destination address
-    const destinationAddress = options?.destinationAddress;
+    // Determine destination address: prefer explicit option, fall back to stored response
+    const destinationAddress =
+      options?.destinationAddress ??
+      (swap as { target_btc_address?: string }).target_btc_address;
     if (!destinationAddress) {
       return {
         success: false,
@@ -2319,6 +2321,7 @@ export class Client {
     swapId: string,
     swapParams: SwapParams,
     response: Record<string, unknown>,
+    targetAddress?: string,
   ): Promise<void> {
     if (!this.#swapStorage) return;
 
@@ -2333,6 +2336,7 @@ export class Client {
       secretKey: bytesToHex(swapParams.secretKey),
       storedAt: Date.now(),
       updatedAt: Date.now(),
+      targetAddress,
     };
 
     await this.#swapStorage.store(storedSwap);
@@ -2441,6 +2445,7 @@ export class Client {
         tokenAddress: sourceAsset.token_id,
         evmChainId: Number(sourceChain),
         userAddress: options.userAddress,
+        targetAddress: options.targetAddress,
         sourceAmount: options.sourceAmount
           ? BigInt(options.sourceAmount)
           : undefined,
