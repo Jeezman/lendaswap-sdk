@@ -17,6 +17,14 @@ const DEFAULT_ARKADE_URLS: Record<string, string> = {
   signet: "https://signet.arkade.computer",
 };
 
+/** Overall VTXO lifecycle status */
+export type VtxoStatus =
+  | "not_funded"
+  | "spendable"
+  | "recoverable"
+  | "spent"
+  | "mixed";
+
 /** VHTLC amounts breakdown */
 export interface VhtlcAmounts {
   /** Amount that can be spent (in satoshis) */
@@ -25,6 +33,8 @@ export interface VhtlcAmounts {
   spent: number;
   /** Amount that can be recovered via refund (in satoshis) */
   recoverable: number;
+  /** Overall status derived from VTXO states */
+  vtxoStatus: VtxoStatus;
 }
 
 /** Parameters for querying VHTLC amounts */
@@ -72,9 +82,20 @@ export async function getVhtlcAmounts(
   const sum = (vtxos: { value: number }[]) =>
     vtxos.reduce((acc, v) => acc + v.value, 0);
 
-  return {
-    spendable: sum(spendableResult.vtxos),
-    spent: sum(spentResult.vtxos),
-    recoverable: sum(recoverableResult.vtxos),
-  };
+  const spendable = sum(spendableResult.vtxos);
+  const spent = sum(spentResult.vtxos);
+  const recoverable = sum(recoverableResult.vtxos);
+
+  const vtxoStatus: VtxoStatus =
+    spendable === 0 && spent === 0 && recoverable === 0
+      ? "not_funded"
+      : spendable > 0 && recoverable > 0
+        ? "mixed"
+        : spendable > 0
+          ? "spendable"
+          : recoverable > 0
+            ? "recoverable"
+            : "spent";
+
+  return { spendable, spent, recoverable, vtxoStatus };
 }

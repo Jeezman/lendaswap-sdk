@@ -39,6 +39,7 @@ import {
   type LightningToEvmSwapGenericOptions,
   type LightningToEvmSwapGenericResult,
 } from "./create";
+import { delegateClaim, delegateRefund } from "./delegate.js";
 import { broadcastTransaction, findOutputByAddress } from "./esplora.js";
 import { encodeApproveCallData, encodeHtlcErc20RefundCallData } from "./evm";
 import {
@@ -255,6 +256,22 @@ export interface CoordinatorRefundCallData {
   timelockExpiry: number;
   /** Refund mode used */
   mode: "swap-back" | "direct";
+}
+
+/** Internal type for VHTLC claim/refund parameters extracted from a stored swap. */
+interface ArkadeVhtlcParams {
+  userSecretKey: string;
+  userPubKey: string;
+  lendaswapPubKey: string;
+  arkadeServerPubKey: string;
+  vhtlcAddress: string;
+  refundLocktime: number;
+  unilateralClaimDelay: number;
+  unilateralRefundDelay: number;
+  unilateralRefundWithoutReceiverDelay: number;
+  network: string;
+  preimage: string;
+  preimageHash: string;
 }
 
 const DEFAULT_BASE_URL = "https://apilendaswap.lendasat.com/";
@@ -1161,8 +1178,12 @@ export class Client {
   /**
    * Claims an Arkade (off-chain) VHTLC swap by revealing the preimage.
    *
-   * This is used for EVM-to-Arkade swaps where the user claims BTC
-   * on Arkade after the server has funded the VHTLC.
+   * Automatically selects the best claim method based on VTXO status:
+   * - **spendable** VTXOs → offchain spend (submitTx/finalizeTx)
+   * - **recoverable** or **mixed** VTXOs → delegated settlement via backend
+   *
+   * This is used for EVM-to-Arkade and BTC-to-Arkade swaps where the user
+   * claims BTC on Arkade after the server has funded the VHTLC.
    *
    * @param id - The UUID of the swap.
    * @param options - Claim options including destination address.
@@ -1225,16 +1246,51 @@ export class Client {
     ) {
       return {
         success: false,
-        message: `Expected evm_to_btc, btc_to_arkade, or evm_to_arkade swap, got ${swap.direction}. claimArkade is for swaps targeting Arkade.`,
+        message: `Expected btc_to_arkade or evm_to_arkade swap, got ${swap.direction}. claimArkade is for swaps targeting Arkade.`,
       };
     }
 
-    // Get user's x-only public key (32 bytes) from stored swap
+    // Extract common VHTLC parameters
+    const claimParams = this.#extractArkadeClaimParams(id, storedSwap);
+
+    // Query VTXO status to determine claim method
+    const amounts = await this.amountsForSwap(id);
+    const vtxoStatus = amounts.vtxoStatus;
+
+    if (vtxoStatus === "not_funded" || vtxoStatus === "spent") {
+      return {
+        success: false,
+        message:
+          vtxoStatus === "not_funded"
+            ? "No VTXOs found at the VHTLC address. The swap may not have been funded yet."
+            : "All VTXOs have already been spent.",
+      };
+    }
+
+    // Route based on VTXO status:
+    // - spendable: offchain spend (faster, no backend dependency)
+    // - recoverable/mixed: delegated settlement (handles expired batches)
+    if (vtxoStatus === "spendable") {
+      return this.#claimArkadeOffchain(claimParams, options);
+    }
+
+    // recoverable or mixed → delegate
+    return this.#claimArkadeDelegate(id, claimParams, options);
+  }
+
+  /**
+   * Extracts VHTLC claim parameters from a stored swap.
+   * @internal
+   */
+  #extractArkadeClaimParams(
+    _id: string,
+    storedSwap: StoredSwap,
+  ): ArkadeVhtlcParams {
+    const swap = storedSwap.response;
     const fullPubKey = storedSwap.publicKey;
     const userPubKey =
       fullPubKey.length === 66 ? fullPubKey.slice(2) : fullPubKey;
 
-    // Build claim parameters based on swap direction
     let lendaswapPubKey: string;
     let arkadeServerPubKey: string;
     let vhtlcAddress: string;
@@ -1245,21 +1301,20 @@ export class Client {
     let network: string;
 
     if (swap.direction === "btc_to_arkade") {
-      const btcToArkadeSwap = swap as BtcToArkadeSwapResponse & {
+      const s = swap as BtcToArkadeSwapResponse & {
         direction: "btc_to_arkade";
       };
-      lendaswapPubKey = btcToArkadeSwap.server_vhtlc_pk;
-      arkadeServerPubKey = btcToArkadeSwap.arkade_server_pk;
-      vhtlcAddress = btcToArkadeSwap.arkade_vhtlc_address;
-      refundLocktime = btcToArkadeSwap.vhtlc_refund_locktime;
-      unilateralClaimDelay = btcToArkadeSwap.unilateral_claim_delay;
-      unilateralRefundDelay = btcToArkadeSwap.unilateral_refund_delay;
+      lendaswapPubKey = s.server_vhtlc_pk;
+      arkadeServerPubKey = s.arkade_server_pk;
+      vhtlcAddress = s.arkade_vhtlc_address;
+      refundLocktime = s.vhtlc_refund_locktime;
+      unilateralClaimDelay = s.unilateral_claim_delay;
+      unilateralRefundDelay = s.unilateral_refund_delay;
       unilateralRefundWithoutReceiverDelay =
-        btcToArkadeSwap.unilateral_refund_without_receiver_delay;
-      network = btcToArkadeSwap.network;
+        s.unilateral_refund_without_receiver_delay;
+      network = s.network;
     } else if (swap.direction === "evm_to_arkade") {
-      // New generic evm_to_arkade endpoint - works with both creation and GET responses
-      const evmToArkadeSwap = swap as {
+      const s = swap as {
         sender_pk: string;
         arkade_server_pk: string;
         btc_vhtlc_address: string;
@@ -1269,45 +1324,59 @@ export class Client {
         unilateral_refund_without_receiver_delay: number;
         network: string;
       };
-      // For EVM-to-Arkade: Lendaswap is SENDER in the VHTLC (locks BTC), user is RECEIVER
-      // In the API response:
-      //   sender_pk = lendaswap's derived key (VHTLC sender, locks BTC)
-      //   receiver_pk = user's key (VHTLC receiver, claims BTC)
-      lendaswapPubKey = evmToArkadeSwap.sender_pk;
-      arkadeServerPubKey = evmToArkadeSwap.arkade_server_pk;
-      vhtlcAddress = evmToArkadeSwap.btc_vhtlc_address;
-      refundLocktime = evmToArkadeSwap.vhtlc_refund_locktime;
-      unilateralClaimDelay = evmToArkadeSwap.unilateral_claim_delay;
-      unilateralRefundDelay = evmToArkadeSwap.unilateral_refund_delay;
+      lendaswapPubKey = s.sender_pk;
+      arkadeServerPubKey = s.arkade_server_pk;
+      vhtlcAddress = s.btc_vhtlc_address;
+      refundLocktime = s.vhtlc_refund_locktime;
+      unilateralClaimDelay = s.unilateral_claim_delay;
+      unilateralRefundDelay = s.unilateral_refund_delay;
       unilateralRefundWithoutReceiverDelay =
-        evmToArkadeSwap.unilateral_refund_without_receiver_delay;
-      network = evmToArkadeSwap.network;
+        s.unilateral_refund_without_receiver_delay;
+      network = s.network;
     } else {
-      throw Error("Unsupported pair");
+      throw Error(`Unsupported direction for Arkade claim: ${swap.direction}`);
     }
 
+    return {
+      userSecretKey: storedSwap.secretKey,
+      userPubKey,
+      lendaswapPubKey,
+      arkadeServerPubKey,
+      vhtlcAddress,
+      refundLocktime,
+      unilateralClaimDelay,
+      unilateralRefundDelay,
+      unilateralRefundWithoutReceiverDelay,
+      network,
+      preimage: storedSwap.preimage,
+      preimageHash: storedSwap.preimageHash,
+    };
+  }
+
+  /**
+   * Claims via the offchain submitTx/finalizeTx path (spendable VTXOs only).
+   * @internal
+   */
+  async #claimArkadeOffchain(
+    params: ArkadeVhtlcParams,
+    options: ArkadeClaimOptions,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    txId?: string;
+    claimAmount?: bigint;
+  }> {
     try {
       const result = await buildArkadeClaim({
-        userSecretKey: storedSwap.secretKey,
-        userPubKey,
-        lendaswapPubKey,
-        arkadeServerPubKey,
-        preimage: storedSwap.preimage,
-        preimageHash: storedSwap.preimageHash,
-        vhtlcAddress,
-        refundLocktime,
-        unilateralClaimDelay,
-        unilateralRefundDelay,
-        unilateralRefundWithoutReceiverDelay,
+        ...params,
         destinationAddress: options.destinationAddress,
-        network,
         arkadeServerUrl:
           options.arkadeServerUrl ?? this.#config.arkadeServerUrl,
       });
 
       return {
         success: true,
-        message: "Arkade claim executed successfully!",
+        message: "Arkade claim executed successfully via offchain spend!",
         txId: result.txId,
         claimAmount: result.claimAmount,
       };
@@ -1315,7 +1384,45 @@ export class Client {
       const message = error instanceof Error ? error.message : String(error);
       return {
         success: false,
-        message: `Failed to execute Arkade claim: ${message}`,
+        message: `Failed to execute offchain Arkade claim: ${message}`,
+      };
+    }
+  }
+
+  /**
+   * Claims via the delegated settlement path (works for all VTXO states).
+   * @internal
+   */
+  async #claimArkadeDelegate(
+    swapId: string,
+    params: ArkadeVhtlcParams,
+    options: ArkadeClaimOptions,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    txId?: string;
+    claimAmount?: bigint;
+  }> {
+    try {
+      const result = await delegateClaim({
+        ...params,
+        destinationAddress: options.destinationAddress,
+        lendaswapApiUrl: this.#config.baseUrl,
+        arkadeServerUrl:
+          options.arkadeServerUrl ?? this.#config.arkadeServerUrl,
+        swapId,
+      });
+
+      return {
+        success: true,
+        message: "Arkade claim executed successfully via delegated settlement!",
+        txId: result.commitmentTxid,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        message: `Failed to execute delegated Arkade claim: ${message}`,
       };
     }
   }
@@ -1900,6 +2007,11 @@ export class Client {
 
   /**
    * Builds and executes an Arkade (off-chain) VHTLC refund.
+   *
+   * Automatically selects the best refund method based on VTXO status:
+   * - **spendable** VTXOs → offchain spend (submitTx/finalizeTx)
+   * - **recoverable** or **mixed** VTXOs → delegated settlement via backend
+   *
    * @internal
    */
   async #buildArkadeRefund(
@@ -1935,98 +2047,162 @@ export class Client {
       };
     }
 
-    // Ensure we have a btc_to_evm swap response (Arkade swaps)
+    // Ensure we have an arkade_to_evm swap
     if (swap.direction !== "arkade_to_evm") {
       return {
         success: false,
-        message: `Expected btc_to_evm swap, got ${swap.direction}`,
+        message: `Expected arkade_to_evm swap, got ${swap.direction}`,
       };
     }
 
-    // Extract VHTLC parameters — field names differ between btc_to_evm and arkade_to_evm
-    let lendaswapPubKey: string;
-    let arkadeServerPubKey: string;
-    let vhtlcAddress: string;
-    let vhtlcRefundLocktime: number;
-    let unilateralClaimDelay: number;
-    let unilateralRefundDelay: number;
-    let unilateralRefundWithoutReceiverDelay: number;
-    let hashLockRaw: string;
-    let network: string;
-
-    if (swap.direction === "arkade_to_evm") {
-      const s = swap as ArkadeToEvmSwapResponse & {
-        direction: "arkade_to_evm";
-      };
-      lendaswapPubKey = s.receiver_pk;
-      arkadeServerPubKey = s.arkade_server_pk;
-      vhtlcAddress = s.btc_vhtlc_address;
-      vhtlcRefundLocktime = s.vhtlc_refund_locktime;
-      unilateralClaimDelay = s.unilateral_claim_delay;
-      unilateralRefundDelay = s.unilateral_refund_delay;
-      unilateralRefundWithoutReceiverDelay =
-        s.unilateral_refund_without_receiver_delay;
-      hashLockRaw = s.hash_lock;
-      network = s.network;
-    } else {
-      throw Error("Unsupported funding combination");
-    }
+    const s = swap as ArkadeToEvmSwapResponse & {
+      direction: "arkade_to_evm";
+    };
 
     // Check refund locktime
     const now = Math.floor(Date.now() / 1000);
-    if (now < vhtlcRefundLocktime) {
-      const remainingSeconds = vhtlcRefundLocktime - now;
+    if (now < s.vhtlc_refund_locktime) {
+      const remainingSeconds = s.vhtlc_refund_locktime - now;
       const remainingMinutes = Math.ceil(remainingSeconds / 60);
       return {
         success: false,
         message:
           `Refund is not yet available. The VHTLC locktime expires in ${remainingMinutes} minutes ` +
-          `(at ${new Date(vhtlcRefundLocktime * 1000).toISOString()}).`,
+          `(at ${new Date(s.vhtlc_refund_locktime * 1000).toISOString()}).`,
       };
     }
 
-    // Get user's x-only public key (32 bytes) from stored swap
-    // The stored publicKey is the full compressed pubkey (33 bytes)
-    // We need to extract the x-only portion (drop the first byte prefix)
     const fullPubKey = storedSwap.publicKey;
     const userPubKey =
       fullPubKey.length === 66 ? fullPubKey.slice(2) : fullPubKey;
 
-    // Parse the hash lock - remove 0x prefix if present
-    const hashLock = hashLockRaw.startsWith("0x")
-      ? hashLockRaw.slice(2)
-      : hashLockRaw;
+    const hashLock = s.hash_lock.startsWith("0x")
+      ? s.hash_lock.slice(2)
+      : s.hash_lock;
 
+    // Query VTXO status to determine refund method
+    const amounts = await this.amountsForSwap(id);
+    const vtxoStatus = amounts.vtxoStatus;
+
+    if (vtxoStatus === "not_funded" || vtxoStatus === "spent") {
+      return {
+        success: false,
+        message:
+          vtxoStatus === "not_funded"
+            ? "No VTXOs found at the VHTLC address."
+            : "All VTXOs have already been spent.",
+      };
+    }
+
+    const refundParams = {
+      userSecretKey: storedSwap.secretKey,
+      userPubKey,
+      lendaswapPubKey: s.receiver_pk,
+      arkadeServerPubKey: s.arkade_server_pk,
+      hashLock,
+      vhtlcAddress: s.btc_vhtlc_address,
+      refundLocktime: s.vhtlc_refund_locktime,
+      unilateralClaimDelay: s.unilateral_claim_delay,
+      unilateralRefundDelay: s.unilateral_refund_delay,
+      unilateralRefundWithoutReceiverDelay:
+        s.unilateral_refund_without_receiver_delay,
+      destinationAddress: options.destinationAddress,
+      network: s.network,
+    };
+
+    if (vtxoStatus === "spendable") {
+      return this.#refundArkadeOffchain(refundParams, options);
+    }
+
+    // recoverable or mixed → delegate
+    return this.#refundArkadeDelegate(refundParams, options);
+  }
+
+  /**
+   * Refunds via the offchain submitTx/finalizeTx path (spendable VTXOs only).
+   * @internal
+   */
+  async #refundArkadeOffchain(
+    params: {
+      userSecretKey: string;
+      userPubKey: string;
+      lendaswapPubKey: string;
+      arkadeServerPubKey: string;
+      hashLock: string;
+      vhtlcAddress: string;
+      refundLocktime: number;
+      unilateralClaimDelay: number;
+      unilateralRefundDelay: number;
+      unilateralRefundWithoutReceiverDelay: number;
+      destinationAddress: string;
+      network: string;
+    },
+    options: ArkadeRefundOptions,
+  ): Promise<RefundResult> {
     try {
       const result = await buildArkadeRefund({
-        userSecretKey: storedSwap.secretKey,
-        userPubKey,
-        lendaswapPubKey,
-        arkadeServerPubKey,
-        hashLock,
-        vhtlcAddress,
-        refundLocktime: vhtlcRefundLocktime,
-        unilateralClaimDelay,
-        unilateralRefundDelay,
-        unilateralRefundWithoutReceiverDelay,
-        destinationAddress: options.destinationAddress,
-        network,
+        ...params,
         arkadeServerUrl:
           options.arkadeServerUrl ?? this.#config.arkadeServerUrl,
       });
 
       return {
         success: true,
-        message: "Arkade refund executed successfully!",
+        message: "Arkade refund executed successfully via offchain spend!",
         txId: result.txId,
         refundAmount: result.refundAmount,
-        broadcast: true, // Arkade refunds are automatically submitted
+        broadcast: true,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return {
         success: false,
-        message: `Failed to execute Arkade refund: ${message}`,
+        message: `Failed to execute offchain Arkade refund: ${message}`,
+      };
+    }
+  }
+
+  /**
+   * Refunds via the delegated settlement path (works for all VTXO states).
+   * @internal
+   */
+  async #refundArkadeDelegate(
+    params: {
+      userSecretKey: string;
+      userPubKey: string;
+      lendaswapPubKey: string;
+      arkadeServerPubKey: string;
+      hashLock: string;
+      vhtlcAddress: string;
+      refundLocktime: number;
+      unilateralClaimDelay: number;
+      unilateralRefundDelay: number;
+      unilateralRefundWithoutReceiverDelay: number;
+      destinationAddress: string;
+      network: string;
+    },
+    options: ArkadeRefundOptions,
+  ): Promise<RefundResult> {
+    try {
+      const result = await delegateRefund({
+        ...params,
+        lendaswapApiUrl: this.#config.baseUrl,
+        arkadeServerUrl:
+          options.arkadeServerUrl ?? this.#config.arkadeServerUrl,
+      });
+
+      return {
+        success: true,
+        message:
+          "Arkade refund executed successfully via delegated settlement!",
+        txId: result.commitmentTxid,
+        broadcast: true,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        success: false,
+        message: `Failed to execute delegated Arkade refund: ${message}`,
       };
     }
   }

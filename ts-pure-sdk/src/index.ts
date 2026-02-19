@@ -33,6 +33,7 @@ export {
   type GetVhtlcAmountsParams,
   getVhtlcAmounts,
   type VhtlcAmounts,
+  type VtxoStatus,
 } from "./arkade.js";
 export type {
   ArkadeClaimOptions,
