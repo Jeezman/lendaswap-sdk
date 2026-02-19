@@ -28,8 +28,7 @@ const CHAINS: Record<EvmChainName, Chain> = {
 
 /** Default RPC URLs (can be overridden via env) */
 const DEFAULT_RPC_URLS: Record<EvmChainName, string> = {
-  // FIXME: undo this change
-  polygon: "http://localhost:8545",
+  polygon: "https://polygon.drpc.org",
   arbitrum: "https://arb1.arbitrum.io/rpc",
   ethereum: "https://eth.llamarpc.com",
 };
