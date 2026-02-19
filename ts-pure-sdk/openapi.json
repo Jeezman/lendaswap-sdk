@@ -1901,7 +1901,6 @@
           "source_amount",
           "target_amount",
           "evm_expected_sats",
-          "btc_expected_sats",
           "evm_htlc_address",
           "client_evm_address",
           "server_evm_address",
@@ -1920,7 +1919,6 @@
         "properties": {
           "arkade_server_pk": { "type": "string" },
           "btc_claim_txid": { "type": ["string", "null"] },
-          "btc_expected_sats": { "type": "integer", "format": "int64" },
           "btc_fund_txid": { "type": ["string", "null"] },
           "btc_vhtlc_address": { "type": "string" },
           "chain": { "type": "string" },
@@ -2735,12 +2733,16 @@
             "description": "Protocol fee rate (as decimal, e.g., 0.0025 = 0.25%)"
           },
           "source_amount": {
-            "type": "string",
-            "description": "Pre-calculated source amount in smallest unit of source token"
+            "type": "integer",
+            "format": "int64",
+            "description": "Pre-calculated source amount in smallest unit of source token",
+            "minimum": 0
           },
           "target_amount": {
-            "type": "string",
-            "description": "Pre-calculated target amount in smallest unit of target token"
+            "type": "integer",
+            "format": "int64",
+            "description": "Pre-calculated target amount in smallest unit of target token",
+            "minimum": 0
           }
         }
       },
