@@ -576,6 +576,18 @@ export class Client {
   }
 
   /**
+   * Derives a deterministic Nostr private key from the wallet mnemonic.
+   *
+   * Uses the NIP-06 derivation path so the same mnemonic always produces
+   * the same Nostr identity.
+   *
+   * @returns The 32-byte Nostr private key as a hex string.
+   */
+  getNostrKeyHex(): string {
+    return this.#signer.deriveNostrKeyHex();
+  }
+
+  /**
    * Gets the user ID extended public key for wallet recovery.
    *
    * This can be shared with the server for recovering swap history.

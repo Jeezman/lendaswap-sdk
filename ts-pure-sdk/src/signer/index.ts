@@ -19,6 +19,8 @@ const ID_PREFIX = 9419;
 const LSW_IDENTIFIER = 121923;
 /** Tag for BIP340-style tagged hash preimage generation. */
 const PREIMAGE_TAG = "lendaswap/preimage";
+/** BIP44 coin type for Nostr (NIP-06). */
+const NOSTR_COIN_TYPE = 1237;
 
 /**
  * Parameters derived for a single swap.
@@ -214,6 +216,27 @@ export class Signer {
     const xpub = this.deriveUserIdXpub();
     // HDKey.publicExtendedKey returns the base58check-encoded xpub
     return xpub.publicExtendedKey;
+  }
+
+  /**
+   * Derive a deterministic Nostr private key from the mnemonic.
+   *
+   * Uses the NIP-06 derivation path: `m/44'/1237'/account'/0/0`
+   * The same mnemonic always produces the same Nostr identity.
+   *
+   * @param account - The account index (default 0).
+   * @returns The 32-byte private key as a hex string.
+   */
+  deriveNostrKeyHex(account = 0): string {
+    const master = HDKey.fromMasterSeed(this.#seed);
+    const path = `m/44'/${NOSTR_COIN_TYPE}'/${account}'/0/0`;
+    const derived = master.derive(path);
+
+    if (!derived.privateKey) {
+      throw new Error("Failed to derive Nostr key");
+    }
+
+    return bytesToHex(derived.privateKey);
   }
 }
 
