@@ -1112,7 +1112,6 @@
           "chain",
           "evm_chain_id",
           "source_amount",
-          "btc_expected_sats",
           "evm_expected_sats",
           "target_amount",
           "btc_vhtlc_address",
@@ -1134,7 +1133,6 @@
         "properties": {
           "arkade_server_pk": { "type": "string" },
           "btc_claim_txid": { "type": ["string", "null"] },
-          "btc_expected_sats": { "type": "integer", "format": "int64" },
           "btc_fund_txid": { "type": ["string", "null"] },
           "btc_vhtlc_address": { "type": "string" },
           "chain": { "type": "string" },
@@ -2029,7 +2027,6 @@
           "source_amount",
           "evm_expected_sats",
           "target_amount",
-          "btc_expected_sats",
           "evm_htlc_address",
           "client_evm_address",
           "server_evm_address",
@@ -2043,7 +2040,6 @@
         ],
         "properties": {
           "btc_claim_txid": { "type": ["string", "null"] },
-          "btc_expected_sats": { "type": "integer", "format": "int64" },
           "btc_fund_txid": { "type": ["string", "null"] },
           "btc_fund_vout": { "type": ["integer", "null"], "format": "int64" },
           "btc_hash_lock": {
@@ -2283,7 +2279,6 @@
           "source_amount",
           "target_amount",
           "evm_expected_sats",
-          "btc_expected_sats",
           "evm_htlc_address",
           "client_evm_address",
           "server_evm_address",
@@ -2301,7 +2296,6 @@
         ],
         "properties": {
           "arkade_server_pk": { "type": "string" },
-          "btc_expected_sats": { "type": "integer", "format": "int64" },
           "chain": { "type": "string" },
           "client_evm_address": { "type": "string" },
           "client_lightning_invoice": {
@@ -2542,7 +2536,6 @@
           "created_at",
           "chain",
           "evm_chain_id",
-          "btc_expected_sats",
           "evm_expected_sats",
           "source_amount",
           "target_amount",
@@ -2574,7 +2567,6 @@
             "type": ["string", "null"],
             "description": "Server's claim transaction ID on Arkade (Boltz VHTLC claim)"
           },
-          "btc_expected_sats": { "type": "integer", "format": "int64" },
           "chain": { "type": "string" },
           "client_evm_address": {
             "type": "string",

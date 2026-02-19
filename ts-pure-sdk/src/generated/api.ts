@@ -552,8 +552,6 @@ export interface components {
         ArkadeToEvmSwapResponse: {
             arkade_server_pk: string;
             btc_claim_txid?: string | null;
-            /** Format: int64 */
-            btc_expected_sats: number;
             btc_fund_txid?: string | null;
             btc_vhtlc_address: string;
             chain: string;
@@ -1106,8 +1104,6 @@ export interface components {
         /** @description EVM → Bitcoin (on-chain) swap response */
         EvmToBitcoinSwapResponse: {
             btc_claim_txid?: string | null;
-            /** Format: int64 */
-            btc_expected_sats: number;
             btc_fund_txid?: string | null;
             /** Format: int64 */
             btc_fund_vout?: number | null;
@@ -1253,8 +1249,6 @@ export interface components {
         /** @description EVM → Lightning swap response */
         EvmToLightningSwapResponse: {
             arkade_server_pk: string;
-            /** Format: int64 */
-            btc_expected_sats: number;
             chain: string;
             client_evm_address: string;
             /** @description User's Lightning invoice to receive payment */
@@ -1388,8 +1382,6 @@ export interface components {
             boltz_swap_id: string;
             /** @description Server's claim transaction ID on Arkade (Boltz VHTLC claim) */
             btc_claim_txid?: string | null;
-            /** Format: int64 */
-            btc_expected_sats: number;
             chain: string;
             /** @description EVM address that will sign the HTLC claim */
             client_evm_address: string;
