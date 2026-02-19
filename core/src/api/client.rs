@@ -281,6 +281,55 @@ impl ApiClient {
         self.get_json(&url).await
     }
 
+    // =========================================================================
+    // Delegate API
+    // =========================================================================
+
+    /// Get the delegate cosigner public key.
+    pub async fn get_delegate_cosigner_pk(&self) -> Result<super::types::CosignerPkResponse> {
+        let url = format!("{}/api/delegate/cosigner-pk", self.base_url);
+        self.get_json(&url).await
+    }
+
+    /// Settle a delegated batch.
+    pub async fn settle_delegate(
+        &self,
+        request: &super::types::SettleDelegateRequest,
+    ) -> Result<super::types::SettleDelegateResponse> {
+        let url = format!("{}/api/delegate/settle", self.base_url);
+        self.post_json(&url, request).await
+    }
+
+    // =========================================================================
+    // Collaborative Refund API
+    // =========================================================================
+
+    /// Request collaborative refund signing for spendable VTXOs.
+    pub async fn collab_refund(
+        &self,
+        swap_id: &str,
+        request: &super::types::CollabRefundRequest,
+    ) -> Result<super::types::CollabRefundResponse> {
+        let url = format!(
+            "{}/api/swap/arkade-evm/{}/collab-refund",
+            self.base_url, swap_id
+        );
+        self.post_json(&url, request).await
+    }
+
+    /// Request collaborative refund signing for recoverable VTXOs (delegate flow).
+    pub async fn collab_refund_delegate(
+        &self,
+        swap_id: &str,
+        request: &super::types::CollabRefundDelegateRequest,
+    ) -> Result<super::types::CollabRefundDelegateResponse> {
+        let url = format!(
+            "{}/api/swap/arkade-evm/{}/collab-refund-delegate",
+            self.base_url, swap_id
+        );
+        self.post_json(&url, request).await
+    }
+
     // Helper methods
 
     async fn get_json<T: serde::de::DeserializeOwned>(&self, url: &str) -> Result<T> {

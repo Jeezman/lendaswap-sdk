@@ -35,6 +35,7 @@ use bitcoin::psbt;
 use bitcoin::secp256k1;
 use bitcoin::secp256k1::schnorr;
 use bitcoin::taproot::LeafVersion;
+use std::str::FromStr;
 
 /// Claim a VHTLC swap by providing the preimage.
 ///
@@ -444,6 +445,417 @@ pub async fn amounts(ark_server_url: &str, swap_data: SwapData) -> Result<VhtlcA
         spent: spent.to_sat(),
         recoverable: recoverable.to_sat(),
     })
+}
+
+/// Collaboratively refund spendable VTXOs from a VHTLC.
+///
+/// Builds an offchain transaction spending via the `refund_script` leaf (3-of-3: sender +
+/// receiver + server), signs as sender (client), requests receiver (lendaswap) signature
+/// from the API, and submits to Arkade for the server signature.
+///
+/// Returns the ark transaction ID.
+pub async fn collab_refund(
+    ark_server_url: &str,
+    lendaswap_api_url: &str,
+    swap_id: &str,
+    refund_ark_address: ArkAddress,
+    swap_data: SwapData,
+    swap_params: SwapParams,
+    network: Network,
+) -> Result<Txid> {
+    let secp = Secp256k1::new();
+
+    let secret_key = swap_params.secret_key;
+    let own_kp = Keypair::from_secret_key(&secp, &secret_key);
+    let own_pk = own_kp.public_key();
+
+    // Hash the preimage for VHTLC construction (SHA256 -> RIPEMD160)
+    let sha256_hash = bitcoin::hashes::sha256::Hash::hash(&swap_params.preimage);
+    let ripemd160_hash = bitcoin::hashes::ripemd160::Hash::hash(&sha256_hash.to_byte_array());
+
+    let lendaswap_pk = parse_public_key(&swap_data.lendaswap_pk)?;
+    let arkade_server_pk = parse_public_key(&swap_data.arkade_server_pk)?;
+
+    // In arkade-to-evm: sender=client(refund_pk), receiver=lendaswap
+    let vhtlc = VhtlcScript::new(
+        VhtlcOptions {
+            sender: own_pk.into(),
+            receiver: lendaswap_pk.into(),
+            server: arkade_server_pk.into(),
+            preimage_hash: ripemd160_hash,
+            refund_locktime: swap_data.refund_locktime,
+            unilateral_claim_delay: parse_sequence_number(swap_data.unilateral_claim_delay)
+                .map_err(|e| Error::Vhtlc(format!("Invalid unilateral claim delay: {}", e)))?,
+            unilateral_refund_delay: parse_sequence_number(swap_data.unilateral_refund_delay)
+                .map_err(|e| Error::Vhtlc(format!("Invalid unilateral refund delay: {}", e)))?,
+            unilateral_refund_without_receiver_delay: parse_sequence_number(
+                swap_data.unilateral_refund_without_receiver_delay,
+            )
+            .map_err(|e| {
+                Error::Vhtlc(format!(
+                    "Invalid unilateral refund without receiver delay: {}",
+                    e,
+                ))
+            })?,
+        },
+        network.to_bitcoin_network(),
+    )
+    .map_err(|e| Error::Vhtlc(format!("Failed to construct VHTLC: {}", e)))?;
+
+    let vhtlc_address = vhtlc.address();
+    if vhtlc_address.encode() != swap_data.vhtlc_address {
+        return Err(Error::Vhtlc(format!(
+            "VHTLC address mismatch: computed {}, expected {}",
+            vhtlc_address.encode(),
+            swap_data.vhtlc_address,
+        )));
+    }
+
+    // Connect to Arkade
+    let rest_client = ark_rest::Client::new(ark_server_url.to_string());
+    let server_info = rest_client
+        .get_info()
+        .await
+        .map_err(|e| Error::Arkade(format!("Failed to get server info: {}", e)))?;
+
+    // Fetch spendable VTXOs
+    let request = GetVtxosRequest::new_for_addresses(std::iter::once(vhtlc_address));
+    let virtual_tx_outpoints = rest_client
+        .list_vtxos(request)
+        .await
+        .map_err(|e| Error::Arkade(format!("Failed to fetch VTXOs: {}", e)))?;
+    let vtxo_list = VtxoList::new(server_info.dust, virtual_tx_outpoints);
+
+    let spend_info = vhtlc.taproot_spend_info();
+    let script_ver = (vhtlc.refund_script(), LeafVersion::TapScript);
+    let control_block = spend_info
+        .control_block(&script_ver)
+        .ok_or_else(|| Error::Vhtlc("Missing control block for refund_script".into()))?;
+
+    let total_amount = vtxo_list
+        .spendable_offchain()
+        .fold(Amount::ZERO, |acc, x| acc + x.amount);
+
+    if total_amount == Amount::ZERO {
+        return Err(Error::Vhtlc("No spendable VTXOs found".into()));
+    }
+
+    let script_pubkey = vhtlc.script_pubkey();
+    let tapscripts = vhtlc.tapscripts();
+
+    let vhtlc_inputs: Vec<VtxoInput> = vtxo_list
+        .spendable_offchain()
+        .map(|v| {
+            VtxoInput::new(
+                script_ver.0.clone(),
+                None, // No locktime for collaborative refund
+                control_block.clone(),
+                tapscripts.clone(),
+                script_pubkey.clone(),
+                v.amount,
+                v.outpoint,
+            )
+        })
+        .collect();
+
+    let outputs = vec![(&refund_ark_address, total_amount)];
+
+    let OffchainTransactions {
+        mut ark_tx,
+        checkpoint_txs,
+    } = build_offchain_transactions(&outputs, None, &vhtlc_inputs, &server_info)
+        .map_err(|e| Error::Vhtlc(format!("Failed to build offchain TXs: {}", e)))?;
+
+    // Sign as sender
+    let sign_fn = |_: &mut psbt::Input,
+                   msg: secp256k1::Message|
+     -> std::result::Result<
+        Vec<(schnorr::Signature, XOnlyPublicKey)>,
+        ark_rs::core::Error,
+    > {
+        let sig = Secp256k1::new().sign_schnorr_no_aux_rand(&msg, &own_kp);
+        let pk = own_kp.public_key().into();
+        Ok(vec![(sig, pk)])
+    };
+
+    sign_ark_transaction(sign_fn, &mut ark_tx, 0)
+        .map_err(|e| Error::Vhtlc(format!("Failed to sign ark transaction: {}", e)))?;
+
+    let mut signed_checkpoints = checkpoint_txs;
+    for cp in signed_checkpoints.iter_mut() {
+        sign_checkpoint_transaction(sign_fn, cp)
+            .map_err(|e| Error::Vhtlc(format!("Failed to sign checkpoint TX: {}", e)))?;
+    }
+
+    // Request receiver (lendaswap) signature via API
+    let api_client = crate::api::ApiClient::new(lendaswap_api_url);
+    let api_request = crate::api::CollabRefundRequest {
+        ark_tx: ark_tx.to_string(),
+        checkpoint_txs: signed_checkpoints.iter().map(|p| p.to_string()).collect(),
+    };
+
+    let api_response = api_client.collab_refund(swap_id, &api_request).await?;
+
+    // Parse countersigned PSBTs
+    let ark_tx = bitcoin::Psbt::from_str(&api_response.ark_tx)
+        .map_err(|e| Error::Vhtlc(format!("Invalid ark_tx PSBT from server: {}", e)))?;
+
+    let checkpoint_txs = api_response
+        .checkpoint_txs
+        .iter()
+        .enumerate()
+        .map(|(i, b64)| {
+            bitcoin::Psbt::from_str(b64).map_err(|e| {
+                Error::Vhtlc(format!("Invalid checkpoint_txs[{i}] PSBT from server: {e}"))
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    // Submit to Arkade
+    let ark_txid = ark_tx.unsigned_tx.compute_txid();
+
+    let res = rest_client
+        .submit_offchain_transaction_request(ark_tx, checkpoint_txs)
+        .await
+        .map_err(|e| Error::Arkade(format!("Failed to submit offchain TXs: {:?}", e)))?;
+
+    let mut final_checkpoints = res.signed_checkpoint_txs;
+    for cp in final_checkpoints.iter_mut() {
+        sign_checkpoint_transaction(sign_fn, cp)
+            .map_err(|e| Error::Vhtlc(format!("Failed to sign final checkpoint TX: {}", e)))?;
+    }
+
+    rest_client
+        .finalize_offchain_transaction(ark_txid, final_checkpoints)
+        .await
+        .map_err(|e| Error::Arkade(format!("Failed to finalize transaction: {}", e)))?;
+
+    log::info!(
+        "Collaboratively refunded VHTLC with transaction {}",
+        ark_txid
+    );
+
+    Ok(ark_txid)
+}
+
+/// Collaboratively refund recoverable VTXOs from a VHTLC via the delegate batch flow.
+///
+/// Builds delegate PSBTs (intent_proof + forfeits) spending via the `refund_script` leaf,
+/// signs as sender (client), requests receiver (lendaswap) signature from the API,
+/// then calls the delegate settle endpoint to complete the batch ceremony.
+///
+/// Returns the commitment transaction ID.
+pub async fn collab_refund_delegate(
+    ark_server_url: &str,
+    lendaswap_api_url: &str,
+    swap_id: &str,
+    refund_ark_address: ArkAddress,
+    swap_data: SwapData,
+    swap_params: SwapParams,
+    network: Network,
+) -> Result<Txid> {
+    use ark_rs::core::batch::prepare_delegate_psbts;
+    use ark_rs::core::batch::sign_delegate_psbts;
+    use ark_rs::core::intent;
+
+    let secp = Secp256k1::new();
+
+    let secret_key = swap_params.secret_key;
+    let own_kp = Keypair::from_secret_key(&secp, &secret_key);
+    let own_pk = own_kp.public_key();
+
+    // Hash the preimage for VHTLC construction
+    let sha256_hash = bitcoin::hashes::sha256::Hash::hash(&swap_params.preimage);
+    let ripemd160_hash = bitcoin::hashes::ripemd160::Hash::hash(&sha256_hash.to_byte_array());
+
+    let lendaswap_pk = parse_public_key(&swap_data.lendaswap_pk)?;
+    let arkade_server_pk = parse_public_key(&swap_data.arkade_server_pk)?;
+
+    let vhtlc = VhtlcScript::new(
+        VhtlcOptions {
+            sender: own_pk.into(),
+            receiver: lendaswap_pk.into(),
+            server: arkade_server_pk.into(),
+            preimage_hash: ripemd160_hash,
+            refund_locktime: swap_data.refund_locktime,
+            unilateral_claim_delay: parse_sequence_number(swap_data.unilateral_claim_delay)
+                .map_err(|e| Error::Vhtlc(format!("Invalid unilateral claim delay: {}", e)))?,
+            unilateral_refund_delay: parse_sequence_number(swap_data.unilateral_refund_delay)
+                .map_err(|e| Error::Vhtlc(format!("Invalid unilateral refund delay: {}", e)))?,
+            unilateral_refund_without_receiver_delay: parse_sequence_number(
+                swap_data.unilateral_refund_without_receiver_delay,
+            )
+            .map_err(|e| {
+                Error::Vhtlc(format!(
+                    "Invalid unilateral refund without receiver delay: {}",
+                    e,
+                ))
+            })?,
+        },
+        network.to_bitcoin_network(),
+    )
+    .map_err(|e| Error::Vhtlc(format!("Failed to construct VHTLC: {}", e)))?;
+
+    let vhtlc_address = vhtlc.address();
+    if vhtlc_address.encode() != swap_data.vhtlc_address {
+        return Err(Error::Vhtlc(format!(
+            "VHTLC address mismatch: computed {}, expected {}",
+            vhtlc_address.encode(),
+            swap_data.vhtlc_address,
+        )));
+    }
+
+    // Connect to Arkade
+    let rest_client = ark_rest::Client::new(ark_server_url.to_string());
+    let server_info = rest_client
+        .get_info()
+        .await
+        .map_err(|e| Error::Arkade(format!("Failed to get server info: {}", e)))?;
+
+    // Fetch recoverable VTXOs
+    let request = GetVtxosRequest::new_for_addresses(std::iter::once(vhtlc_address));
+    let virtual_tx_outpoints = rest_client
+        .list_vtxos(request)
+        .await
+        .map_err(|e| Error::Arkade(format!("Failed to fetch VTXOs: {}", e)))?;
+    let vtxo_list = VtxoList::new(server_info.dust, virtual_tx_outpoints);
+
+    let spend_info = vhtlc.taproot_spend_info();
+    let script_ver = (vhtlc.refund_script(), LeafVersion::TapScript);
+    let control_block = spend_info
+        .control_block(&script_ver)
+        .ok_or_else(|| Error::Vhtlc("Missing control block for refund_script".into()))?;
+
+    let total_amount = vtxo_list
+        .recoverable()
+        .fold(Amount::ZERO, |acc, x| acc + x.amount);
+
+    if total_amount == Amount::ZERO {
+        return Err(Error::Vhtlc("No recoverable VTXOs found".into()));
+    }
+
+    let script_pubkey = vhtlc.script_pubkey();
+    let tapscripts = vhtlc.tapscripts();
+
+    // Get delegate cosigner public key from lendaswap
+    let api_client = crate::api::ApiClient::new(lendaswap_api_url);
+    let cosigner_pk_response = api_client.get_delegate_cosigner_pk().await?;
+    let delegate_cosigner_pk = PublicKey::from_str(&cosigner_pk_response.cosigner_pk)
+        .map_err(|e| Error::Parse(format!("Invalid cosigner pk: {}", e)))?;
+
+    // Build intent inputs from recoverable VTXOs
+    let intent_inputs: Vec<intent::Input> = vtxo_list
+        .recoverable()
+        .map(|v| {
+            intent::Input::new(
+                v.outpoint,
+                bitcoin::Sequence::ZERO,
+                None,
+                bitcoin::TxOut {
+                    value: v.amount,
+                    script_pubkey: script_pubkey.clone(),
+                },
+                tapscripts.clone(),
+                (script_ver.0.clone(), control_block.clone()),
+                false,
+                false,
+            )
+        })
+        .collect();
+
+    let outputs = vec![intent::Output::Offchain(bitcoin::TxOut {
+        value: total_amount,
+        script_pubkey: refund_ark_address.to_p2tr_script_pubkey(),
+    })];
+
+    // Prepare delegate PSBTs
+    let mut delegate = prepare_delegate_psbts(
+        intent_inputs,
+        outputs,
+        delegate_cosigner_pk.inner,
+        &server_info.forfeit_address,
+        server_info.dust,
+    )
+    .map_err(|e| Error::Vhtlc(format!("Failed to prepare delegate PSBTs: {}", e)))?;
+
+    // Sign as sender
+    let mut sign_fn = |_: &mut psbt::Input,
+                       msg: secp256k1::Message|
+     -> std::result::Result<
+        Vec<(schnorr::Signature, XOnlyPublicKey)>,
+        ark_rs::core::Error,
+    > {
+        let sig = Secp256k1::new().sign_schnorr_no_aux_rand(&msg, &own_kp);
+        let pk = own_kp.public_key().into();
+        Ok(vec![(sig, pk)])
+    };
+
+    sign_delegate_psbts(
+        &mut sign_fn,
+        &mut delegate.intent.proof,
+        &mut delegate.forfeit_psbts,
+    )
+    .map_err(|e| Error::Vhtlc(format!("Failed to sign delegate PSBTs: {}", e)))?;
+
+    // Request receiver (lendaswap) signature via API
+    let api_request = crate::api::CollabRefundDelegateRequest {
+        intent_proof: delegate.intent.proof.to_string(),
+        forfeit_psbts: delegate
+            .forfeit_psbts
+            .iter()
+            .map(|p| p.to_string())
+            .collect(),
+    };
+
+    let api_response = api_client
+        .collab_refund_delegate(swap_id, &api_request)
+        .await?;
+
+    // Parse countersigned PSBTs back
+    delegate.intent.proof = bitcoin::Psbt::from_str(&api_response.intent_proof)
+        .map_err(|e| Error::Vhtlc(format!("Invalid intent_proof PSBT from server: {}", e)))?;
+
+    delegate.forfeit_psbts = api_response
+        .forfeit_psbts
+        .iter()
+        .enumerate()
+        .map(|(i, b64)| {
+            bitcoin::Psbt::from_str(b64).map_err(|e| {
+                Error::Vhtlc(format!("Invalid forfeit_psbts[{i}] PSBT from server: {e}"))
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    // Now settle via the delegate endpoint
+    let intent_message = delegate
+        .intent
+        .serialize_message()
+        .map_err(|e| Error::Vhtlc(format!("Failed to serialize intent message: {}", e)))?;
+
+    let settle_request = crate::api::SettleDelegateRequest {
+        intent_proof: delegate.intent.proof.to_string(),
+        intent_message,
+        forfeit_psbts: delegate
+            .forfeit_psbts
+            .iter()
+            .map(|p| p.to_string())
+            .collect(),
+        cosigner_pk: cosigner_pk_response.cosigner_pk,
+        swap_id: None,
+        preimage: None,
+    };
+
+    let settle_response = api_client.settle_delegate(&settle_request).await?;
+
+    let txid = Txid::from_str(&settle_response.commitment_txid)
+        .map_err(|e| Error::Vhtlc(format!("Invalid txid from server: {}", e)))?;
+
+    log::info!(
+        "Collaboratively refunded VHTLC via delegate with commitment {}",
+        txid
+    );
+
+    Ok(txid)
 }
 
 /// Parse a hex-encoded public key.

@@ -1023,3 +1023,64 @@ pub struct ArkadeToEvmSwapResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dex_call_data: Option<DexCallData>,
 }
+
+// ============================================================================
+// Collaborative Refund types
+// ============================================================================
+
+/// Request for collaborative refund of spendable VTXOs.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CollabRefundRequest {
+    pub ark_tx: String,
+    pub checkpoint_txs: Vec<String>,
+}
+
+/// Response with countersigned PSBTs for spendable VTXOs.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CollabRefundResponse {
+    pub ark_tx: String,
+    pub checkpoint_txs: Vec<String>,
+}
+
+/// Request for collaborative refund of recoverable VTXOs (delegate flow).
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CollabRefundDelegateRequest {
+    pub intent_proof: String,
+    pub forfeit_psbts: Vec<String>,
+}
+
+/// Response with countersigned delegate PSBTs for recoverable VTXOs.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CollabRefundDelegateResponse {
+    pub intent_proof: String,
+    pub forfeit_psbts: Vec<String>,
+}
+
+// ============================================================================
+// Delegate types
+// ============================================================================
+
+/// Response containing the delegate cosigner public key.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CosignerPkResponse {
+    pub cosigner_pk: String,
+}
+
+/// Request to settle a delegated batch.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SettleDelegateRequest {
+    pub intent_proof: String,
+    pub intent_message: String,
+    pub forfeit_psbts: Vec<String>,
+    pub cosigner_pk: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub swap_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preimage: Option<String>,
+}
+
+/// Response from delegate settlement.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SettleDelegateResponse {
+    pub commitment_txid: String,
+}
