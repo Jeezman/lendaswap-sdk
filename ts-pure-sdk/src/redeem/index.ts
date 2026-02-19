@@ -195,9 +195,9 @@ async function buildCoordinatorClaimData(
 
     if (response.data) {
       dexCallData = {
-        to: response.data.to,
-        data: response.data.data,
-        value: response.data.value,
+        to: response.data.dex_calldata.to,
+        data: response.data.dex_calldata.data,
+        value: response.data.dex_calldata.value,
       };
     }
   }

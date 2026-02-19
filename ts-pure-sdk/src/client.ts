@@ -1141,9 +1141,9 @@ export class Client {
       }
       if (calldataResponse.data) {
         dexCalldata = {
-          to: calldataResponse.data.to,
-          data: calldataResponse.data.data,
-          value: calldataResponse.data.value,
+          to: calldataResponse.data.dex_calldata.to,
+          data: calldataResponse.data.dex_calldata.data,
+          value: calldataResponse.data.dex_calldata.value,
         };
       }
     }

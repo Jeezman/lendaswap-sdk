@@ -852,10 +852,12 @@
         ],
         "responses": {
           "200": {
-            "description": "Fresh DEX calldata",
+            "description": "Fresh DEX calldata with gasless fee estimate",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/DexCallData" }
+                "schema": {
+                  "$ref": "#/components/schemas/RedeemAndSwapResponse"
+                }
               }
             }
           },
@@ -2782,6 +2784,23 @@
             "type": "array",
             "items": { "$ref": "#/components/schemas/RecoveredSwap" },
             "description": "List of recovered swaps with their derivation indices"
+          }
+        }
+      },
+      "RedeemAndSwapResponse": {
+        "type": "object",
+        "description": "Response containing fresh DEX calldata and the gasless fee that will be deducted at claim time.",
+        "required": ["dex_calldata", "gasless_fee_sats"],
+        "properties": {
+          "dex_calldata": {
+            "$ref": "#/components/schemas/DexCallData",
+            "description": "DEX swap calldata from 1inch"
+          },
+          "gasless_fee_sats": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Gasless fee in WBTC sats, estimated at calldata-fetch time.\nThe claim endpoint will deduct this from the HTLC amount via a WBTC transfer.",
+            "minimum": 0
           }
         }
       },
