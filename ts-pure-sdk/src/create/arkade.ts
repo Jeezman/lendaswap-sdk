@@ -70,6 +70,7 @@ export async function createArkadeToEvmSwapGeneric(
         ? Number(options.targetAmount)
         : undefined,
       referral_code: options.referralCode,
+      gasless: options.gasless ?? true,
     },
   });
 

@@ -60,6 +60,7 @@ export async function createBitcoinToEvmSwap(
       amount_in: options.sourceAmount,
       amount_out: options.targetAmount,
       referral_code: options.referralCode,
+      gasless: options.gasless ?? true,
     },
   });
 

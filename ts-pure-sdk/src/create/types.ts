@@ -52,6 +52,8 @@ export interface BitcoinToEvmSwapOptions {
   targetAmount?: number;
   /** Optional referral code for fee exemption */
   referralCode?: string;
+  /** Whether the server should execute the DEX swap on behalf of the user (gasless claim). Defaults to true. */
+  gasless?: boolean;
 }
 
 /** Response from the generic `/swap/bitcoin/evm` endpoint. */
@@ -135,6 +137,8 @@ export interface LightningToEvmSwapGenericOptions {
   amountOut?: number;
   /** Optional referral code */
   referralCode?: string;
+  /** Whether the server should execute the DEX swap on behalf of the user (gasless claim). Defaults to true. */
+  gasless?: boolean;
 }
 
 /** Result of creating a Lightning-to-EVM swap via the generic endpoint */
@@ -236,6 +240,8 @@ export interface ArkadeToEvmSwapOptions {
   targetAmount?: bigint;
   /** Optional referral code */
   referralCode?: string;
+  /** Whether the server should execute the DEX swap on behalf of the user (gasless claim). Defaults to true. */
+  gasless?: boolean;
 }
 
 /** Result of creating an Arkade-to-EVM swap via the generic endpoint */
