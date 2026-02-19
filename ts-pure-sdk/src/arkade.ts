@@ -58,7 +58,6 @@ export async function getVhtlcAmounts(
   params: GetVhtlcAmountsParams,
 ): Promise<VhtlcAmounts> {
   const { vhtlcAddress, network, arkadeServerUrl } = params;
-  console.log(`We are here`);
 
   // Decode the Arkade address to get the pkScript for indexer queries
   const decoded = ArkAddress.decode(vhtlcAddress);
@@ -82,9 +81,25 @@ export async function getVhtlcAmounts(
   const sum = (vtxos: { value: number }[]) =>
     vtxos.reduce((acc, v) => acc + v.value, 0);
 
-  const spendable = sum(spendableResult.vtxos);
+  // The indexer's spendableOnly filter doesn't account for expired batches.
+  // A preconfirmed VTXO with batchExpiry in the past is effectively expired
+  // and can only be spent via delegated settlement, not offchain spend.
+  // Reclassify such VTXOs from spendable to recoverable.
+  const now = Date.now();
+  let actualSpendable = 0;
+  let expiredSpendable = 0;
+  for (const v of spendableResult.vtxos) {
+    const expiry = v.virtualStatus?.batchExpiry;
+    if (expiry && expiry <= now) {
+      expiredSpendable += v.value;
+    } else {
+      actualSpendable += v.value;
+    }
+  }
+
+  const spendable = actualSpendable;
   const spent = sum(spentResult.vtxos);
-  const recoverable = sum(recoverableResult.vtxos);
+  const recoverable = sum(recoverableResult.vtxos) + expiredSpendable;
 
   const vtxoStatus: VtxoStatus =
     spendable === 0 && spent === 0 && recoverable === 0
