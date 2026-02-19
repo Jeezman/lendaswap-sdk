@@ -25,8 +25,8 @@ import {
   Transaction,
   VHTLC,
 } from "@arkade-os/sdk";
-import { ripemd160 } from "@noble/hashes/legacy";
-import { sha256 } from "@noble/hashes/sha2";
+import { ripemd160 } from "@noble/hashes/ripemd160";
+import { sha256 } from "@noble/hashes/sha256";
 import { base64, hex } from "@scure/base";
 
 /** Default Arkade server URL by network */

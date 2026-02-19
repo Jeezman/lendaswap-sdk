@@ -145,4 +145,4 @@ export {
   toChain,
   toChainName,
 } from "./tokens.js";
-export { getUsdPrices } from "./usd-price";
+export { getUsdPrices } from "./usd-price.js";

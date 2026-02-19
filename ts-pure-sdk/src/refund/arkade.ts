@@ -22,7 +22,7 @@ import {
   Transaction,
   VHTLC,
 } from "@arkade-os/sdk";
-import { ripemd160 } from "@noble/hashes/legacy";
+import { ripemd160 } from "@noble/hashes/ripemd160";
 import { base64, hex } from "@scure/base";
 
 /** Default Arkade server URL by network */

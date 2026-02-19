@@ -14,7 +14,7 @@ import type {
   TokenId,
   TokenInfo,
 } from "../api/client.js";
-import type { SwapParams } from "../signer";
+import type { SwapParams } from "../signer/index.js";
 
 // Placeholder types until OpenAPI spec is regenerated
 // These match the Rust API response types
