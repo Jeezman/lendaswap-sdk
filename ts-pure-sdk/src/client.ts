@@ -1369,7 +1369,7 @@ export class Client {
     }
 
     // Bitcoin on-chain swaps require on-chain refund transaction
-    if (direction === "bitcoin_to_evm") {
+    if (direction === "bitcoin_to_evm" || direction === "btc_to_arkade") {
       return this.#buildOnchainRefund(
         id,
         swap,

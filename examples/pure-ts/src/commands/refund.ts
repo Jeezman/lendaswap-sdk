@@ -69,7 +69,7 @@ export async function refundSwap(
   console.log("");
 
   // Check which type of swap this is based on direction
-  const isOnchainSwap = swap.direction === "bitcoin_to_evm";
+  const isOnchainSwap = swap.direction === "bitcoin_to_evm" || swap.direction === "btc_to_arkade";
   const isArkadeSwap = swap.direction === "arkade_to_evm";
   const isEvmSwap = swap.direction === "evm_to_arkade" || swap.direction === "evm_to_bitcoin" || swap.direction === "evm_to_lightning";
 
