@@ -54,6 +54,8 @@ import {
   buildArkadeRefund,
   buildOnchainClaimTransaction,
   buildOnchainRefundTransaction,
+  collabRefundDelegate,
+  collabRefundOffchain,
   verifyHtlcAddress,
 } from "./refund";
 import {
@@ -2060,19 +2062,6 @@ export class Client {
       direction: "arkade_to_evm";
     };
 
-    // Check refund locktime
-    const now = Math.floor(Date.now() / 1000);
-    if (now < s.vhtlc_refund_locktime) {
-      const remainingSeconds = s.vhtlc_refund_locktime - now;
-      const remainingMinutes = Math.ceil(remainingSeconds / 60);
-      return {
-        success: false,
-        message:
-          `Refund is not yet available. The VHTLC locktime expires in ${remainingMinutes} minutes ` +
-          `(at ${new Date(s.vhtlc_refund_locktime * 1000).toISOString()}).`,
-      };
-    }
-
     const fullPubKey = storedSwap.publicKey;
     const userPubKey =
       fullPubKey.length === 66 ? fullPubKey.slice(2) : fullPubKey;
@@ -2110,6 +2099,60 @@ export class Client {
       destinationAddress: options.destinationAddress,
       network: s.network,
     };
+
+    // Try collaborative refund first (instant, no locktime wait).
+    // Falls back to non-collab refund if the server rejects (e.g. unsafe state).
+    const collabParams = {
+      ...refundParams,
+      swapId: id,
+      apiClient: this.#apiClient,
+      arkadeServerUrl: options.arkadeServerUrl ?? this.#config.arkadeServerUrl,
+    };
+
+    try {
+      if (vtxoStatus === "spendable") {
+        const result = await collabRefundOffchain(collabParams);
+        return {
+          success: true,
+          message:
+            "Arkade refund executed successfully via collaborative offchain spend!",
+          txId: result.txId,
+          refundAmount: result.refundAmount,
+          broadcast: true,
+        };
+      }
+      // recoverable or mixed → collab delegate
+      const result = await collabRefundDelegate(collabParams);
+      return {
+        success: true,
+        message:
+          "Arkade refund executed successfully via collaborative delegated settlement!",
+        txId: result.commitmentTxid,
+        broadcast: true,
+      };
+    } catch (collabError) {
+      const collabMsg =
+        collabError instanceof Error
+          ? collabError.message
+          : String(collabError);
+      console.warn(
+        `Collaborative refund failed (${collabMsg}), falling back to non-collab refund`,
+      );
+    }
+
+    // Fallback: non-collaborative refund (requires locktime to have expired)
+    const now = Math.floor(Date.now() / 1000);
+    if (now < s.vhtlc_refund_locktime) {
+      const remainingSeconds = s.vhtlc_refund_locktime - now;
+      const remainingMinutes = Math.ceil(remainingSeconds / 60);
+      return {
+        success: false,
+        message:
+          `Collaborative refund was rejected by the server and non-collaborative refund ` +
+          `is not yet available. The VHTLC locktime expires in ${remainingMinutes} minutes ` +
+          `(at ${new Date(s.vhtlc_refund_locktime * 1000).toISOString()}).`,
+      };
+    }
 
     if (vtxoStatus === "spendable") {
       return this.#refundArkadeOffchain(refundParams, options);

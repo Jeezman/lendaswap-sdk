@@ -12,6 +12,12 @@ export {
   buildArkadeRefund,
 } from "./arkade.js";
 export {
+  type CollabRefundParams,
+  type CollabRefundResult,
+  collabRefundDelegate,
+  collabRefundOffchain,
+} from "./collab.js";
+export {
   type BitcoinNetwork,
   buildOnchainClaimTransaction,
   buildOnchainRefundTransaction,
