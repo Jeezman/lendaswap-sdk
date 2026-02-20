@@ -239,17 +239,25 @@ export async function collabRefundOffchain(
     checkpointTapscript,
   );
 
+  // Snapshot checkpoint PSBTs BEFORE signing — signer.sign() may mutate
+  // shared internal state between arkTx and checkpoints.
+  const unsignedCheckpointPsbts = checkpoints.map((cp) =>
+    base64.encode(cp.toPSBT()),
+  );
+
   const signer = SingleKey.fromHex(params.userSecretKey);
   const signedArkTx = await signer.sign(arkTx);
 
-  // POST to lendaswap backend for receiver cosigning
+  // POST to lendaswap backend for receiver cosigning.
+  // The backend cosigns both ark_tx (for the 3-of-3 refund leaf) and
+  // checkpoint_txs (which also need the receiver signature).
   const collabRes = await params.apiClient.POST(
     "/api/swap/arkade-evm/{id}/collab-refund",
     {
       params: { path: { id: params.swapId } },
       body: {
         ark_tx: base64.encode(signedArkTx.toPSBT()),
-        checkpoint_txs: checkpoints.map((cp) => base64.encode(cp.toPSBT())),
+        checkpoint_txs: unsignedCheckpointPsbts,
       },
     },
   );
@@ -260,16 +268,53 @@ export async function collabRefundOffchain(
     );
   }
 
-  // Submit countersigned PSBTs to Arkade for the server (3rd) signature
+  // Save the receiver's (lendaswap) tap_script_sigs from each cosigned
+  // checkpoint BEFORE submitting to arkd. arkd strips incoming signatures
+  // and only returns checkpoints with its own (server) signature.
+  // We must merge the receiver sigs back in before client-signing.
+  type TapScriptSigEntry = [{ pubKey: Uint8Array; leafHash: Uint8Array }, Uint8Array];
+  const receiverCheckpointSigs = collabRes.data.checkpoint_txs.map((cp) => {
+    const tx = Transaction.fromPSBT(base64.decode(cp));
+    const inputSigs: TapScriptSigEntry[][] = [];
+    for (let i = 0; i < tx.inputsLength; i++) {
+      const input = tx.getInput(i);
+      const sigs: TapScriptSigEntry[] = [];
+      if (input.tapScriptSig) {
+        for (const [key, sig] of input.tapScriptSig) {
+          sigs.push([{ pubKey: Uint8Array.from(key.pubKey), leafHash: Uint8Array.from(key.leafHash) }, Uint8Array.from(sig)]);
+        }
+      }
+      inputSigs.push(sigs);
+    }
+    return inputSigs;
+  });
+
+  // Submit to Arkade with the cosigned ark_tx and the backend-cosigned
+  // checkpoints. Arkade adds its server signature to both.
   const submitRes = await arkProvider.submitTx(
     collabRes.data.ark_tx,
     collabRes.data.checkpoint_txs,
   );
 
-  // Finalize checkpoints with our signature
+  // Finalize: Arkade returns checkpoints with only the server signature.
+  // We must merge back the receiver sigs, then add the client (sender)
+  // signature to complete the 3-of-3.
   const finalCheckpoints = await Promise.all(
-    submitRes.signedCheckpointTxs.map(async (cp) => {
+    submitRes.signedCheckpointTxs.map(async (cp, cpIdx) => {
       const tx = Transaction.fromPSBT(base64.decode(cp));
+
+      // Merge receiver tap_script_sigs back into each input
+      const savedSigs = receiverCheckpointSigs[cpIdx];
+      if (savedSigs) {
+        for (let i = 0; i < tx.inputsLength && i < savedSigs.length; i++) {
+          for (const [key, signature] of savedSigs[i]) {
+            tx.updateInput(i, {
+              tapScriptSig: [[key, signature]],
+            });
+          }
+        }
+      }
+
       const signed = await signer.sign(tx);
       return base64.encode(signed.toPSBT());
     }),
