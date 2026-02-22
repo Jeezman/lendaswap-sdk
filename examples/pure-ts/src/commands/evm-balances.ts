@@ -41,7 +41,7 @@ const TOKEN_ADDRESSES = {
 
 // RPC URLs
 const RPC_URLS = {
-  polygon: "https://polygon-rpc.com",
+  polygon: "https://polygon.drpc.org",
   arbitrum: "https://arb1.arbitrum.io/rpc",
   ethereum: "https://eth.llamarpc.com",
 };
