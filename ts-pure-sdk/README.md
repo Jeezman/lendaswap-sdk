@@ -86,15 +86,15 @@ console.log(`You'll receive: ${quote.target_amount} USDC`);
 #### Lightning to EVM
 
 ```typescript
-const result = await client.createLightningToEvmSwap({
+const result = await client.createLightningToEvmSwapGeneric({
   targetAddress: "0x1234567890abcdef1234567890abcdef12345678",
-  targetToken: "usdc_pol",    // or "usdc_arb", "usdt_pol", "usdt_arb"
-  targetChain: "polygon",      // or "arbitrum"
-  sourceAmount: 100000,        // Amount in sats
+  tokenAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // USDC on Polygon
+  evmChainId: 137,             // 1 (Ethereum), 137 (Polygon), 42161 (Arbitrum)
+  amountIn: 100000,            // Amount in sats (or use amountOut for target amount)
 });
 
 // Pay the Lightning invoice to complete the swap
-console.log(`Pay this invoice: ${result.response.ln_invoice}`);
+console.log(`Pay this invoice: ${result.response.boltz_invoice}`);
 console.log(`Swap ID: ${result.response.id}`);
 ```
 
@@ -132,9 +132,9 @@ console.log(`Claimed! TX: ${claimResult.txHash}`);
 ```typescript
 const result = await client.createBitcoinToEvmSwap({
   targetAddress: "0x1234567890abcdef1234567890abcdef12345678",
-  targetToken: "usdc_pol",
-  targetChain: "polygon",
-  sourceAmount: 100000,
+  tokenAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // USDC on Polygon
+  evmChainId: 137,
+  sourceAmount: 100000, // sats
 });
 
 // Send BTC to the on-chain HTLC address
@@ -145,32 +145,44 @@ console.log(`Swap ID: ${result.response.id}`);
 #### EVM to Arkade
 
 ```typescript
-const result = await client.createEvmToArkadeSwap({
-  sourceToken: "usdc_pol",       // or "usdc_arb", "usdc_eth", "usdt_*", "wbtc_eth"
-  sourceChain: "polygon",        // or "arbitrum", "ethereum"
-  sourceAmount: 100000000n,      // Amount in token's smallest unit (e.g., 6 decimals for USDC)
+const result = await client.createEvmToArkadeSwapGeneric({
   targetAddress: "ark1...",      // Your Arkade address
-  evmAddress: "0x...",           // Your EVM address (for funding the HTLC)
+  tokenAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // USDC on Polygon
+  evmChainId: 137,
+  userAddress: "0x...",          // Your EVM wallet address
+  sourceAmount: 100000000n,      // Amount in token's smallest unit (e.g., 6 decimals for USDC)
 });
 
-// Fund the EVM HTLC (approve + createSwap)
-console.log(`HTLC Address: ${result.response.htlc_address}`);
+// Fund the EVM HTLC via coordinator
 console.log(`Swap ID: ${result.response.id}`);
 ```
 
 #### EVM to Lightning
 
 ```typescript
-const result = await client.createEvmToLightningSwap({
-  sourceToken: "usdc_pol",
-  sourceChain: "polygon",
-  sourceAmount: 100000000n,
-  targetAddress: "lnbc...",       // Lightning invoice
-  evmAddress: "0x...",
+const result = await client.createEvmToLightningSwapGeneric({
+  lightningInvoice: "lnbc...",   // BOLT11 invoice (amount derived from invoice)
+  tokenAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // USDC on Polygon
+  evmChainId: 137,
+  userAddress: "0x...",          // Your EVM wallet address
 });
 
-// Fund the EVM HTLC
-console.log(`HTLC Address: ${result.response.htlc_address}`);
+// Fund the EVM HTLC via coordinator
+console.log(`Swap ID: ${result.response.id}`);
+```
+
+#### EVM to Bitcoin (on-chain)
+
+```typescript
+const result = await client.createEvmToBitcoinSwap({
+  tokenAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // USDC on Polygon
+  evmChainId: 137,
+  userAddress: "0x...",          // Your EVM wallet address
+  targetAddress: "bc1p...",      // Your BTC address
+  sourceAmount: 100000000n,      // Amount in token's smallest unit
+});
+
+// Fund the EVM HTLC, then redeem BTC once server funds the BTC HTLC
 console.log(`Swap ID: ${result.response.id}`);
 ```
 
@@ -299,17 +311,48 @@ await swapStorage.update("uuid", newApiResponse);
 ```
 src/
 ├── api/
-│   └── client.ts       # Low-level API client wrapper
+│   └── client.ts              # Low-level API client wrapper
 ├── generated/
-│   └── api.ts          # Auto-generated types from OpenAPI spec
+│   └── api.ts                 # Auto-generated types from OpenAPI spec
+├── create/
+│   ├── index.ts               # Swap creation exports
+│   ├── types.ts               # Type definitions for swap creation
+│   ├── arkade.ts              # Arkade-to-EVM swap creation
+│   ├── bitcoin.ts             # Bitcoin-to-EVM swap creation
+│   ├── bitcoin-to-arkade.ts   # Bitcoin-to-Arkade swap creation
+│   ├── evm-to-arkade.ts       # EVM-to-Arkade swap creation
+│   ├── evm-to-bitcoin.ts      # EVM-to-Bitcoin swap creation
+│   ├── evm-to-lightning.ts    # EVM-to-Lightning swap creation
+│   └── lightning.ts           # Lightning-to-EVM swap creation
+├── redeem/
+│   ├── index.ts               # Claim/redeem operation exports
+│   ├── arkade.ts              # Arkade claim logic
+│   ├── ethereum.ts            # Ethereum claim logic
+│   └── gasless.ts             # Gasless claim logic
+├── refund/
+│   ├── index.ts               # Refund operation exports
+│   ├── arkade.ts              # Arkade refund logic
+│   └── onchain.ts             # On-chain refund logic
+├── evm/
+│   ├── index.ts               # EVM HTLC utilities
+│   ├── coordinator.ts         # Coordinator interaction
+│   ├── htlc.ts                # HTLC contract utilities
+│   └── signing.ts             # EVM signing utilities
 ├── signer/
-│   └── index.ts        # HD wallet key derivation (BIP39/BIP32)
+│   └── index.ts               # HD wallet key derivation (BIP39/BIP32)
 ├── storage/
-│   ├── index.ts        # Storage interfaces and in-memory implementations
-│   ├── idb.ts          # IndexedDB storage for browsers
-│   └── types.ts        # StoredSwap type definition
-├── client.ts           # High-level Client class with convenience methods
-└── index.ts            # Public exports
+│   ├── index.ts               # Storage interfaces and in-memory implementations
+│   ├── idb.ts                 # IndexedDB storage for browsers
+│   ├── sqlite.ts              # SQLite storage for Node.js
+│   └── types.ts               # StoredSwap type definition
+├── client.ts                  # High-level Client class with convenience methods
+├── arkade.ts                  # Arkade VHTLC query utilities
+├── delegate.ts                # Delegate settlement utilities
+├── tokens.ts                  # Token helpers and constants
+├── usd-price.ts               # USD price fetching via CoinGecko
+├── price-calculations.ts      # Price calculation utilities
+├── node.ts                    # Node.js-specific exports (SQLite storage)
+└── index.ts                   # Public exports
 ```
 
 ### Auto-generated API Types
