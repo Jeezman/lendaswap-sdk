@@ -534,113 +534,115 @@ export async function createSwap(
   // #endregion error-handling
 }
 
-// #region lightning-to-evm
-// Create a Lightning to EVM swap:
-//
-// const result = await client.createLightningToEvmSwapGeneric({
-//   targetAddress: "0xYourPolygonAddress",
-//   evmChainId: 137, // Polygon (1 = Ethereum, 42161 = Arbitrum)
-//   tokenAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // USDC on Polygon
-//   amountIn: 100000, // 100k sats to send
-// });
-//
-// console.log("Pay invoice:", result.response.boltz_invoice);
-// // ... "lnbc1m1p..."
-// console.log("Swap ID:", result.response.id);
-// // ... "550e8400-e29b-41d4-a716-446655440000"
-// #endregion lightning-to-evm
+/** Doc-only examples — type-checked but never called at runtime. */
 
-// #region lightning-to-evm-by-target
-// To create a swap by target amount (receive exactly N USDC):
-//
-// const resultByTarget = await client.createLightningToEvmSwapGeneric({
-//   targetAddress: "0xYourPolygonAddress",
-//   evmChainId: 137, // Polygon
-//   tokenAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // USDC on Polygon
-//   amountOut: 50_000_000, // Receive exactly 50 USDC (6 decimals)
-// });
-//
-// console.log("Pay invoice:", resultByTarget.response.boltz_invoice);
-// // ... "lnbc500u1p..."
-// console.log("Swap ID:", resultByTarget.response.id);
-// // ... "550e8400-e29b-41d4-a716-446655440000"
-// #endregion lightning-to-evm-by-target
+async function _exampleLightningToEvm(client: Client) {
+  // #region lightning-to-evm
+  const result = await client.createLightningToEvmSwapGeneric({
+    targetAddress: "0xYourPolygonAddress",
+    evmChainId: 137, // Polygon (1 = Ethereum, 42161 = Arbitrum)
+    tokenAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // USDC on Polygon
+    amountIn: 100000, // 100k sats to send
+  });
 
-// #region lightning-to-evm-complete-flow
-// Complete flow: create swap, poll for status, then claim
-//
-// // 1. Create swap
-// const result = await client.createLightningToEvmSwapGeneric({
-//   targetAddress: "0xYourPolygonAddress",
-//   evmChainId: 137, // Polygon
-//   tokenAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // USDC on Polygon
-//   amountIn: 100000, // 100k sats
-// });
-//
-// console.log("Pay invoice:", result.response.boltz_invoice);
-// // ... "lnbc1m1p..."
-//
-// // 2. Poll for status
-// let swap = await client.getSwap(result.response.id);
-// while (swap.status !== "serverfunded" && swap.status !== "clientredeemed") {
-//   await new Promise((r) => setTimeout(r, 3000));
-//   swap = await client.getSwap(result.response.id);
-//   console.log("Status:", swap.status);
-//   // ... "clientfunded" → "serverfunded"
-// }
-//
-// // 3. Claim (gasless on Polygon)
-// if (swap.status === "serverfunded") {
-//   const claim = await client.claim(result.response.id);
-//   console.log("Claim result:", claim.success, claim.message);
-//   // ... true "Claim successful"
-// }
-// #endregion lightning-to-evm-complete-flow
+  console.log("Pay invoice:", result.response.boltz_invoice);
+  // ... "lnbc1m1p..."
+  console.log("Swap ID:", result.response.id);
+  // ... "550e8400-e29b-41d4-a716-446655440000"
+  // #endregion lightning-to-evm
+}
 
-// #region complete-flow
-// Complete flow for on-chain BTC -> Arkade:
-//
-// const result = await client.createBitcoinToArkadeSwap({
-//   satsReceive: 100000,
-//   targetAddress: "ark1q...",
-// });
-//
-// console.log("Send", result.response.source_amount, "sats to:", result.response.btc_htlc_address);
-// // ... "Send 101500 sats to: bc1q..."
-//
-// // Poll for status
-// let swap = await client.getSwap(result.response.id);
-// while (swap.status !== "serverfunded" && swap.status !== "clientredeemed") {
-//   await new Promise((r) => setTimeout(r, 10000)); // 10s for onchain
-//   swap = await client.getSwap(result.response.id);
-//   console.log("Status:", swap.status);
-//   // ... "clientfunded" → "serverfunded"
-// }
-//
-// // Claim VTXOs
-// if (swap.status === "serverfunded") {
-//   const claim = await client.claimArkade(result.response.id, {
-//     destinationAddress: "ark1q...",
-//   });
-//   console.log("Claimed:", claim.success);
-//   // ... true
-// }
-// #endregion complete-flow
+async function _exampleLightningToEvmByTarget(client: Client) {
+  // #region lightning-to-evm-by-target
+  const result = await client.createLightningToEvmSwapGeneric({
+    targetAddress: "0xYourPolygonAddress",
+    evmChainId: 137, // Polygon
+    tokenAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // USDC on Polygon
+    amountOut: 50_000_000, // Receive exactly 50 USDC (6 decimals)
+  });
 
-// #region monitor-swap
-// Poll swap status until BTC confirms and VTXOs are ready:
-//
-// let swap = await client.getSwap(result.response.id);
-// while (swap.status !== "serverfunded" && swap.status !== "clientredeemed") {
-//   await new Promise((r) => setTimeout(r, 10000)); // 10s for onchain
-//   swap = await client.getSwap(result.response.id);
-//   console.log("Status:", swap.status);
-//   // ... "pending" → "clientfunded" → "serverfunded"
-// }
-//
-// console.log("Ready to claim!", swap.status);
-// // ... "serverfunded"
-// #endregion monitor-swap
+  console.log("Pay invoice:", result.response.boltz_invoice);
+  // ... "lnbc500u1p..."
+  console.log("Swap ID:", result.response.id);
+  // ... "550e8400-e29b-41d4-a716-446655440000"
+  // #endregion lightning-to-evm-by-target
+}
+
+async function _exampleLightningToEvmCompleteFlow(client: Client) {
+  // #region lightning-to-evm-complete-flow
+  // 1. Create swap
+  const result = await client.createLightningToEvmSwapGeneric({
+    targetAddress: "0xYourPolygonAddress",
+    evmChainId: 137, // Polygon
+    tokenAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // USDC on Polygon
+    amountIn: 100000, // 100k sats
+  });
+
+  console.log("Pay invoice:", result.response.boltz_invoice);
+  // ... "lnbc1m1p..."
+
+  // 2. Poll for status
+  let swap = await client.getSwap(result.response.id);
+  while (swap.status !== "serverfunded" && swap.status !== "clientredeemed") {
+    await new Promise((r) => setTimeout(r, 3000));
+    swap = await client.getSwap(result.response.id);
+    console.log("Status:", swap.status);
+    // ... "clientfunded" → "serverfunded"
+  }
+
+  // 3. Claim (gasless on Polygon)
+  if (swap.status === "serverfunded") {
+    const claim = await client.claim(result.response.id);
+    console.log("Claim result:", claim.success, claim.message);
+    // ... true "Claim successful"
+  }
+  // #endregion lightning-to-evm-complete-flow
+}
+
+async function _exampleBtcToArkadeCompleteFlow(client: Client) {
+  // #region complete-flow
+  const result = await client.createBitcoinToArkadeSwap({
+    satsReceive: 100000,
+    targetAddress: "ark1q...",
+  });
+
+  console.log("Send", result.response.source_amount, "sats to:", result.response.btc_htlc_address);
+  // ... "Send 101500 sats to: bc1q..."
+
+  // Poll for status
+  let swap = await client.getSwap(result.response.id);
+  while (swap.status !== "serverfunded" && swap.status !== "clientredeemed") {
+    await new Promise((r) => setTimeout(r, 10000)); // 10s for onchain
+    swap = await client.getSwap(result.response.id);
+    console.log("Status:", swap.status);
+    // ... "clientfunded" → "serverfunded"
+  }
+
+  // Claim VTXOs
+  if (swap.status === "serverfunded") {
+    const claim = await client.claimArkade(result.response.id, {
+      destinationAddress: "ark1q...",
+    });
+    console.log("Claimed:", claim.success);
+    // ... true
+  }
+  // #endregion complete-flow
+}
+
+async function _exampleMonitorSwap(client: Client, swapId: string) {
+  // #region monitor-swap
+  let swap = await client.getSwap(swapId);
+  while (swap.status !== "serverfunded" && swap.status !== "clientredeemed") {
+    await new Promise((r) => setTimeout(r, 10000)); // 10s for onchain
+    swap = await client.getSwap(swapId);
+    console.log("Status:", swap.status);
+    // ... "pending" → "clientfunded" → "serverfunded"
+  }
+
+  console.log("Ready to claim!", swap.status);
+  // ... "serverfunded"
+  // #endregion monitor-swap
+}
 
 /**
  * Parse the source and target tokens to determine swap type.
