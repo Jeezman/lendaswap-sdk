@@ -5,169 +5,73 @@
  *
  * @example
  * ```typescript
- * import { getUsdPrice, getUsdPrices, TokenId } from '@lendasat/lendaswap-sdk';
+ * import { getUsdPrices } from '@lendasat/lendaswap-sdk';
  *
- * // Get single token price
- * const btcPrice = await getUsdPrice('btc_lightning');
- * console.log('BTC price:', btcPrice);
- *
- * // Get multiple token prices
- * const prices = await getUsdPrices(['btc_lightning', 'usdc_pol', 'pol_pol']);
- * console.log('Prices:', prices);
+ * const prices = await getUsdPrices([
+ *   { symbol: "BTC", chain: "Lightning", token_id: "btc", name: "Bitcoin", decimals: 0 },
+ *   { symbol: "USDC", chain: "137", token_id: "usdc_pol", name: "USDC", decimals: 6 },
+ * ]);
+ * // prices is a Map<TokenInfo, number | null>
  * ```
  */
 
-import type { TokenId } from "./api/client.js";
+import type { TokenInfo } from "./api/client.js";
 
-/**
- * CoinGecko API base URL
- */
 const COINGECKO_API = "https://api.coingecko.com/api/v3";
 
 /**
- * Mapping from SDK TokenId to CoinGecko coin ID.
- * CoinGecko uses lowercase slugs as identifiers.
+ * Mapping from lowercase token symbol to CoinGecko coin ID.
+ * Symbols are unique per chain, and the CoinGecko ID only depends on the symbol.
  */
-const TOKEN_TO_COINGECKO: Record<string, string> = {
-  // Bitcoin variants
-  btc_lightning: "bitcoin",
-  btc_arkade: "bitcoin",
-  btc_onchain: "bitcoin",
-
-  // Stablecoins on Polygon
-  usdc_pol: "usd-coin",
-  usdt0_pol: "tether",
-
-  // Stablecoins on Ethereum
-  usdc_eth: "usd-coin",
-  usdt_eth: "tether",
-
-  // Stablecoins on Arbitrum
-  usdc_arb: "usd-coin",
-  usdt_arb: "tether",
-
-  // Gold token
-  xaut_eth: "tether-gold",
-
-  // Wrapped Bitcoin
-  wbtc_pol: "wrapped-bitcoin",
-  wbtc_eth: "wrapped-bitcoin",
-  wbtc_arb: "wrapped-bitcoin",
-
-  // Native tokens
-  pol_pol: "matic-network", // POL (formerly MATIC)
-  eth_eth: "ethereum",
-  eth_arb: "ethereum", // ETH on Arbitrum
+const SYMBOL_TO_COINGECKO: Record<string, string> = {
+  btc: "bitcoin",
+  usdc: "usd-coin",
+  usdt: "tether",
+  usdt0: "tether",
+  xaut: "tether-gold",
+  wbtc: "wrapped-bitcoin",
+  pol: "matic-network",
+  eth: "ethereum",
 };
 
-/**
- * Response from CoinGecko simple/price endpoint
- */
 interface CoinGeckoSimplePriceResponse {
   [coinId: string]: {
     usd: number;
-    usd_24h_change?: number;
   };
 }
 
 /**
- * USD price result for a token
- */
-export interface UsdPriceResult {
-  /** Token ID */
-  tokenId: TokenId;
-  /** USD price (null if not found) */
-  usdPrice: number | null;
-  /** 24h change percentage (optional) */
-  change24h?: number;
-}
-
-/**
- * Options for price fetching
- */
-export interface GetUsdPriceOptions {
-  /** Include 24h price change. Default: false */
-  include24hChange?: boolean;
-}
-
-/**
- * Get the CoinGecko ID for a given TokenId.
+ * Get the CoinGecko ID for a token by its symbol.
  *
- * @param tokenId - The SDK token ID
  * @returns CoinGecko coin ID or null if not supported
  */
-export function getCoinGeckoId(tokenId: TokenId): string | null {
-  return TOKEN_TO_COINGECKO[tokenId.toLowerCase()] ?? null;
+export function getCoinGeckoId(token: TokenInfo): string | null {
+  return SYMBOL_TO_COINGECKO[token.symbol.toLowerCase()] ?? null;
 }
 
 /**
- * Fetch the current USD price for a single token.
+ * Fetch current USD prices for multiple tokens in a single CoinGecko request.
  *
- * @param tokenId - Token ID (e.g., 'btc_lightning', 'usdc_pol', 'pol_pol')
- * @param options - Optional settings
- * @returns USD price or null if not found/error
- *
- * @example
- * ```typescript
- * const btcPrice = await getUsdPrice('btc_lightning');
- * if (btcPrice) {
- *   console.log(`BTC: $${btcPrice.toFixed(2)}`);
- * }
- * ```
- */
-export async function getUsdPrice(
-  tokenId: TokenId,
-  options?: GetUsdPriceOptions,
-): Promise<number | null> {
-  const result = await getUsdPrices([tokenId], options);
-  return result[0]?.usdPrice ?? null;
-}
-
-/**
- * Fetch current USD prices for multiple tokens in a single request.
- *
- * @param tokenIds - Array of token IDs
- * @param options - Optional settings
- * @returns Array of price results (same order as input)
- *
- * @example
- * ```typescript
- * const prices = await getUsdPrices(['btc_lightning', 'pol_pol', 'usdc_pol']);
- * for (const p of prices) {
- *   console.log(`${p.tokenId}: $${p.usdPrice?.toFixed(2) ?? 'N/A'}`);
- * }
- * ```
+ * @param tokens - Array of TokenInfo objects
+ * @returns Array of `{ token, usdPrice }` results in the same order as input
  */
 export async function getUsdPrices(
-  tokenIds: TokenId[],
-  options?: GetUsdPriceOptions,
-): Promise<UsdPriceResult[]> {
-  // Map token IDs to CoinGecko IDs, filtering out unsupported tokens
-  const tokenToCoinGecko = new Map<string, string>();
-  for (const tokenId of tokenIds) {
-    const coinGeckoId = getCoinGeckoId(tokenId);
-    if (coinGeckoId) {
-      tokenToCoinGecko.set(tokenId.toLowerCase(), coinGeckoId);
-    }
+  tokens: TokenInfo[],
+): Promise<{ token: TokenInfo; usdPrice: number | null }[]> {
+  // Resolve unique CoinGecko IDs we need to fetch
+  const coinGeckoIds = new Set<string>();
+  for (const token of tokens) {
+    const id = getCoinGeckoId(token);
+    if (id) coinGeckoIds.add(id);
   }
 
-  // Get unique CoinGecko IDs
-  const uniqueCoinGeckoIds = [...new Set(tokenToCoinGecko.values())];
-
-  if (uniqueCoinGeckoIds.length === 0) {
-    // No supported tokens, return null prices for all
-    return tokenIds.map((tokenId) => ({
-      tokenId,
-      usdPrice: null,
-    }));
+  if (coinGeckoIds.size === 0) {
+    return tokens.map((token) => ({ token, usdPrice: null }));
   }
 
-  // Build request URL
-  const include24hChange = options?.include24hChange ?? false;
   const params = new URLSearchParams({
-    ids: uniqueCoinGeckoIds.join(","),
+    ids: [...coinGeckoIds].join(","),
     vs_currencies: "usd",
-    ...(include24hChange && { include_24hr_change: "true" }),
   });
 
   try {
@@ -177,49 +81,22 @@ export async function getUsdPrices(
       console.error(
         `CoinGecko API error: ${response.status} ${response.statusText}`,
       );
-      return tokenIds.map((tokenId) => ({
-        tokenId,
-        usdPrice: null,
-      }));
+      return tokens.map((token) => ({ token, usdPrice: null }));
     }
 
     const data: CoinGeckoSimplePriceResponse = await response.json();
 
-    // Map results back to token IDs
-    return tokenIds.map((tokenId) => {
-      const coinGeckoId = tokenToCoinGecko.get(tokenId.toLowerCase());
-      if (!coinGeckoId) {
-        return { tokenId, usdPrice: null };
-      }
+    return tokens.map((token) => {
+      const coinGeckoId = getCoinGeckoId(token);
+      if (!coinGeckoId) return { token, usdPrice: null };
 
       const priceData = data[coinGeckoId];
-      if (!priceData) {
-        return { tokenId, usdPrice: null };
-      }
+      if (!priceData) return { token, usdPrice: null };
 
-      return {
-        tokenId,
-        usdPrice: priceData.usd,
-        ...(include24hChange &&
-          priceData.usd_24h_change !== undefined && {
-            change24h: priceData.usd_24h_change,
-          }),
-      };
+      return { token, usdPrice: priceData.usd };
     });
   } catch (error) {
     console.error("Failed to fetch USD prices from CoinGecko:", error);
-    return tokenIds.map((tokenId) => ({
-      tokenId,
-      usdPrice: null,
-    }));
+    return tokens.map((token) => ({ token, usdPrice: null }));
   }
-}
-
-/**
- * Get all supported token IDs that have USD price mappings.
- *
- * @returns Array of supported token IDs
- */
-export function getSupportedTokensForUsdPrice(): TokenId[] {
-  return Object.keys(TOKEN_TO_COINGECKO) as TokenId[];
 }
