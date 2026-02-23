@@ -21,7 +21,6 @@ High-level TypeScript/JavaScript SDK:
 - Pure idiomatic TypeScript
 - HD key management for swap parameters
 - Storage providers (LocalStorage, IndexedDB, Memory, SQLite via node-sdk)
-- Real-time WebSocket price feed
 - Published as `@lendasat/lendaswap-sdk-pure` on npm
 
 ### [`examples/`](./examples/) - Example Projects
