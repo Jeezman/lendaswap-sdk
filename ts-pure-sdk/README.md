@@ -375,7 +375,7 @@ When the backend API changes:
 
 1. Download the latest OpenAPI spec from the backend:
    ```bash
-   curl -o openapi.json https://apilendaswap.lendasat.com/api-docs/openapi.json
+   curl -o openapi.json https://api.lendaswap.com/api-docs/openapi.json
    ```
 
 2. Run the generate command:

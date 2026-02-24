@@ -274,7 +274,7 @@ interface ArkadeVhtlcParams {
   preimageHash: string;
 }
 
-const DEFAULT_BASE_URL = "https://apilendaswap.lendasat.com/";
+const DEFAULT_BASE_URL = "https://api.lendaswap.com/";
 
 /** Default Esplora URLs by network */
 const DEFAULT_ESPLORA_URLS: Record<string, string> = {
