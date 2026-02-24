@@ -272,7 +272,10 @@ export async function collabRefundOffchain(
   // checkpoint BEFORE submitting to arkd. arkd strips incoming signatures
   // and only returns checkpoints with its own (server) signature.
   // We must merge the receiver sigs back in before client-signing.
-  type TapScriptSigEntry = [{ pubKey: Uint8Array; leafHash: Uint8Array }, Uint8Array];
+  type TapScriptSigEntry = [
+    { pubKey: Uint8Array; leafHash: Uint8Array },
+    Uint8Array,
+  ];
   const receiverCheckpointSigs = collabRes.data.checkpoint_txs.map((cp) => {
     const tx = Transaction.fromPSBT(base64.decode(cp));
     const inputSigs: TapScriptSigEntry[][] = [];
@@ -281,7 +284,13 @@ export async function collabRefundOffchain(
       const sigs: TapScriptSigEntry[] = [];
       if (input.tapScriptSig) {
         for (const [key, sig] of input.tapScriptSig) {
-          sigs.push([{ pubKey: Uint8Array.from(key.pubKey), leafHash: Uint8Array.from(key.leafHash) }, Uint8Array.from(sig)]);
+          sigs.push([
+            {
+              pubKey: Uint8Array.from(key.pubKey),
+              leafHash: Uint8Array.from(key.leafHash),
+            },
+            Uint8Array.from(sig),
+          ]);
         }
       }
       inputSigs.push(sigs);
