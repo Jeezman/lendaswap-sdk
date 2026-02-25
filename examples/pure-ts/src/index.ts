@@ -39,6 +39,7 @@ import { redeemSwap } from "./commands/redeem.js";
 import { refundSwap } from "./commands/refund.js";
 import { evmFundSwap } from "./commands/evm-fund.js";
 import { evmFundPermit2 } from "./commands/evm-fund-permit2.js";
+import { fundGasless } from "./commands/fund-gasless.js";
 import { evmRefundSwap } from "./commands/evm-refund.js";
 import { evmClaimSwap } from "./commands/evm-claim.js";
 import { showEvmBalances } from "./commands/evm-balances.js";
@@ -112,6 +113,7 @@ Commands:
   swap <from> <to> <amount> <addr>   Create a new swap
   evm-fund <id>                      Fund an EVM HTLC (EVM-to-Arkade/Lightning)
   evm-fund-permit2 <id>              Fund via Permit2 (gasless signing)
+  fund-gasless <id>                  Fund via gasless relay (no wallet/ETH needed)
   watch <id>                         Watch a swap's status (polls backend)
   redeem <id> [destination]          Redeem a swap (when serverfunded)
   refund <id> [addr] [fee]           Refund a swap (addr/fee for on-chain)
@@ -192,14 +194,19 @@ async function main(): Promise<void> {
     case "quote":
       await getQuote(client, args[1], args[2], args[3]);
       break;
-    case "swap":
-      await createSwap(client, args[1], args[2], args[3], args[4], CONFIG.evmMnemonic);
+    case "swap": {
+      const gaslessFlag = process.argv.includes("--gasless");
+      await createSwap(client, args[1], args[2], args[3], args[4], CONFIG.evmMnemonic, gaslessFlag);
       break;
+    }
     case "evm-fund":
       await evmFundSwap(client, swapStorage, args[1], CONFIG.evmMnemonic);
       break;
     case "evm-fund-permit2":
       await evmFundPermit2(client, swapStorage, args[1], CONFIG.evmMnemonic);
+      break;
+    case "fund-gasless":
+      await fundGasless(client, swapStorage, args[1]);
       break;
     case "watch":
       await watchSwap(client, args[1]);

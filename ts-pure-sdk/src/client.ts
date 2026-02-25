@@ -43,6 +43,7 @@ import { delegateClaim, delegateRefund } from "./delegate.js";
 import { broadcastTransaction, findOutputByAddress } from "./esplora.js";
 import { encodeApproveCallData, encodeHtlcErc20RefundCallData } from "./evm";
 import {
+  buildEip2612PermitDigest,
   buildPermit2FundingDigest,
   encodeExecuteAndCreateWithPermit2,
   PERMIT2_ADDRESS,
@@ -105,11 +106,13 @@ import type { BitcoinToEvmSwapResponse } from "./create";
 
 // Re-export coordinator utilities for Arkade-to-EVM redeemAndExecute flow
 export {
+  buildEip2612PermitDigest,
   buildExecuteAndCreateCalls,
   buildPermit2FundingDigest,
   buildRedeemCalls,
   buildRedeemDigest,
   type CoordinatorCall,
+  type Eip2612PermitParams,
   type ExecuteAndCreateCallData,
   type ExecuteAndCreateParams,
   type ExecuteAndCreateWithPermit2Params,
@@ -2685,51 +2688,60 @@ export class Client {
 
     // EVM → Arkade
     if (isEvmToken(sourceChain) && isArkade(targetAsset)) {
-      if (!options.userAddress) {
-        throw new Error("userAddress is required for EVM → Arkade swaps");
+      if (!options.userAddress && !options.gasless) {
+        throw new Error(
+          "userAddress is required for EVM → Arkade swaps (unless gasless)",
+        );
       }
       return this.createEvmToArkadeSwapGeneric({
         targetAddress: options.targetAddress,
         tokenAddress: sourceAsset.token_id,
         evmChainId: Number(sourceChain),
-        userAddress: options.userAddress,
+        userAddress: options.userAddress ?? "",
         sourceAmount: options.sourceAmount
           ? BigInt(options.sourceAmount)
           : undefined,
         targetAmount: options.targetAmount,
         referralCode: options.referralCode,
+        gasless: options.gasless,
       });
     }
 
     // EVM → Bitcoin (on-chain)
     if (isEvmToken(sourceChain) && isBtcOnchain(targetAsset)) {
-      if (!options.userAddress) {
-        throw new Error("userAddress is required for EVM → Bitcoin swaps");
+      if (!options.userAddress && !options.gasless) {
+        throw new Error(
+          "userAddress is required for EVM → Bitcoin swaps (unless gasless)",
+        );
       }
       return this.createEvmToBitcoinSwap({
         tokenAddress: sourceAsset.token_id,
         evmChainId: Number(sourceChain),
-        userAddress: options.userAddress,
+        userAddress: options.userAddress ?? "",
         targetAddress: options.targetAddress,
         sourceAmount: options.sourceAmount
           ? BigInt(options.sourceAmount)
           : undefined,
         targetAmount: options.targetAmount,
         referralCode: options.referralCode,
+        gasless: options.gasless,
       });
     }
 
     // EVM → Lightning
     if (isEvmToken(sourceChain) && isLightning(targetAsset)) {
-      if (!options.userAddress) {
-        throw new Error("userAddress is required for EVM → Lightning swaps");
+      if (!options.userAddress && !options.gasless) {
+        throw new Error(
+          "userAddress is required for EVM → Lightning swaps (unless gasless)",
+        );
       }
       return this.createEvmToLightningSwapGeneric({
         lightningInvoice: options.targetAddress,
         evmChainId: Number(sourceChain),
         tokenAddress: sourceAsset.token_id,
-        userAddress: options.userAddress,
+        userAddress: options.userAddress ?? "",
         referralCode: options.referralCode,
+        gasless: options.gasless,
       });
     }
 
@@ -3189,5 +3201,185 @@ export class Client {
         data: encoded.data,
       },
     };
+  }
+
+  /**
+   * Fund an EVM-sourced swap via the gasless relay.
+   *
+   * Signs the Permit2 authorization and (optionally) an EIP-2612 permit
+   * off-chain, then POSTs them to the server which submits the on-chain
+   * transactions on behalf of the user. No wallet or ETH required.
+   *
+   * @param swapId - The UUID of the swap (must have been created with gasless=true)
+   * @returns The relay transaction hash
+   *
+   * @example
+   * ```ts
+   * const result = await client.fundSwapGasless(swap.response.id);
+   * console.log("Funded via relay:", result.txHash);
+   * ```
+   */
+  async fundSwapGasless(swapId: string): Promise<{ txHash: string }> {
+    // 1. Look up stored swap to get the secret key
+    const storedSwap = await this.getStoredSwap(swapId);
+    if (!storedSwap) {
+      throw new Error(
+        `Swap ${swapId} not found in local storage. Cannot sign without the secret key.`,
+      );
+    }
+
+    const swap = await this.getSwap(swapId);
+
+    if (
+      swap.direction !== "evm_to_arkade" &&
+      swap.direction !== "evm_to_bitcoin" &&
+      swap.direction !== "evm_to_lightning"
+    ) {
+      throw new Error(
+        `Expected evm_to_arkade/evm_to_bitcoin/evm_to_lightning swap, got ${swap.direction}. Gasless fund is for EVM-sourced swaps.`,
+      );
+    }
+
+    const chainId = (swap as { evm_chain_id: number }).evm_chain_id;
+
+    // 2. Fetch Permit2 funding data (includes fee transfer in calls + EIP-2612 data)
+    const baseUrl = this.#config.baseUrl.replace(/\/$/, "");
+    const url = `${baseUrl}/swap/${swapId}/swap-and-lock-calldata-permit2`;
+    const headers: Record<string, string> = {};
+    if (this.#config.apiKey) {
+      headers["X-API-Key"] = this.#config.apiKey;
+    }
+
+    const resp = await fetch(url, { headers });
+    if (!resp.ok) {
+      const body = await resp.text();
+      throw new Error(
+        `Failed to get Permit2 funding data: ${resp.status} ${body}`,
+      );
+    }
+
+    const serverData = (await resp.json()) as {
+      coordinator_address: string;
+      permit2_address: string;
+      source_token_address: string;
+      source_amount: number;
+      lock_token_address: string;
+      preimage_hash: string;
+      claim_address: string;
+      timelock: number;
+      calls: Array<{ target: string; value: string; call_data: string }>;
+      calls_hash: string;
+      eip2612?: {
+        supported: boolean;
+        already_approved: boolean;
+        nonce: number;
+        domain_separator: string;
+      };
+      relay_fee?: string;
+    };
+
+    // 3. Generate random Permit2 nonce and deadline
+    const nonceBytes = new Uint8Array(32);
+    crypto.getRandomValues(nonceBytes);
+    const nonce = BigInt(
+      `0x${Array.from(nonceBytes)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("")}`,
+    );
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 30 * 60); // 30 minutes
+
+    const sourceAmount = BigInt(serverData.source_amount);
+
+    // 4. Build and sign Permit2 EIP-712 digest
+    const digest = buildPermit2FundingDigest({
+      chainId,
+      coordinatorAddress: serverData.coordinator_address,
+      sourceToken: serverData.source_token_address,
+      sourceAmount,
+      preimageHash: serverData.preimage_hash,
+      lockToken: serverData.lock_token_address,
+      claimAddress: serverData.claim_address,
+      refundAddress: serverData.coordinator_address,
+      timelock: serverData.timelock,
+      callsHash: serverData.calls_hash,
+      nonce,
+      deadline,
+    });
+    const permit2Sig = signEvmDigest(storedSwap.secretKey, digest);
+    const rClean = permit2Sig.r.replace(/^0x/, "");
+    const sClean = permit2Sig.s.replace(/^0x/, "");
+    const vHex = permit2Sig.v.toString(16).padStart(2, "0");
+    const compactSignature = `0x${rClean}${sClean}${vHex}`;
+
+    // 5. Derive depositor address
+    const { deriveEvmAddress } = await import("./evm/signing.js");
+    const depositorAddress = deriveEvmAddress(storedSwap.secretKey);
+
+    // 6. If EIP-2612 needed (token supports it and not yet approved to Permit2)
+    let eip2612Permit:
+      | {
+          v: number;
+          r: string;
+          s: string;
+          value: string;
+          deadline: number;
+          nonce: number;
+        }
+      | undefined;
+
+    if (serverData.eip2612?.supported && !serverData.eip2612.already_approved) {
+      const maxUint256 = BigInt(
+        "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      );
+      const eip2612Digest = buildEip2612PermitDigest({
+        domainSeparator: serverData.eip2612.domain_separator,
+        owner: depositorAddress,
+        spender: PERMIT2_ADDRESS,
+        value: maxUint256,
+        nonce: serverData.eip2612.nonce,
+        deadline,
+      });
+      const sig = signEvmDigest(storedSwap.secretKey, eip2612Digest);
+      eip2612Permit = {
+        v: sig.v,
+        r: sig.r.replace(/^0x/, ""),
+        s: sig.s.replace(/^0x/, ""),
+        value: maxUint256.toString(),
+        deadline: Number(deadline),
+        nonce: serverData.eip2612.nonce,
+      };
+    }
+
+    // 7. POST to fund-gasless relay endpoint
+    const fundUrl = `${baseUrl}/swap/${swapId}/fund-gasless`;
+    const fundResp = await fetch(fundUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...headers,
+      },
+      body: JSON.stringify({
+        permit2_nonce: nonce.toString(),
+        permit2_deadline: Number(deadline),
+        permit2_signature: compactSignature,
+        depositor_address: depositorAddress,
+        calls: serverData.calls,
+        eip2612_permit: eip2612Permit,
+      }),
+    });
+
+    if (!fundResp.ok) {
+      const body = await fundResp.text();
+      throw new Error(`Gasless fund relay failed: ${fundResp.status} ${body}`);
+    }
+
+    const result = (await fundResp.json()) as {
+      id: string;
+      status: string;
+      tx_hash: string;
+      message: string;
+    };
+
+    return { txHash: result.tx_hash };
   }
 }

@@ -161,6 +161,8 @@ export interface EvmToLightningSwapGenericOptions {
   userAddress: string;
   /** Optional referral code */
   referralCode?: string;
+  /** Use gasless relay. When true, userAddress is auto-derived from the swap's secretKey. */
+  gasless?: boolean;
 }
 
 /** Result of creating an EVM-to-Lightning swap via the generic endpoint */
@@ -187,6 +189,8 @@ export interface EvmToArkadeSwapGenericOptions {
   targetAmount?: number;
   /** Optional referral code */
   referralCode?: string;
+  /** Use gasless relay. When true, userAddress is auto-derived from the swap's secretKey. */
+  gasless?: boolean;
 }
 
 /** Result of creating an EVM-to-Arkade swap via the generic endpoint */
@@ -213,6 +217,8 @@ export interface EvmToBitcoinSwapOptions {
   targetAmount?: number;
   /** Optional referral code */
   referralCode?: string;
+  /** Use gasless relay. When true, userAddress is auto-derived from the swap's secretKey. */
+  gasless?: boolean;
 }
 
 /** Result of creating an EVM-to-Bitcoin (on-chain) swap */
@@ -263,6 +269,8 @@ export interface CreateSwapOptions {
   /** EVM address of the user (required for EVM→* swaps) */
   userAddress?: string;
   referralCode?: string;
+  /** Whether to use gasless relay for EVM funding (no wallet needed). When true, the SDK-derived EVM address is used as the depositor. */
+  gasless?: boolean;
 }
 
 /** Union of all swap creation results returned by `createSwap`. */

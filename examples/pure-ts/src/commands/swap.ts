@@ -39,6 +39,7 @@ export async function createSwap(
   amount: string | undefined,
   address: string | undefined,
   evmMnemonic?: string,
+  gasless?: boolean,
 ): Promise<void> {
   if (!from || !to || !amount) {
     console.error("Usage: tsx src/index.ts swap <from> <to> <amount> [address]");
@@ -162,8 +163,8 @@ export async function createSwap(
         console.log(`  Using EVM address from EVM_MNEMONIC: ${evmUserAddress}`);
       }
 
-      if (!evmUserAddress) {
-        console.error("Error: EVM to Arkade swaps require your EVM wallet address.");
+      if (!evmUserAddress && !gasless) {
+        console.error("Error: EVM to Arkade swaps require your EVM wallet address (or use --gasless).");
         console.error("Either provide it as the 5th argument or set EVM_MNEMONIC environment variable.");
         console.error("");
         console.error("Usage: tsx src/index.ts swap <sourceToken> btc_arkade <amount> <arkadeAddress> [evmAddress]");
@@ -181,7 +182,7 @@ export async function createSwap(
 
       console.log(`  Chain ID: ${tokenInfo.evmChainId}`);
       console.log(`  Token Address: ${tokenInfo.tokenAddress}`);
-      console.log(`  EVM User Address: ${evmUserAddress}`);
+      console.log(`  EVM User Address: ${evmUserAddress || "(will be auto-derived when gasless)"}`);
       console.log("");
 
       // #region evm-to-arkade
@@ -190,8 +191,9 @@ export async function createSwap(
         targetAddress: address!, // Arkade address (validated above)
         tokenAddress: tokenInfo.tokenAddress,
         evmChainId: tokenInfo.evmChainId,
-        userAddress: evmUserAddress,
+        userAddress: evmUserAddress || "",  // Will be auto-derived when gasless
         sourceAmount: amountBigInt,
+        gasless,
       });
 
       console.log("Swap ID:", result.response.id);
@@ -230,8 +232,8 @@ export async function createSwap(
         console.log(`  Using EVM address from EVM_MNEMONIC: ${evmUserAddress}`);
       }
 
-      if (!evmUserAddress) {
-        console.error("Error: EVM to Lightning swaps require your EVM wallet address.");
+      if (!evmUserAddress && !gasless) {
+        console.error("Error: EVM to Lightning swaps require your EVM wallet address (or use --gasless).");
         console.error("Either provide it as the 4th argument or set EVM_MNEMONIC environment variable.");
         console.error("");
         console.error("Usage: tsx src/index.ts swap <sourceToken> btc_lightning <invoice> [evmAddress]");
@@ -256,7 +258,8 @@ export async function createSwap(
         lightningInvoice: bolt11Invoice,
         evmChainId: tokenInfo.evmChainId,
         tokenAddress: tokenInfo.tokenAddress,
-        userAddress: evmUserAddress,
+        userAddress: evmUserAddress || "",  // Will be auto-derived when gasless
+        gasless,
       });
 
       console.log("HTLC contract:", result.response.evm_htlc_address);
@@ -297,8 +300,8 @@ export async function createSwap(
         console.log(`  Using EVM address from EVM_MNEMONIC: ${evmUserAddress}`);
       }
 
-      if (!evmUserAddress) {
-        console.error("Error: EVM to Bitcoin swaps require your EVM wallet address.");
+      if (!evmUserAddress && !gasless) {
+        console.error("Error: EVM to Bitcoin swaps require your EVM wallet address (or use --gasless).");
         console.error("Either provide it as the 5th argument or set EVM_MNEMONIC environment variable.");
         console.error("");
         console.error("Usage: tsx src/index.ts swap <sourceToken> btc_onchain <amount> <btcAddress> [evmAddress]");
@@ -315,15 +318,17 @@ export async function createSwap(
 
       console.log(`  Chain ID: ${tokenInfo.evmChainId}`);
       console.log(`  Token Address: ${tokenInfo.tokenAddress}`);
-      console.log(`  EVM User Address: ${evmUserAddress}`);
+      console.log(`  EVM User Address: ${evmUserAddress || "(will be auto-derived when gasless)"}`);
       console.log("");
 
       const amountBigInt = BigInt(amount);
       const result = await client.createEvmToBitcoinSwap({
         tokenAddress: tokenInfo.tokenAddress,
         evmChainId: tokenInfo.evmChainId,
-        userAddress: evmUserAddress,
+        userAddress: evmUserAddress || "",
         sourceAmount: amountBigInt,
+        targetAddress: address!,
+        gasless,
       });
 
       console.log("Swap ID:", result.response.id);

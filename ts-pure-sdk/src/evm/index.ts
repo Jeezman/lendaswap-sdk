@@ -5,11 +5,13 @@
  */
 
 export {
+  buildEip2612PermitDigest,
   buildExecuteAndCreateCalls,
   buildPermit2FundingDigest,
   buildRedeemCalls,
   buildRedeemDigest,
   type CoordinatorCall,
+  type Eip2612PermitParams,
   type ExecuteAndCreateCallData,
   type ExecuteAndCreateParams,
   type ExecuteAndCreateWithPermit2Params,

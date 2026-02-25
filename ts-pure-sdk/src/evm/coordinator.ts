@@ -829,6 +829,57 @@ export function encodeExecuteAndCreateWithPermit2(
   };
 }
 
+// ── EIP-2612 Permit digest ───────────────────────────────────────────────────
+
+/** Parameters for building the EIP-2612 permit digest */
+export interface Eip2612PermitParams {
+  /** Token's EIP-712 domain separator (0x-prefixed, from token.DOMAIN_SEPARATOR()) */
+  domainSeparator: string;
+  /** Token owner address */
+  owner: string;
+  /** Spender address (typically Permit2) */
+  spender: string;
+  /** Approval amount */
+  value: bigint;
+  /** Token nonce for the owner (from token.nonces(owner)) */
+  nonce: number;
+  /** Signature deadline (unix timestamp) */
+  deadline: bigint;
+}
+
+/**
+ * Builds the EIP-712 digest for an EIP-2612 token permit.
+ *
+ * This is the standard ERC-2612 permit signature that allows gasless
+ * token approvals. The user signs this to let `spender` (Permit2) spend
+ * their tokens without an on-chain approve transaction.
+ *
+ * @param params - The EIP-2612 permit parameters
+ * @returns The 32-byte digest as hex string with 0x prefix
+ */
+export function buildEip2612PermitDigest(params: Eip2612PermitParams): string {
+  const PERMIT_TYPEHASH = keccak256(
+    stringToUtf8Bytes(
+      "Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)",
+    ),
+  );
+  const structHash = keccak256(
+    abiEncode([
+      { type: "bytes32", value: PERMIT_TYPEHASH },
+      { type: "address", value: params.owner },
+      { type: "address", value: params.spender },
+      { type: "uint256", value: params.value },
+      { type: "uint256", value: BigInt(params.nonce) },
+      { type: "uint256", value: params.deadline },
+    ]),
+  );
+
+  // EIP-712 digest: 0x1901 || domainSeparator || structHash
+  const domainSep = params.domainSeparator.replace(/^0x/, "");
+  const structHashClean = structHash.replace(/^0x/, "");
+  return keccak256(`1901${domainSep}${structHashClean}`);
+}
+
 // ── Internal encoding helpers ────────────────────────────────────────────────
 
 /** Encode ERC20 approve(address,uint256) call data */

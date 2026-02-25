@@ -5,6 +5,7 @@
  */
 
 import type { EvmToLightningSwapResponse } from "../api/client";
+import { deriveEvmAddress } from "../evm/index.js";
 import { bytesToHex } from "../signer/index.js";
 import type {
   CreateSwapContext,
@@ -47,13 +48,18 @@ export async function createEvmToLightningSwapGeneric(
   // by the server, so we don't send it here.
   const userId = bytesToHex(swapParams.userId);
 
+  const userAddress = options.gasless
+    ? deriveEvmAddress(bytesToHex(swapParams.secretKey))
+    : options.userAddress;
+
   const body = {
     user_id: userId,
     lightning_invoice: options.lightningInvoice,
     evm_chain_id: options.evmChainId,
     token_address: options.tokenAddress,
-    user_address: options.userAddress,
+    user_address: userAddress,
     referral_code: options.referralCode,
+    gasless: options.gasless ?? false,
   };
 
   // Use fetch directly since the generated types don't have this endpoint yet

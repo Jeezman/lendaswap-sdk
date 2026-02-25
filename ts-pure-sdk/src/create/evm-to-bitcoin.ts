@@ -5,6 +5,7 @@
  * via Taproot HTLC.
  */
 
+import { deriveEvmAddress } from "../evm/index.js";
 import { bytesToHex } from "../signer/index.js";
 import type {
   CreateSwapContext,
@@ -48,6 +49,10 @@ export async function createEvmToBitcoinSwap(
   const claimPk = bytesToHex(swapParams.publicKey);
   const userId = bytesToHex(swapParams.userId);
 
+  const userAddress = options.gasless
+    ? deriveEvmAddress(bytesToHex(swapParams.secretKey))
+    : options.userAddress;
+
   const { data, error } = await ctx.apiClient.POST("/swap/evm/bitcoin", {
     body: {
       hash_lock: hashLock,
@@ -55,7 +60,7 @@ export async function createEvmToBitcoinSwap(
       user_id: userId,
       token_address: options.tokenAddress,
       evm_chain_id: options.evmChainId,
-      user_address: options.userAddress,
+      user_address: userAddress,
       target_address: options.targetAddress,
       amount_in: options.sourceAmount
         ? Number(options.sourceAmount)
@@ -64,6 +69,7 @@ export async function createEvmToBitcoinSwap(
         ? Number(options.targetAmount)
         : undefined,
       referral_code: options.referralCode,
+      gasless: options.gasless ?? false,
     },
   });
 
