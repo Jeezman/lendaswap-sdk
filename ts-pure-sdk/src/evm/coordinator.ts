@@ -545,6 +545,290 @@ export function encodeRefundTo(
   };
 }
 
+// ── Permit2 constants ─────────────────────────────────────────────────────────
+
+/** Canonical Permit2 deployment address (same on all EVM chains) */
+export const PERMIT2_ADDRESS = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
+
+// Permit2 uses a simpler domain: EIP712Domain(string name, uint256 chainId, address verifyingContract)
+const PERMIT2_DOMAIN_TYPEHASH =
+  "EIP712Domain(string name,uint256 chainId,address verifyingContract)";
+
+const PERMIT2_NAME = "Permit2";
+
+// Full type string for permitWitnessTransferFrom — includes sub-types alphabetically
+const PERMIT_WITNESS_TRANSFER_FROM_TYPEHASH =
+  "PermitWitnessTransferFrom(TokenPermissions permitted,address spender,uint256 nonce,uint256 deadline,ExecuteAndCreate witness)" +
+  "ExecuteAndCreate(bytes32 preimageHash,address token,address claimAddress,address refundAddress,uint256 timelock,bytes32 callsHash)" +
+  "TokenPermissions(address token,uint256 amount)";
+
+const TOKEN_PERMISSIONS_TYPEHASH =
+  "TokenPermissions(address token,uint256 amount)";
+
+const EXECUTE_AND_CREATE_WITNESS_TYPEHASH =
+  "ExecuteAndCreate(bytes32 preimageHash,address token,address claimAddress,address refundAddress,uint256 timelock,bytes32 callsHash)";
+
+// ── Permit2 interfaces ───────────────────────────────────────────────────────
+
+/** Parameters for building the Permit2 EIP-712 digest */
+export interface Permit2FundingParams {
+  /** EVM chain ID */
+  chainId: number;
+  /** HTLCCoordinator contract address (the spender) */
+  coordinatorAddress: string;
+  /** Source token address (what user holds, e.g. USDC) */
+  sourceToken: string;
+  /** Source amount in smallest units */
+  sourceAmount: bigint;
+  /** SHA-256 preimage hash (0x-prefixed, 32 bytes) */
+  preimageHash: string;
+  /** Lock token address (WBTC — the token field in the witness) */
+  lockToken: string;
+  /** Server's claim address */
+  claimAddress: string;
+  /** Refund address — coordinator address for overload 1 (depositor tracking) */
+  refundAddress: string;
+  /** HTLC timelock (unix timestamp) */
+  timelock: number;
+  /** keccak256(abi.encode(calls)) — binds the calls array in the witness */
+  callsHash: string;
+  /** Random Permit2 nonce (one-use) */
+  nonce: bigint;
+  /** Signature expiry timestamp */
+  deadline: bigint;
+}
+
+/** Result of building Permit2-based coordinator funding call data */
+export interface Permit2SignedFundingCallData {
+  /** One-time approve: source token → Permit2 (max uint256) */
+  approve: { to: string; data: string };
+  /** The executeAndCreateWithPermit2 tx */
+  executeAndCreate: { to: string; data: string };
+}
+
+// ── Permit2 EIP-712 digest ───────────────────────────────────────────────────
+
+/**
+ * Builds the EIP-712 digest for Permit2 `permitWitnessTransferFrom` with
+ * an `ExecuteAndCreate` witness.
+ *
+ * The user signs this digest to authorize the coordinator to pull their
+ * source tokens via Permit2 and execute the swap + HTLC creation.
+ *
+ * @param params - The Permit2 funding parameters
+ * @returns The 32-byte digest as hex string with 0x prefix
+ */
+export function buildPermit2FundingDigest(
+  params: Permit2FundingParams,
+): string {
+  // 1. Permit2 domain separator (simpler than standard EIP-712 — no version)
+  const domainSeparator = keccak256(
+    abiEncode([
+      {
+        type: "bytes32",
+        value: keccak256(stringToUtf8Bytes(PERMIT2_DOMAIN_TYPEHASH)),
+      },
+      { type: "bytes32", value: keccak256(stringToUtf8Bytes(PERMIT2_NAME)) },
+      { type: "uint256", value: BigInt(params.chainId) },
+      { type: "address", value: PERMIT2_ADDRESS },
+    ]),
+  );
+
+  // 2. TokenPermissions hash
+  const tokenPermissionsHash = keccak256(
+    abiEncode([
+      {
+        type: "bytes32",
+        value: keccak256(stringToUtf8Bytes(TOKEN_PERMISSIONS_TYPEHASH)),
+      },
+      { type: "address", value: params.sourceToken },
+      { type: "uint256", value: params.sourceAmount },
+    ]),
+  );
+
+  // 3. ExecuteAndCreate witness hash
+  const witnessHash = keccak256(
+    abiEncode([
+      {
+        type: "bytes32",
+        value: keccak256(
+          stringToUtf8Bytes(EXECUTE_AND_CREATE_WITNESS_TYPEHASH),
+        ),
+      },
+      { type: "bytes32", value: params.preimageHash },
+      { type: "address", value: params.lockToken },
+      { type: "address", value: params.claimAddress },
+      { type: "address", value: params.refundAddress },
+      { type: "uint256", value: BigInt(params.timelock) },
+      { type: "bytes32", value: params.callsHash },
+    ]),
+  );
+
+  // 4. Struct hash: PermitWitnessTransferFrom(tokenPermissionsHash, spender, nonce, deadline, witnessHash)
+  const structHash = keccak256(
+    abiEncode([
+      {
+        type: "bytes32",
+        value: keccak256(
+          stringToUtf8Bytes(PERMIT_WITNESS_TRANSFER_FROM_TYPEHASH),
+        ),
+      },
+      { type: "bytes32", value: tokenPermissionsHash },
+      { type: "address", value: params.coordinatorAddress },
+      { type: "uint256", value: params.nonce },
+      { type: "uint256", value: params.deadline },
+      { type: "bytes32", value: witnessHash },
+    ]),
+  );
+
+  // 5. EIP-712 digest: \x19\x01 ‖ domainSeparator ‖ structHash
+  const prefix = new Uint8Array([0x19, 0x01]);
+  const domainBytes = hexToBytes(domainSeparator);
+  const structBytes = hexToBytes(structHash);
+  const message = new Uint8Array(
+    prefix.length + domainBytes.length + structBytes.length,
+  );
+  message.set(prefix, 0);
+  message.set(domainBytes, prefix.length);
+  message.set(structBytes, prefix.length + domainBytes.length);
+
+  return keccak256(message);
+}
+
+// ── executeAndCreateWithPermit2 selector (overload 1: depositor tracking) ────
+// keccak256("executeAndCreateWithPermit2((address,uint256,bytes)[],bytes32,address,address,uint256,address,((address,uint256),uint256,uint256),bytes)")
+const EXECUTE_AND_CREATE_WITH_PERMIT2_SELECTOR = keccak256(
+  stringToUtf8Bytes(
+    "executeAndCreateWithPermit2((address,uint256,bytes)[],bytes32,address,address,uint256,address,((address,uint256),uint256,uint256),bytes)",
+  ),
+).slice(0, 10);
+
+// ── executeAndCreateWithPermit2 calldata ─────────────────────────────────────
+
+/** Parameters for encoding executeAndCreateWithPermit2 call data */
+export interface ExecuteAndCreateWithPermit2Params {
+  /** Array of calls to execute (approve DEX + DEX swap) */
+  calls: CoordinatorCall[];
+  /** SHA-256 preimage hash (32-byte hex with 0x prefix) */
+  preimageHash: string;
+  /** Lock token address (WBTC) */
+  token: string;
+  /** Server's claim address */
+  claimAddress: string;
+  /** HTLC timelock (unix timestamp) */
+  timelock: number;
+  /** Depositor address (the user whose tokens are pulled via Permit2) */
+  depositor: string;
+  /** Source token address (permitted token in the Permit2 struct) */
+  sourceToken: string;
+  /** Source amount (permitted amount) */
+  sourceAmount: bigint;
+  /** Permit2 nonce */
+  nonce: bigint;
+  /** Permit2 deadline */
+  deadline: bigint;
+  /** Signature bytes (compact 65-byte: r || s || v) */
+  signature: string;
+}
+
+/**
+ * Encodes the call data for `coordinator.executeAndCreateWithPermit2(...)` (overload 1).
+ *
+ * Overload 1 uses depositor tracking: the coordinator becomes the HTLC sender,
+ * enabling server-side refundTo/refundAndExecute for expired swaps.
+ *
+ * Signature: executeAndCreateWithPermit2(
+ *   Call[] calls,
+ *   bytes32 preimageHash,
+ *   address token,
+ *   address claimAddress,
+ *   uint256 timelock,
+ *   address depositor,
+ *   ((address,uint256),uint256,uint256) permit,
+ *   bytes signature
+ * )
+ *
+ * @param coordinatorAddress - The HTLCCoordinator contract address
+ * @param params - All parameters for the call
+ * @returns The encoded call data
+ */
+export function encodeExecuteAndCreateWithPermit2(
+  coordinatorAddress: string,
+  params: ExecuteAndCreateWithPermit2Params,
+): ExecuteAndCreateCallData {
+  // ABI head layout (11 words):
+  //   0:  calls offset (dynamic → pointer)
+  //   1:  preimageHash (bytes32)
+  //   2:  token (address)
+  //   3:  claimAddress (address)
+  //   4:  timelock (uint256)
+  //   5:  depositor (address)
+  //   6:  permit.permitted.token (address)     ← inline static struct
+  //   7:  permit.permitted.amount (uint256)    ← inline
+  //   8:  permit.nonce (uint256)               ← inline
+  //   9:  permit.deadline (uint256)            ← inline
+  //   10: signature offset (dynamic → pointer)
+  //
+  // Tail:
+  //   calls data
+  //   signature data (length + padded bytes)
+  const HEAD_WORDS = 11n;
+
+  const preimageHash = normalizeBytes32(params.preimageHash);
+  const token = normalizeAddress(params.token);
+  const claimAddress = normalizeAddress(params.claimAddress);
+  const timelock = encodeUint256(BigInt(params.timelock));
+  const depositor = normalizeAddress(params.depositor);
+
+  // Permit struct fields (encoded inline in the head)
+  const permitToken = normalizeAddress(params.sourceToken);
+  const permitAmount = encodeUint256(params.sourceAmount);
+  const permitNonce = encodeUint256(params.nonce);
+  const permitDeadline = encodeUint256(params.deadline);
+
+  // Encode the calls array (tail)
+  const callsEncoded = encodeCalls(params.calls);
+  const callsEncodedBytes = BigInt(callsEncoded.length / 2);
+
+  // Encode signature as dynamic bytes (tail)
+  const sigClean = params.signature.startsWith("0x")
+    ? params.signature.slice(2)
+    : params.signature;
+  const sigLength = sigClean.length / 2;
+  const sigPaddedLength = Math.ceil(sigLength / 32) * 32;
+  const signatureEncoded =
+    encodeUint256(BigInt(sigLength)) +
+    sigClean.padEnd(sigPaddedLength * 2, "0");
+
+  // Compute offsets (relative to start of params, after selector)
+  const callsOffset = HEAD_WORDS * 32n;
+  const signatureOffset = callsOffset + callsEncodedBytes;
+
+  const data = [
+    EXECUTE_AND_CREATE_WITH_PERMIT2_SELECTOR,
+    encodeUint256(callsOffset), // 0: calls offset
+    preimageHash, // 1: preimageHash
+    token, // 2: token
+    claimAddress, // 3: claimAddress
+    timelock, // 4: timelock
+    depositor, // 5: depositor
+    permitToken, // 6: permit.permitted.token
+    permitAmount, // 7: permit.permitted.amount
+    permitNonce, // 8: permit.nonce
+    permitDeadline, // 9: permit.deadline
+    encodeUint256(signatureOffset), // 10: signature offset
+    callsEncoded, // tail: calls data
+    signatureEncoded, // tail: signature data
+  ].join("");
+
+  return {
+    to: coordinatorAddress,
+    data,
+    functionSignature:
+      "executeAndCreateWithPermit2((address,uint256,bytes)[],bytes32,address,address,uint256,address,((address,uint256),uint256,uint256),bytes)",
+  };
+}
+
 // ── Internal encoding helpers ────────────────────────────────────────────────
 
 /** Encode ERC20 approve(address,uint256) call data */

@@ -522,6 +522,31 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/swap/{id}/swap-and-lock-calldata-permit2": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Returns structured data for funding an EVM-to-BTC swap via Permit2.
+     * @description Instead of pre-encoded calldata, this returns the individual components
+     *     so the SDK can construct the Permit2 EIP-712 signature and
+     *     `executeAndCreateWithPermit2` calldata client-side.
+     *
+     *     The calls array contains only [approve(dexRouter, amount), dexSwap(...)].
+     *     No `transferFrom` — Permit2 handles the token pull.
+     */
+    get: operations["get_coordinator_funding_calldata_permit2"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/tokens": {
     parameters: {
       query?: never;
@@ -2931,6 +2956,47 @@ export interface operations {
     requestBody?: never;
     responses: {
       /** @description Coordinator funding calldata */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/plain": string;
+        };
+      };
+      /** @description Bad request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal server error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  get_coordinator_funding_calldata_permit2: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Swap ID */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Permit2 funding data */
       200: {
         headers: {
           [name: string]: unknown;

@@ -43,6 +43,13 @@ import { delegateClaim, delegateRefund } from "./delegate.js";
 import { broadcastTransaction, findOutputByAddress } from "./esplora.js";
 import { encodeApproveCallData, encodeHtlcErc20RefundCallData } from "./evm";
 import {
+  buildPermit2FundingDigest,
+  encodeExecuteAndCreateWithPermit2,
+  PERMIT2_ADDRESS,
+  type Permit2SignedFundingCallData,
+} from "./evm/index.js";
+import { signEvmDigest } from "./evm/signing.js";
+import {
   buildArkadeClaim,
   type ClaimGaslessResult,
   type ClaimResult,
@@ -99,15 +106,21 @@ import type { BitcoinToEvmSwapResponse } from "./create";
 // Re-export coordinator utilities for Arkade-to-EVM redeemAndExecute flow
 export {
   buildExecuteAndCreateCalls,
+  buildPermit2FundingDigest,
   buildRedeemCalls,
   buildRedeemDigest,
   type CoordinatorCall,
   type ExecuteAndCreateCallData,
   type ExecuteAndCreateParams,
+  type ExecuteAndCreateWithPermit2Params,
   encodeExecuteAndCreate,
+  encodeExecuteAndCreateWithPermit2,
   encodeRedeemAndExecute,
   encodeRefundAndExecute,
   encodeRefundTo,
+  PERMIT2_ADDRESS,
+  type Permit2FundingParams,
+  type Permit2SignedFundingCallData,
   type RedeemAndExecuteCallData,
   type RedeemAndExecuteParams,
   type RedeemDigestParams,
@@ -3008,6 +3021,172 @@ export class Client {
       executeAndCreate: {
         to: serverData.coordinator_address,
         data: serverData.execute_and_create_calldata,
+      },
+    };
+  }
+
+  /**
+   * Gets Permit2-based call data to fund an EVM-to-BTC swap via the HTLCCoordinator.
+   *
+   * Uses Permit2 for gasless token approval: the user signs an off-chain EIP-712
+   * message instead of submitting a separate `approve` tx to the source token.
+   *
+   * The returned `approve` is a one-time max approval of the source token to the
+   * Permit2 contract (can be skipped if already approved). The `executeAndCreate`
+   * calldata includes the Permit2 signature and can be submitted by anyone (relayer).
+   *
+   * @param swapId - The UUID of the swap
+   * @param chainId - The EVM chain ID (e.g. 137 for Polygon, 1 for Ethereum)
+   * @returns The approve (token → Permit2) and executeAndCreateWithPermit2 call data
+   *
+   * @example
+   * ```ts
+   * const funding = await client.getCoordinatorFundingCallDataPermit2(swap.response.id, 137);
+   *
+   * // Step 1: One-time approve source token to Permit2 (can skip if already done)
+   * await wallet.sendTransaction({ to: funding.approve.to, data: funding.approve.data });
+   *
+   * // Step 2: Execute swap + create HTLC (signed via Permit2)
+   * await wallet.sendTransaction({ to: funding.executeAndCreate.to, data: funding.executeAndCreate.data });
+   * ```
+   */
+  async getCoordinatorFundingCallDataPermit2(
+    swapId: string,
+    chainId: number,
+  ): Promise<Permit2SignedFundingCallData> {
+    // 1. Look up stored swap to get the secret key for signing
+    const storedSwap = await this.getStoredSwap(swapId);
+    if (!storedSwap) {
+      throw new Error(
+        `Swap ${swapId} not found in local storage. Cannot sign Permit2 message without the secret key.`,
+      );
+    }
+
+    const swap = await this.getSwap(swapId);
+
+    if (
+      swap.direction !== "evm_to_arkade" &&
+      swap.direction !== "evm_to_bitcoin" &&
+      swap.direction !== "evm_to_lightning"
+    ) {
+      throw new Error(
+        `Expected evm_to_arkade/evm_to_bitcoin/evm_to_lightning swap, got ${swap.direction}. Permit2 fund method is for EVM-sourced swaps.`,
+      );
+    }
+
+    // 2. Fetch Permit2 funding data from server
+    const baseUrl = this.#config.baseUrl.replace(/\/$/, "");
+    const url = `${baseUrl}/swap/${swapId}/swap-and-lock-calldata-permit2`;
+    const headers: Record<string, string> = {};
+    if (this.#config.apiKey) {
+      headers["X-API-Key"] = this.#config.apiKey;
+    }
+
+    const resp = await fetch(url, { headers });
+    if (!resp.ok) {
+      const body = await resp.text();
+      throw new Error(
+        `Failed to get Permit2 funding data: ${resp.status} ${body}`,
+      );
+    }
+
+    const serverData = (await resp.json()) as {
+      coordinator_address: string;
+      permit2_address: string;
+      source_token_address: string;
+      source_amount: number;
+      lock_token_address: string;
+      preimage_hash: string;
+      claim_address: string;
+      timelock: number;
+      calls: Array<{ target: string; value: string; call_data: string }>;
+      calls_hash: string;
+    };
+
+    // 3. Generate random Permit2 nonce and deadline
+    const nonceBytes = new Uint8Array(32);
+    crypto.getRandomValues(nonceBytes);
+    const nonce = BigInt(
+      `0x${Array.from(nonceBytes)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("")}`,
+    );
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 30 * 60); // 30 minutes
+
+    const sourceAmount = BigInt(serverData.source_amount);
+
+    // 4. Build EIP-712 digest
+    // refundAddress = coordinator address for overload 1 (depositor tracking)
+    const digest = buildPermit2FundingDigest({
+      chainId,
+      coordinatorAddress: serverData.coordinator_address,
+      sourceToken: serverData.source_token_address,
+      sourceAmount,
+      preimageHash: serverData.preimage_hash,
+      lockToken: serverData.lock_token_address,
+      claimAddress: serverData.claim_address,
+      refundAddress: serverData.coordinator_address,
+      timelock: serverData.timelock,
+      callsHash: serverData.calls_hash,
+      nonce,
+      deadline,
+    });
+
+    // 5. Sign with the stored secret key
+    const sig = signEvmDigest(storedSwap.secretKey, digest);
+    // Compact signature: r (32 bytes) || s (32 bytes) || v (1 byte)
+    const rClean = sig.r.replace(/^0x/, "");
+    const sClean = sig.s.replace(/^0x/, "");
+    const vHex = sig.v.toString(16).padStart(2, "0");
+    const compactSignature = `0x${rClean}${sClean}${vHex}`;
+
+    // 6. Build calls array for the coordinator
+    const calls = serverData.calls.map((c) => ({
+      target: c.target,
+      value: BigInt(c.value),
+      data: c.call_data,
+    }));
+
+    // Derive depositor address from secret key
+    const { deriveEvmAddress } = await import("./evm/signing.js");
+    const depositorAddress = deriveEvmAddress(storedSwap.secretKey);
+
+    // 7. Encode executeAndCreateWithPermit2 calldata
+    const encoded = encodeExecuteAndCreateWithPermit2(
+      serverData.coordinator_address,
+      {
+        calls,
+        preimageHash: serverData.preimage_hash,
+        token: serverData.lock_token_address,
+        claimAddress: serverData.claim_address,
+        timelock: serverData.timelock,
+        depositor: depositorAddress,
+        sourceToken: serverData.source_token_address,
+        sourceAmount,
+        nonce,
+        deadline,
+        signature: compactSignature,
+      },
+    );
+
+    // 8. Build approve: source token → Permit2 (max uint256, one-time)
+    const maxUint256 = BigInt(
+      "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    );
+    const approve = encodeApproveCallData(
+      serverData.source_token_address,
+      PERMIT2_ADDRESS,
+      maxUint256,
+    );
+
+    return {
+      approve: {
+        to: approve.to,
+        data: approve.data,
+      },
+      executeAndCreate: {
+        to: encoded.to,
+        data: encoded.data,
       },
     };
   }

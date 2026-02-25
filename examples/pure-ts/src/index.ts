@@ -38,11 +38,13 @@ import { watchSwap } from "./commands/watch.js";
 import { redeemSwap } from "./commands/redeem.js";
 import { refundSwap } from "./commands/refund.js";
 import { evmFundSwap } from "./commands/evm-fund.js";
+import { evmFundPermit2 } from "./commands/evm-fund-permit2.js";
 import { evmRefundSwap } from "./commands/evm-refund.js";
 import { evmClaimSwap } from "./commands/evm-claim.js";
 import { showEvmBalances } from "./commands/evm-balances.js";
 import { recoverSwaps } from "./commands/recover.js";
 import { delegateSettle } from "./commands/delegate-settle.js";
+import { deriveSwapEvmAddress } from "./commands/derive-evm-address.js";
 
 // Configuration from environment variables
 export const CONFIG = {
@@ -109,12 +111,14 @@ Commands:
   quote <from> <to> <amount>         Get a quote for a swap
   swap <from> <to> <amount> <addr>   Create a new swap
   evm-fund <id>                      Fund an EVM HTLC (EVM-to-Arkade/Lightning)
+  evm-fund-permit2 <id>              Fund via Permit2 (gasless signing)
   watch <id>                         Watch a swap's status (polls backend)
   redeem <id> [destination]          Redeem a swap (when serverfunded)
   refund <id> [addr] [fee]           Refund a swap (addr/fee for on-chain)
   evm-refund <id> [--direct] [--force] Refund EVM HTLC (--direct: WBTC, --force: skip timelock check)
   evm-claim <id>                     Claim EVM tokens (BTC-to-Ethereum only)
   evm-balances                       Show EVM wallet balances (all chains)
+  derive-evm-address <id>            Derive EVM address from stored swap key
   swaps                              List locally stored swaps
   recover                            Recover swaps from server
   info                               Show wallet info
@@ -173,6 +177,12 @@ async function main(): Promise<void> {
     return;
   }
 
+  // Commands that don't need the API client
+  if (command === "derive-evm-address") {
+    await deriveSwapEvmAddress(swapStorage, args[1]);
+    return;
+  }
+
   const client = await createClient();
 
   switch (command) {
@@ -187,6 +197,9 @@ async function main(): Promise<void> {
       break;
     case "evm-fund":
       await evmFundSwap(client, swapStorage, args[1], CONFIG.evmMnemonic);
+      break;
+    case "evm-fund-permit2":
+      await evmFundPermit2(client, swapStorage, args[1], CONFIG.evmMnemonic);
       break;
     case "watch":
       await watchSwap(client, args[1]);
