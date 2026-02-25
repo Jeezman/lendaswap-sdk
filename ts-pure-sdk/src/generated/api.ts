@@ -236,6 +236,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/support-agents": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Return the configured support agent npubs. */
+    get: operations["get_support_agents"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/swap/arkade/evm": {
     parameters: {
       query?: never;
@@ -1662,6 +1679,12 @@ export interface components {
       /** @description Commitment transaction ID from the batch settlement. */
       commitment_txid: string;
     };
+    SupportAgentInfo: {
+      npub: string;
+    };
+    SupportAgentsResponse: {
+      agents: components["schemas"]["SupportAgentInfo"][];
+    };
     /** @description Common fields shared across all swap directions */
     SwapCommonFields: {
       /**
@@ -2359,6 +2382,26 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  get_support_agents: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description List of support agent npubs */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SupportAgentsResponse"];
         };
       };
     };

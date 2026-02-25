@@ -6,7 +6,7 @@
     "license": {
       "name": ""
     },
-    "version": "0.1.71"
+    "version": "0.2.1"
   },
   "paths": {
     "/api/delegate/cosigner-pk": {
@@ -200,9 +200,7 @@
             "description": "Bad request",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
               }
             }
           },
@@ -583,6 +581,25 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/support-agents": {
+      "get": {
+        "tags": ["support"],
+        "summary": "Return the configured support agent npubs.",
+        "operationId": "get_support_agents",
+        "responses": {
+          "200": {
+            "description": "List of support agent npubs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportAgentsResponse"
                 }
               }
             }
@@ -3649,6 +3666,27 @@
           }
         }
       },
+      "SupportAgentInfo": {
+        "type": "object",
+        "required": ["npub"],
+        "properties": {
+          "npub": {
+            "type": "string"
+          }
+        }
+      },
+      "SupportAgentsResponse": {
+        "type": "object",
+        "required": ["agents"],
+        "properties": {
+          "agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SupportAgentInfo"
+            }
+          }
+        }
+      },
       "SwapCommonFields": {
         "type": "object",
         "description": "Common fields shared across all swap directions",
@@ -4099,6 +4137,10 @@
     {
       "name": "websocket",
       "description": "WebSocket endpoints for real-time data streaming."
+    },
+    {
+      "name": "support",
+      "description": "Support agent configuration."
     }
   ]
 }
