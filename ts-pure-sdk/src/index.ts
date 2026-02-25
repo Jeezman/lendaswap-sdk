@@ -63,6 +63,7 @@ export type {
   OnchainRefundOptions,
   RefundOptions,
   RefundResult,
+  SupportAgentInfo,
 } from "./client.js";
 // Main client
 export { Client, ClientBuilder } from "./client.js";

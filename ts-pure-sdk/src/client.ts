@@ -122,6 +122,11 @@ export type {
   EthereumClaimData,
 } from "./redeem/index.js";
 
+/** A support agent's Nostr identity */
+export interface SupportAgentInfo {
+  npub: string;
+}
+
 /** Result of attempting a refund */
 export interface RefundResult {
   /** Whether the refund was successful */
@@ -683,6 +688,21 @@ export class Client {
       throw new Error("No version data returned");
     }
     return data;
+  }
+
+  /**
+   * Gets the list of support agent npubs from the backend config.
+   * @returns A promise that resolves to an array of support agent info objects.
+   * @throws Error if the request fails.
+   */
+  async getSupportAgents(): Promise<SupportAgentInfo[]> {
+    const baseUrl = this.#config.baseUrl.replace(/\/$/, "");
+    const resp = await fetch(`${baseUrl}/support-agents`);
+    if (!resp.ok) {
+      throw new Error(`Failed to get support agents: ${resp.status}`);
+    }
+    const data: { agents: SupportAgentInfo[] } = await resp.json();
+    return data.agents;
   }
 
   /**
