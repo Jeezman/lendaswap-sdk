@@ -193,7 +193,7 @@ async function buildCoordinatorClaimData(
       };
     }
 
-    if (response.data) {
+    if (response.data.dex_calldata) {
       dexCallData = {
         to: response.data.dex_calldata.to,
         data: response.data.dex_calldata.data,

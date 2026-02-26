@@ -449,6 +449,29 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/swap/{id}/fund-gasless": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Fund an EVM-sourced swap gaslessly via Permit2.
+     * @description The server submits the `executeAndCreateWithPermit2` transaction on the
+     *     depositor's behalf, pulling tokens via the depositor's Permit2 signature.
+     *     If an EIP-2612 permit is provided, the server first submits that to approve
+     *     the Permit2 contract.
+     */
+    post: operations["fund_gasless"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/swap/{id}/redeem-and-swap-calldata": {
     parameters: {
       query?: never;
@@ -457,10 +480,11 @@ export interface paths {
       cookie?: never;
     };
     /**
-     * Returns fresh 1inch DEX calldata for an EVM-targeted swap (Arkade-to-EVM or Bitcoin-to-EVM).
-     * @description The calldata is generated with `receiver = destination` so that 1inch
-     *     sends the output tokens directly to the user's address, avoiding an
-     *     extra sweep transfer.
+     * Returns the gasless claim data for an EVM-targeted swap.
+     * @description For non-WBTC targets: fetches fresh 1inch DEX calldata with `receiver = destination`.
+     *     For WBTC-direct targets: returns only the gasless fee and calls_hash (no DEX data).
+     *
+     *     Always returns `calls_hash` which the client must include in the EIP-712 redeem signature.
      */
     get: operations["get_dex_calldata"];
     put?: never;
@@ -488,32 +512,6 @@ export interface paths {
      *     Both are permissionless after the timelock expires.
      */
     get: operations["get_refund_calldata"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/swap/{id}/swap-and-lock-calldata": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Returns the calldata needed to fund an EVM-to-Arkade swap via the HTLCCoordinator.
-     * @description The coordinator atomically:
-     *     1. Pulls source tokens from the user via `transferFrom`
-     *     2. Approves the 1inch router to spend the source tokens
-     *     3. Swaps source tokens to WBTC via 1inch
-     *     4. Locks the WBTC into an HTLC
-     *
-     *     The caller must first approve the source token to the **coordinator** address.
-     */
-    get: operations["get_coordinator_funding_calldata"];
     put?: never;
     post?: never;
     delete?: never;
@@ -970,6 +968,12 @@ export interface components {
       /** @description User's EVM address to receive tokens */
       user_address_evm: string;
     };
+    /** @description A single call in the coordinator's Call[] array. */
+    CallJson: {
+      call_data: string;
+      target: string;
+      value: string;
+    };
     /**
      * @description Supported blockchain networks.
      *     EVM chains serialize to their chain ID as a string (e.g. "137" for Polygon).
@@ -1059,6 +1063,16 @@ export interface components {
       /** @description Native token value (usually "0") */
       value?: string;
     };
+    /** @description EIP-2612 permit signature for gasless token->Permit2 approval. */
+    Eip2612Permit: {
+      /** Format: int64 */
+      deadline: number;
+      r: string;
+      s: string;
+      /** Format: int32 */
+      v: number;
+      value: string;
+    };
     ErrorResponse: {
       error: string;
     };
@@ -1120,6 +1134,8 @@ export interface components {
        * @description Numeric EVM chain ID: 1 (Ethereum), 137 (Polygon), 42161 (Arbitrum).
        */
       evm_chain_id: number;
+      /** @description Whether to use gasless relay for funding (server submits tx on behalf of user). */
+      gasless?: boolean;
       /** @description Hash lock (0x-prefixed 32-byte hex). Client generates secret, computes SHA256(secret). */
       hash_lock: string;
       /** @description User's Arkade VHTLC claim key (receiver). */
@@ -1156,6 +1172,8 @@ export interface components {
       evm_refund_locktime: number;
       /** Format: int64 */
       fee_sats: number;
+      /** @description Whether this swap was created with gasless relay (Permit2) */
+      gasless: boolean;
       hash_lock: string;
       id: string;
       network: string;
@@ -1204,6 +1222,8 @@ export interface components {
        * @description Numeric EVM chain ID: 1 (Ethereum), 137 (Polygon), 42161 (Arbitrum).
        */
       evm_chain_id: number;
+      /** @description Whether to use gasless relay for funding (server submits tx on behalf of user). */
+      gasless?: boolean;
       /** @description Hash lock (0x-prefixed 32-byte hex). Client generates secret, computes SHA256(secret). */
       hash_lock: string;
       /** @description Optional referral code for tracking. */
@@ -1265,6 +1285,8 @@ export interface components {
       evm_refund_locktime: number;
       /** Format: int64 */
       fee_sats: number;
+      /** @description Whether this swap was created with gasless relay (Permit2) */
+      gasless: boolean;
       id: string;
       network: string;
       /** @description Server's EVM address (claims the EVM HTLC) */
@@ -1348,6 +1370,8 @@ export interface components {
        * @description Numeric EVM chain ID: 1 (Ethereum), 137 (Polygon), 42161 (Arbitrum).
        */
       evm_chain_id: number;
+      /** @description Whether to use gasless relay for funding (server submits tx on behalf of user). */
+      gasless?: boolean;
       /**
        * @description User's Lightning BOLT11 invoice to receive payment.
        *     The payment hash from this invoice becomes the HTLC hash_lock.
@@ -1382,6 +1406,8 @@ export interface components {
       evm_refund_locktime: number;
       /** Format: int64 */
       fee_sats: number;
+      /** @description Whether this swap was created with gasless relay (Permit2) */
+      gasless: boolean;
       hash_lock: string;
       id: string;
       /** @description Whether the Lightning payment has been made */
@@ -1419,6 +1445,27 @@ export interface components {
       chains: {
         [key: string]: components["schemas"]["EvmTokenInfo"][];
       };
+    };
+    FundGaslessRequest: {
+      /** @description The calls array (includes fee transfer + DEX swap) */
+      calls: components["schemas"]["CallJson"][];
+      /** @description Depositor's EVM address */
+      depositor_address: string;
+      eip2612_permit?: null | components["schemas"]["Eip2612Permit"];
+      /**
+       * Format: int64
+       * @description Permit2 signature deadline (unix timestamp)
+       */
+      permit2_deadline: number;
+      /** @description Permit2 nonce (decimal string) */
+      permit2_nonce: string;
+      /** @description Compact Permit2 signature (hex: r || s || v) */
+      permit2_signature: string;
+    };
+    FundGaslessResponse: {
+      id: string;
+      message: string;
+      tx_hash: string;
     };
     GetSwapResponse:
       | (components["schemas"]["BtcToArkadeSwapResponse"] & {
@@ -1667,8 +1714,12 @@ export interface components {
     };
     /** @description Response containing fresh DEX calldata and the gasless fee that will be deducted at claim time. */
     RedeemAndSwapResponse: {
-      /** @description DEX swap calldata from 1inch */
-      dex_calldata: components["schemas"]["DexCallData"];
+      /**
+       * @description keccak256(abi.encode(calls)) — the hash of the full calls array (including fee transfer).
+       *     Must be included in the client's EIP-712 redeem signature to prevent call substitution.
+       */
+      calls_hash: string;
+      dex_calldata?: null | components["schemas"]["DexCallData"];
       /**
        * Format: int64
        * @description Gasless fee in WBTC sats, estimated at calldata-fetch time.
@@ -2023,6 +2074,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Swap ID */
         id: string;
       };
       cookie?: never;
@@ -2085,6 +2137,7 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @description Swap ID */
         id: string;
       };
       cookie?: never;
@@ -2853,6 +2906,51 @@ export interface operations {
       };
     };
   };
+  fund_gasless: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Swap ID */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FundGaslessRequest"];
+      };
+    };
+    responses: {
+      /** @description Swap funded successfully via gasless relay */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FundGaslessResponse"];
+        };
+      };
+      /** @description Bad request - swap not found or in wrong state */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal server error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
   get_dex_calldata: {
     parameters: {
       query: {
@@ -2921,47 +3019,6 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["RefundCalldataResponse"];
-        };
-      };
-      /** @description Bad request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-      /** @description Internal server error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-    };
-  };
-  get_coordinator_funding_calldata: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Swap ID */
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Coordinator funding calldata */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "text/plain": string;
         };
       };
       /** @description Bad request */
