@@ -6,16 +6,14 @@
 
 export {
   buildEip2612PermitDigest,
-  buildExecuteAndCreateCalls,
   buildPermit2FundingDigest,
+  buildPermit2TypedData,
   buildRedeemCalls,
   buildRedeemDigest,
   type CoordinatorCall,
   type Eip2612PermitParams,
   type ExecuteAndCreateCallData,
-  type ExecuteAndCreateParams,
   type ExecuteAndCreateWithPermit2Params,
-  encodeExecuteAndCreate,
   encodeExecuteAndCreateWithPermit2,
   encodeRedeemAndExecute,
   encodeRefundAndExecute,
@@ -24,11 +22,13 @@ export {
   PERMIT2_ADDRESS,
   type Permit2FundingParams,
   type Permit2SignedFundingCallData,
+  type Permit2TypedData,
   type RedeemAndExecuteCallData,
   type RedeemAndExecuteParams,
   type RedeemDigestParams,
   type RefundAndExecuteParams,
   type RefundToParams,
+  type UnsignedPermit2FundingData,
 } from "./coordinator.js";
 export {
   type ApproveCallData,

@@ -48,6 +48,8 @@ export interface RedeemDigestParams {
   sweepToken: string;
   /** Minimum amount of sweepToken to receive (slippage protection) */
   minAmountOut: bigint;
+  /** Hash of the calls array (prevents call substitution attacks) */
+  callsHash: string;
 }
 
 /** Parameters for encoding redeemAndExecute call data */
@@ -88,23 +90,7 @@ export interface RedeemAndExecuteCallData {
   functionSignature: string;
 }
 
-// ── executeAndCreate interfaces (EVM-to-BTC coordinator flow) ────────────────
-
-/** Parameters for encoding executeAndCreate call data */
-export interface ExecuteAndCreateParams {
-  /** Array of calls to execute (approve + DEX swap) */
-  calls: CoordinatorCall[];
-  /** SHA256 hash of the preimage (32-byte hex with 0x prefix) */
-  preimageHash: string;
-  /** WBTC token address (token locked in the HTLC) */
-  token: string;
-  /** Claim address (server's EVM address that can claim) */
-  claimAddress: string;
-  /** HTLC timelock (unix timestamp) */
-  timelock: number;
-}
-
-/** Result of building executeAndCreate call data */
+/** Result of building coordinator call data (used by refund, Permit2, etc.) */
 export interface ExecuteAndCreateCallData {
   /** The coordinator contract address */
   to: string;
@@ -153,9 +139,9 @@ export interface RefundToParams {
 const EIP712_DOMAIN_TYPEHASH =
   "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)";
 const REDEEM_TYPEHASH =
-  "Redeem(bytes32 preimage,uint256 amount,address token,address sender,uint256 timelock,address caller,address destination,address sweepToken,uint256 minAmountOut)";
+  "Redeem(bytes32 preimage,uint256 amount,address token,address sender,uint256 timelock,address caller,address destination,address sweepToken,uint256 minAmountOut,bytes32 callsHash)";
 const HTLC_NAME = "HTLCErc20";
-const HTLC_VERSION = "2";
+const HTLC_VERSION = "3";
 
 // ── redeemAndExecute selector ────────────────────────────────────────────────
 // keccak256("redeemAndExecute(bytes32,uint256,address,address,uint256,(address,uint256,bytes)[],address,uint256,address,uint8,bytes32,bytes32)")
@@ -233,6 +219,7 @@ export function buildRedeemDigest(params: RedeemDigestParams): string {
       { type: "address", value: params.destination },
       { type: "address", value: params.sweepToken },
       { type: "uint256", value: params.minAmountOut },
+      { type: "bytes32", value: params.callsHash },
     ]),
   );
 
@@ -369,14 +356,6 @@ export function encodeRedeemAndExecute(
   };
 }
 
-// ── executeAndCreate selector ────────────────────────────────────────────────
-// keccak256("executeAndCreate((address,uint256,bytes)[],bytes32,address,address,uint256)")
-const EXECUTE_AND_CREATE_SELECTOR = keccak256(
-  stringToUtf8Bytes(
-    "executeAndCreate((address,uint256,bytes)[],bytes32,address,address,uint256)",
-  ),
-).slice(0, 10);
-
 // ── refundAndExecute selector ────────────────────────────────────────────────
 // keccak256("refundAndExecute(bytes32,uint256,address,address,uint256,(address,uint256,bytes)[],address,uint256)")
 const REFUND_AND_EXECUTE_SELECTOR = keccak256(
@@ -390,78 +369,6 @@ const REFUND_AND_EXECUTE_SELECTOR = keccak256(
 const REFUND_TO_SELECTOR = keccak256(
   stringToUtf8Bytes("refundTo(bytes32,uint256,address,address,uint256)"),
 ).slice(0, 10);
-
-// ── executeAndCreate calldata ────────────────────────────────────────────────
-
-/**
- * Builds the calls array for `executeAndCreate` — approve source token to DEX + execute swap.
- *
- * @param sourceToken - Source token contract address (e.g. USDC)
- * @param sourceAmount - Amount of source token to approve
- * @param dexCallData - DEX swap calldata (from 1inch)
- * @returns Array of CoordinatorCall structs
- */
-export function buildExecuteAndCreateCalls(
-  sourceToken: string,
-  sourceAmount: bigint,
-  dexCallData: { to: string; data: string; value?: string },
-): CoordinatorCall[] {
-  const approveData = encodeApprove(dexCallData.to, sourceAmount);
-
-  return [
-    {
-      target: sourceToken,
-      value: 0n,
-      data: approveData,
-    },
-    {
-      target: dexCallData.to,
-      value: BigInt(dexCallData.value || "0"),
-      data: dexCallData.data,
-    },
-  ];
-}
-
-/**
- * Encodes the call data for `coordinator.executeAndCreate(...)`.
- *
- * Signature: executeAndCreate(Call[] calls, bytes32 preimageHash, address token, address claimAddress, uint256 timelock)
- *
- * @param coordinatorAddress - The HTLCCoordinator contract address
- * @param params - All parameters for the call
- * @returns The encoded call data
- */
-export function encodeExecuteAndCreate(
-  coordinatorAddress: string,
-  params: ExecuteAndCreateParams,
-): ExecuteAndCreateCallData {
-  // Head: calls_offset, preimageHash, token, claimAddress, timelock (5 slots)
-  const callsOffset = encodeUint256(5n * 32n);
-  const preimageHash = normalizeBytes32(params.preimageHash);
-  const token = normalizeAddress(params.token);
-  const claimAddress = normalizeAddress(params.claimAddress);
-  const timelock = encodeUint256(BigInt(params.timelock));
-
-  // Encode the calls array (tail)
-  const callsEncoded = encodeCalls(params.calls);
-
-  const data = [
-    EXECUTE_AND_CREATE_SELECTOR,
-    callsOffset,
-    preimageHash,
-    token,
-    claimAddress,
-    timelock,
-    callsEncoded,
-  ].join("");
-
-  return {
-    to: coordinatorAddress,
-    data,
-    functionSignature:
-      "executeAndCreate((address,uint256,bytes)[],bytes32,address,address,uint256)",
-  };
-}
 
 /**
  * Encodes the call data for `coordinator.refundAndExecute(...)`.
@@ -606,6 +513,69 @@ export interface Permit2SignedFundingCallData {
   executeAndCreate: { to: string; data: string };
 }
 
+/**
+ * EIP-712 typed data structure for Permit2 permitWitnessTransferFrom.
+ *
+ * Compatible with viem/wagmi's `signTypedData` and `eth_signTypedData_v4`.
+ * Used in the sovereign flow where the user's browser wallet signs
+ * the Permit2 message directly.
+ */
+export interface Permit2TypedData {
+  domain: {
+    name: string;
+    chainId: number;
+    verifyingContract: string;
+  };
+  types: {
+    PermitWitnessTransferFrom: Array<{ name: string; type: string }>;
+    TokenPermissions: Array<{ name: string; type: string }>;
+    ExecuteAndCreate: Array<{ name: string; type: string }>;
+  };
+  primaryType: "PermitWitnessTransferFrom";
+  message: {
+    permitted: { token: string; amount: bigint };
+    spender: string;
+    nonce: bigint;
+    deadline: bigint;
+    witness: {
+      preimageHash: string;
+      token: string;
+      claimAddress: string;
+      refundAddress: string;
+      timelock: bigint;
+      callsHash: string;
+    };
+  };
+}
+
+/** Unsigned Permit2 funding data returned by `getPermit2FundingParamsUnsigned`. */
+export interface UnsignedPermit2FundingData {
+  /** Coordinator contract address */
+  coordinatorAddress: string;
+  /** Source token address */
+  sourceTokenAddress: string;
+  /** Source amount in smallest units */
+  sourceAmount: bigint;
+  /** Lock token address (WBTC) */
+  lockTokenAddress: string;
+  /** Preimage hash */
+  preimageHash: string;
+  /** Server's claim address */
+  claimAddress: string;
+  /** HTLC timelock */
+  timelock: number;
+  /** Calls array for the coordinator */
+  calls: CoordinatorCall[];
+  /** Calls hash */
+  callsHash: string;
+  /** Random Permit2 nonce */
+  nonce: bigint;
+  /** Signature deadline */
+  deadline: bigint;
+  /** EIP-712 typed data for wallet signing (pass to signTypedData) */
+  typedData: Permit2TypedData;
+}
+
 // ── Permit2 EIP-712 digest ───────────────────────────────────────────────────
 
 /**
@@ -693,6 +663,76 @@ export function buildPermit2FundingDigest(
   message.set(structBytes, prefix.length + domainBytes.length);
 
   return keccak256(message);
+}
+
+// ── Permit2 typed data for wallet signing ──────────────────────────────────
+
+/**
+ * Builds the EIP-712 typed data structure for Permit2 `permitWitnessTransferFrom`
+ * with an `ExecuteAndCreate` witness.
+ *
+ * This is intended for the "sovereign" flow where the user's browser wallet
+ * signs the Permit2 message via `eth_signTypedData_v4` / wagmi's `signTypedData`.
+ *
+ * @param params - The Permit2 funding parameters
+ * @returns EIP-712 typed data compatible with viem/wagmi's `signTypedData`
+ *
+ * @example
+ * ```ts
+ * const typedData = buildPermit2TypedData(params);
+ * // In the browser with wagmi:
+ * const signature = await walletClient.signTypedData(typedData);
+ * ```
+ */
+export function buildPermit2TypedData(
+  params: Permit2FundingParams,
+): Permit2TypedData {
+  return {
+    domain: {
+      name: PERMIT2_NAME,
+      chainId: params.chainId,
+      verifyingContract: PERMIT2_ADDRESS,
+    },
+    types: {
+      PermitWitnessTransferFrom: [
+        { name: "permitted", type: "TokenPermissions" },
+        { name: "spender", type: "address" },
+        { name: "nonce", type: "uint256" },
+        { name: "deadline", type: "uint256" },
+        { name: "witness", type: "ExecuteAndCreate" },
+      ],
+      TokenPermissions: [
+        { name: "token", type: "address" },
+        { name: "amount", type: "uint256" },
+      ],
+      ExecuteAndCreate: [
+        { name: "preimageHash", type: "bytes32" },
+        { name: "token", type: "address" },
+        { name: "claimAddress", type: "address" },
+        { name: "refundAddress", type: "address" },
+        { name: "timelock", type: "uint256" },
+        { name: "callsHash", type: "bytes32" },
+      ],
+    },
+    primaryType: "PermitWitnessTransferFrom",
+    message: {
+      permitted: {
+        token: params.sourceToken,
+        amount: params.sourceAmount,
+      },
+      spender: params.coordinatorAddress,
+      nonce: params.nonce,
+      deadline: params.deadline,
+      witness: {
+        preimageHash: params.preimageHash,
+        token: params.lockToken,
+        claimAddress: params.claimAddress,
+        refundAddress: params.refundAddress,
+        timelock: BigInt(params.timelock),
+        callsHash: params.callsHash,
+      },
+    },
+  };
 }
 
 // ── executeAndCreateWithPermit2 selector (overload 1: depositor tracking) ────

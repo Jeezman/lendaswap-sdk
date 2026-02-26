@@ -45,9 +45,11 @@ import { encodeApproveCallData, encodeHtlcErc20RefundCallData } from "./evm";
 import {
   buildEip2612PermitDigest,
   buildPermit2FundingDigest,
+  buildPermit2TypedData,
   encodeExecuteAndCreateWithPermit2,
   PERMIT2_ADDRESS,
   type Permit2SignedFundingCallData,
+  type UnsignedPermit2FundingData,
 } from "./evm/index.js";
 import { signEvmDigest } from "./evm/signing.js";
 import {
@@ -107,16 +109,12 @@ import type { BitcoinToEvmSwapResponse } from "./create";
 // Re-export coordinator utilities for Arkade-to-EVM redeemAndExecute flow
 export {
   buildEip2612PermitDigest,
-  buildExecuteAndCreateCalls,
   buildPermit2FundingDigest,
   buildRedeemCalls,
   buildRedeemDigest,
   type CoordinatorCall,
   type Eip2612PermitParams,
-  type ExecuteAndCreateCallData,
-  type ExecuteAndCreateParams,
   type ExecuteAndCreateWithPermit2Params,
-  encodeExecuteAndCreate,
   encodeExecuteAndCreateWithPermit2,
   encodeRedeemAndExecute,
   encodeRefundAndExecute,
@@ -245,24 +243,6 @@ export interface EvmFundingCallData {
     /** HTLC contract address to call */
     to: string;
     /** Encoded createSwap call data (from server) */
-    data: string;
-  };
-}
-
-/** Result of getting coordinator funding call data for EVM-to-BTC swaps */
-export interface CoordinatorFundingCallData {
-  /** Call data for approving source token spend to the coordinator */
-  approve: {
-    /** Source token contract address to call */
-    to: string;
-    /** Encoded approve(coordinator, amount) call data */
-    data: string;
-  };
-  /** Call data for executeAndCreate on the coordinator */
-  executeAndCreate: {
-    /** Coordinator contract address to call */
-    to: string;
-    /** Encoded executeAndCreate call data */
     data: string;
   };
 }
@@ -1185,35 +1165,50 @@ export class Client {
       );
     }
 
-    // Fetch DEX calldata if the target token differs from WBTC
+    // Always fetch redeem calldata from the server to get calls_hash.
+    // For non-WBTC targets this also returns DEX calldata.
+    const slippage = options?.slippage ?? 1.0;
+    const calldataResponse = await this.#apiClient.GET(
+      "/swap/{id}/redeem-and-swap-calldata",
+      {
+        params: {
+          path: { id },
+          query: { destination, slippage },
+        },
+      },
+    );
+    if (calldataResponse.error) {
+      throw new Error(
+        `Failed to fetch redeem calldata: ${calldataResponse.error.error}`,
+      );
+    }
+
+    // Cast to the updated response shape (includes calls_hash and optional dex_calldata).
+    // The generated API types may lag behind the server; this will align after regeneration.
+    const responseData = calldataResponse.data as
+      | {
+          dex_calldata?: { to: string; data: string; value: string };
+          gasless_fee_sats: number;
+          calls_hash: string;
+        }
+      | undefined;
+
     const targetTokenAddress = String(swap.target_token.token_id);
     const needsDexSwap =
       targetTokenAddress.toLowerCase() !== swap.wbtc_address.toLowerCase();
 
     let dexCalldata: { to: string; data: string; value: string } | undefined;
-    if (needsDexSwap) {
-      const slippage = options?.slippage ?? 1.0;
-      const calldataResponse = await this.#apiClient.GET(
-        "/swap/{id}/redeem-and-swap-calldata",
-        {
-          params: {
-            path: { id },
-            query: { destination, slippage },
-          },
-        },
-      );
-      if (calldataResponse.error) {
-        throw new Error(
-          `Failed to fetch DEX calldata: ${calldataResponse.error.error}`,
-        );
-      }
-      if (calldataResponse.data) {
-        dexCalldata = {
-          to: calldataResponse.data.dex_calldata.to,
-          data: calldataResponse.data.dex_calldata.data,
-          value: calldataResponse.data.dex_calldata.value,
-        };
-      }
+    if (needsDexSwap && responseData?.dex_calldata) {
+      dexCalldata = {
+        to: responseData.dex_calldata.to,
+        data: responseData.dex_calldata.data,
+        value: responseData.dex_calldata.value,
+      };
+    }
+
+    const callsHash = responseData?.calls_hash;
+    if (!callsHash) {
+      throw new Error("Server did not return calls_hash for redeem signature");
     }
 
     return gaslessClaim({
@@ -1223,6 +1218,7 @@ export class Client {
       swap,
       destination,
       dexCalldata,
+      callsHash,
     });
   }
 
@@ -2943,101 +2939,6 @@ export class Client {
   // =========================================================================
 
   /**
-   * Gets call data to fund an EVM-to-BTC swap via the HTLCCoordinator.
-   *
-   * The coordinator atomically swaps source tokens (e.g. USDC) to WBTC via DEX
-   * and locks the WBTC into an HTLC in a single transaction.
-   *
-   * Fetches the coordinator calldata from the server, which builds the 1inch
-   * swap calldata and computes the refundCallsHash.
-   *
-   * @param swapId - The UUID of the swap.
-   * @param approveMax - If true, approves max uint256. If false, approves exact amount. Default: true.
-   * @returns The approve and executeAndCreate call data.
-   *
-   * @example
-   * ```ts
-   * const swap = await client.createEvmToArkadeSwap({...});
-   * const funding = await client.getCoordinatorFundingCallData(swap.response.id);
-   *
-   * // Step 1: Approve source token to coordinator
-   * await wallet.sendTransaction({ to: funding.approve.to, data: funding.approve.data });
-   *
-   * // Step 2: Execute swap + create HTLC
-   * await wallet.sendTransaction({ to: funding.executeAndCreate.to, data: funding.executeAndCreate.data });
-   * ```
-   */
-  async getCoordinatorFundingCallData(
-    swapId: string,
-    approveMax = true,
-  ): Promise<CoordinatorFundingCallData> {
-    const swap = await this.getSwap(swapId);
-
-    if (
-      swap.direction !== "evm_to_arkade" &&
-      swap.direction !== "evm_to_bitcoin" &&
-      swap.direction !== "evm_to_lightning"
-    ) {
-      throw new Error(
-        `Expected evm_to_arkade/evm_to_bitcoin/evm_to_lightning swap, got ${swap.direction}. Coordinator fund call data method is for EVM-sourced swaps via coordinator.`,
-      );
-    }
-
-    // Get source amount based on swap direction
-    // All EVM-sourced swaps: source_amount is already in smallest units (integer)
-    const evmSwap = swap as GetSwapResponse & {
-      source_amount: number;
-    };
-    const exactAmount = BigInt(evmSwap.source_amount);
-
-    // Fetch coordinator funding calldata from server
-    const baseUrl = this.#config.baseUrl.replace(/\/$/, "");
-    const url = `${baseUrl}/swap/${swapId}/swap-and-lock-calldata`;
-    const headers: Record<string, string> = {};
-    if (this.#config.apiKey) {
-      headers["X-API-Key"] = this.#config.apiKey;
-    }
-
-    const resp = await fetch(url, { headers });
-    if (!resp.ok) {
-      const body = await resp.text();
-      throw new Error(
-        `Failed to get coordinator funding calldata: ${resp.status} ${body}`,
-      );
-    }
-
-    const serverData = (await resp.json()) as {
-      coordinator_address: string;
-      source_token_address: string;
-      approve_amount: string;
-      execute_and_create_calldata: string;
-    };
-
-    // Build approve call data: approve source token to coordinator
-    const maxUint256 = BigInt(
-      "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-    );
-    const approveAmount = approveMax ? maxUint256 : exactAmount;
-
-    const approve = encodeApproveCallData(
-      serverData.source_token_address,
-      serverData.coordinator_address,
-      approveAmount,
-    );
-
-    return {
-      approve: {
-        to: approve.to,
-        data: approve.data,
-      },
-      executeAndCreate: {
-        to: serverData.coordinator_address,
-        data: serverData.execute_and_create_calldata,
-      },
-    };
-  }
-
-  /**
    * Gets Permit2-based call data to fund an EVM-to-BTC swap via the HTLCCoordinator.
    *
    * Uses Permit2 for gasless token approval: the user signs an off-chain EIP-712
@@ -3200,6 +3101,144 @@ export class Client {
         to: encoded.to,
         data: encoded.data,
       },
+    };
+  }
+
+  /**
+   * Get unsigned Permit2 funding parameters for the sovereign flow.
+   *
+   * Returns the EIP-712 typed data structure and all parameters needed
+   * for the user's browser wallet to sign via `signTypedData` and then
+   * encode + submit the `executeAndCreateWithPermit2` transaction.
+   *
+   * Unlike `getCoordinatorFundingCallDataPermit2`, this method does NOT
+   * sign the Permit2 message — the caller is responsible for obtaining
+   * the signature from the user's wallet.
+   *
+   * @param swapId - The UUID of the swap
+   * @param chainId - The EVM chain ID
+   * @returns Unsigned Permit2 funding data including typed data for signing
+   *
+   * @example
+   * ```ts
+   * const params = await client.getPermit2FundingParamsUnsigned(swapId, chainId);
+   *
+   * // In the browser with wagmi/viem:
+   * const signature = await walletClient.signTypedData(params.typedData);
+   *
+   * // Encode the final calldata
+   * const calldata = encodeExecuteAndCreateWithPermit2(
+   *   params.coordinatorAddress,
+   *   {
+   *     calls: params.calls,
+   *     preimageHash: params.preimageHash,
+   *     token: params.lockTokenAddress,
+   *     claimAddress: params.claimAddress,
+   *     timelock: params.timelock,
+   *     depositor: userWalletAddress,
+   *     sourceToken: params.sourceTokenAddress,
+   *     sourceAmount: params.sourceAmount,
+   *     nonce: params.nonce,
+   *     deadline: params.deadline,
+   *     signature,
+   *   },
+   * );
+   * ```
+   */
+  async getPermit2FundingParamsUnsigned(
+    swapId: string,
+    chainId: number,
+  ): Promise<UnsignedPermit2FundingData> {
+    const swap = await this.getSwap(swapId);
+
+    if (
+      swap.direction !== "evm_to_arkade" &&
+      swap.direction !== "evm_to_bitcoin" &&
+      swap.direction !== "evm_to_lightning"
+    ) {
+      throw new Error(
+        `Expected evm_to_arkade/evm_to_bitcoin/evm_to_lightning swap, got ${swap.direction}. Permit2 fund method is for EVM-sourced swaps.`,
+      );
+    }
+
+    // Fetch Permit2 funding data from server
+    const baseUrl = this.#config.baseUrl.replace(/\/$/, "");
+    const url = `${baseUrl}/swap/${swapId}/swap-and-lock-calldata-permit2`;
+    const headers: Record<string, string> = {};
+    if (this.#config.apiKey) {
+      headers["X-API-Key"] = this.#config.apiKey;
+    }
+
+    const resp = await fetch(url, { headers });
+    if (!resp.ok) {
+      const body = await resp.text();
+      throw new Error(
+        `Failed to get Permit2 funding data: ${resp.status} ${body}`,
+      );
+    }
+
+    const serverData = (await resp.json()) as {
+      coordinator_address: string;
+      permit2_address: string;
+      source_token_address: string;
+      source_amount: number;
+      lock_token_address: string;
+      preimage_hash: string;
+      claim_address: string;
+      timelock: number;
+      calls: Array<{ target: string; value: string; call_data: string }>;
+      calls_hash: string;
+    };
+
+    // Generate random Permit2 nonce and deadline
+    const nonceBytes = new Uint8Array(32);
+    crypto.getRandomValues(nonceBytes);
+    const nonce = BigInt(
+      `0x${Array.from(nonceBytes)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("")}`,
+    );
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 30 * 60); // 30 minutes
+
+    const sourceAmount = BigInt(serverData.source_amount);
+
+    const calls = serverData.calls.map((c) => ({
+      target: c.target,
+      value: BigInt(c.value),
+      data: c.call_data,
+    }));
+
+    // Build EIP-712 typed data for wallet signing
+    const fundingParams = {
+      chainId,
+      coordinatorAddress: serverData.coordinator_address,
+      sourceToken: serverData.source_token_address,
+      sourceAmount,
+      preimageHash: serverData.preimage_hash,
+      lockToken: serverData.lock_token_address,
+      claimAddress: serverData.claim_address,
+      refundAddress: serverData.coordinator_address, // overload 1: depositor tracking
+      timelock: serverData.timelock,
+      callsHash: serverData.calls_hash,
+      nonce,
+      deadline,
+    };
+
+    const typedData = buildPermit2TypedData(fundingParams);
+
+    return {
+      coordinatorAddress: serverData.coordinator_address,
+      sourceTokenAddress: serverData.source_token_address,
+      sourceAmount,
+      lockTokenAddress: serverData.lock_token_address,
+      preimageHash: serverData.preimage_hash,
+      claimAddress: serverData.claim_address,
+      timelock: serverData.timelock,
+      calls,
+      callsHash: serverData.calls_hash,
+      nonce,
+      deadline,
+      typedData,
     };
   }
 

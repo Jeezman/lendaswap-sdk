@@ -1,11 +1,8 @@
 /**
- * Fund an EVM HTLC for EVM-to-Arkade/Lightning swaps.
+ * Fund an EVM HTLC for EVM-to-Arkade/Lightning swaps (direct WBTC mode).
  *
- * Supports two modes:
- * - **Direct HTLC** (default): Approve + createSwap on the HTLC contract
- * - **Coordinator**: Approve + executeAndCreate via HTLCCoordinator (DEX swap + HTLC lock)
- *
- * Set USE_COORDINATOR=1 to use the coordinator flow.
+ * For WBTC-sourced swaps: Approve + createSwap on the HTLC contract.
+ * For non-WBTC source tokens: use the Permit2 flow (evm-fund-permit2 command).
  */
 
 import * as readline from "node:readline";
@@ -155,91 +152,10 @@ export async function evmFundSwap(
 
   try {
     if (useCoordinator) {
-      // ── Coordinator mode: approve source token to coordinator, then executeAndCreate ──
-
-      // First, get coordinator address to check allowance
-      console.log("Fetching coordinator info...");
-      const initialFunding = await client.getCoordinatorFundingCallData(swapId);
-      const coordinatorAddress = initialFunding.executeAndCreate.to as `0x${string}`;
-
-      console.log(`Coordinator: ${coordinatorAddress}`);
-      console.log("");
-
-      // Step 1: Approve source token to coordinator (if needed)
-      console.log("Step 1: Checking token allowance...");
-
-      const currentAllowance = await evmWallet.publicClient.readContract({
-        address: tokenAddress,
-        abi: ERC20_ABI,
-        functionName: "allowance",
-        args: [evmWallet.address as `0x${string}`, coordinatorAddress],
-      });
-
-      if (currentAllowance < amountNeeded) {
-        console.log(`  Current allowance: ${currentAllowance}, needed: ${amountNeeded}`);
-        const confirmApprove = await confirm("Send approve transaction?");
-        if (!confirmApprove) {
-          console.log("Cancelled.");
-          return;
-        }
-
-        const approveTxHash = await evmWallet.walletClient.sendTransaction({
-          to: initialFunding.approve.to as `0x${string}`,
-          data: initialFunding.approve.data as `0x${string}`,
-          chain: evmWallet.chain,
-          account: evmWallet.account,
-        });
-
-        console.log(`  Approve TX: ${approveTxHash}`);
-        const approveReceipt = await evmWallet.publicClient.waitForTransactionReceipt({
-          hash: approveTxHash,
-        });
-
-        if (approveReceipt.status !== "success") {
-          throw new Error("Approve transaction failed");
-        }
-        console.log("  Approved!");
-      } else {
-        console.log("  Allowance sufficient, skipping.");
-      }
-
-      // Step 2: Ask for confirmation first, THEN fetch fresh calldata
-      console.log("");
-      console.log("Step 2: Calling executeAndCreate on coordinator...");
-      console.log(`  This will swap ${sourceAmountDisplay} ${sourceTokenDisplay} to WBTC and lock into HTLC.`);
-      console.log("");
-
-      const confirmFund = await confirm("Send executeAndCreate transaction?");
-      if (!confirmFund) {
-        console.log("Cancelled.");
-        return;
-      }
-
-      // Fetch FRESH calldata right before sending (1inch quotes expire quickly)
-      console.log("  Fetching fresh DEX calldata...");
-      const freshFunding = await client.getCoordinatorFundingCallData(swapId);
-
-      const txHash = await evmWallet.walletClient.sendTransaction({
-        to: freshFunding.executeAndCreate.to as `0x${string}`,
-        data: freshFunding.executeAndCreate.data as `0x${string}`,
-        chain: evmWallet.chain,
-        account: evmWallet.account,
-      });
-
-      console.log(`  executeAndCreate TX: ${txHash}`);
-      const receipt = await evmWallet.publicClient.waitForTransactionReceipt({hash: txHash});
-
-      if (receipt.status !== "success") {
-        throw new Error("executeAndCreate transaction failed");
-      }
-
-      console.log("  Confirmed!");
-      console.log("");
-      console.log("=".repeat(60));
-      console.log("SWAP FUNDED VIA COORDINATOR!");
-      console.log("=".repeat(60));
-      console.log("");
-      console.log(`  executeAndCreate TX: ${txHash}`);
+      // Non-WBTC source tokens require the Permit2 flow via evm-fund-permit2 command
+      console.error("Non-WBTC source tokens must use the Permit2 flow.");
+      console.error("Run: tsx src/index.ts evm-fund-permit2 " + swapId);
+      process.exit(1);
 
     } else if (swap.direction === "evm_to_lightning" || swap.direction === "evm_to_bitcoin" || swap.direction === "evm_to_arkade") {
       // ── Direct HTLCErc20.create (build calldata locally) ──
