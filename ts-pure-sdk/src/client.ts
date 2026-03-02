@@ -3397,7 +3397,6 @@ export class Client {
         permit2_nonce: nonce.toString(),
         permit2_deadline: Number(deadline),
         permit2_signature: compactSignature,
-        depositor_address: depositorAddress,
         calls: serverData.calls,
         eip2612_permit: eip2612Permit,
       }),
