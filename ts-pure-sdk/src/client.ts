@@ -41,17 +41,18 @@ import {
 } from "./create";
 import { delegateClaim, delegateRefund } from "./delegate.js";
 import { broadcastTransaction, findOutputByAddress } from "./esplora.js";
-import { encodeApproveCallData, encodeHtlcErc20RefundCallData } from "./evm";
 import {
   buildEip2612PermitDigest,
   buildPermit2FundingDigest,
   buildPermit2TypedData,
+  encodeApproveCallData,
   encodeExecuteAndCreateWithPermit2,
+  encodeHtlcErc20RefundCallData,
   PERMIT2_ADDRESS,
   type Permit2SignedFundingCallData,
+  signEvmDigest,
   type UnsignedPermit2FundingData,
-} from "./evm/index.js";
-import { signEvmDigest } from "./evm/signing.js";
+} from "./evm";
 import {
   buildArkadeClaim,
   type ClaimGaslessResult,
@@ -1185,13 +1186,11 @@ export class Client {
 
     // Cast to the updated response shape (includes calls_hash and optional dex_calldata).
     // The generated API types may lag behind the server; this will align after regeneration.
-    const responseData = calldataResponse.data as
-      | {
-          dex_calldata?: { to: string; data: string; value: string };
-          gasless_fee_sats: number;
-          calls_hash: string;
-        }
-      | undefined;
+    const responseData = calldataResponse.data as {
+      dex_calldata?: { to: string; data: string; value: string };
+      gasless_fee_sats: number;
+      calls_hash: string;
+    };
 
     const targetTokenAddress = String(swap.target_token.token_id);
     const needsDexSwap =
@@ -1206,10 +1205,7 @@ export class Client {
       };
     }
 
-    const callsHash = responseData?.calls_hash;
-    if (!callsHash) {
-      throw new Error("Server did not return calls_hash for redeem signature");
-    }
+    const callsHash = responseData.calls_hash;
 
     return gaslessClaim({
       baseUrl: this.#config.baseUrl,

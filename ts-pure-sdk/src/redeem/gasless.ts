@@ -33,7 +33,7 @@ export interface GaslessClaimParams {
   dexCalldata?: { to: string; data: string; value: string };
   /** keccak256(abi.encode(calls)) from the redeem-and-swap-calldata endpoint.
    *  Required for non-WBTC targets (when dexCalldata is provided). */
-  callsHash?: string;
+  callsHash: string;
 }
 
 /**
@@ -73,14 +73,6 @@ export async function claimViaGasless(
 
   // sweepToken: if there's a DEX swap, sweep the target token; otherwise sweep WBTC
   const sweepToken = needsDexSwap ? targetTokenAddress : wbtcAddress;
-
-  // Compute calls_hash: for non-WBTC targets this comes from the server's
-  // redeem-and-swap-calldata endpoint; for WBTC-direct it also comes from the server.
-  if (!callsHash) {
-    throw new Error(
-      "callsHash is required for gasless claims (EIP-712 redeem signature v3)",
-    );
-  }
 
   // Build EIP-712 digest
   const digest = buildRedeemDigest({
