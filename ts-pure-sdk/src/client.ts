@@ -1124,6 +1124,7 @@ export class Client {
    *
    * @param id - The UUID of the swap.
    * @param destination - The EVM address where tokens should be sent.
+   * @param slippage - Maximum acceptable slippage percentage for the DEX swap (e.g. 1.0 = 1%). Defaults to 1.0.
    * @returns The gasless claim result with transaction hash.
    *
    * @example
@@ -1135,7 +1136,7 @@ export class Client {
   async claimViaGasless(
     id: string,
     destination: string,
-    options?: { slippage?: number },
+    { slippage = 1.0 }: { slippage?: number } = {},
   ): Promise<ClaimGaslessResult> {
     if (!this.#swapStorage) {
       throw new Error(
@@ -1167,7 +1168,6 @@ export class Client {
 
     // Always fetch redeem calldata from the server to get calls_hash.
     // For non-WBTC targets this also returns DEX calldata.
-    const slippage = options?.slippage ?? 1.0;
     const calldataResponse = await this.#apiClient.GET(
       "/swap/{id}/redeem-and-swap-calldata",
       {
