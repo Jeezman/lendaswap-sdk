@@ -1108,7 +1108,7 @@
             "name": "mode",
             "in": "query",
             "description": "Refund mode: \"swap-back\" (default) or \"direct\"",
-            "required": true,
+            "required": false,
             "schema": { "type": "string" }
           }
         ],

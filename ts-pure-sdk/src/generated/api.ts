@@ -2959,9 +2959,9 @@ export interface operations {
   };
   get_refund_calldata: {
     parameters: {
-      query: {
+      query?: {
         /** @description Refund mode: "swap-back" (default) or "direct" */
-        mode: string;
+        mode?: string;
       };
       header?: never;
       path: {
