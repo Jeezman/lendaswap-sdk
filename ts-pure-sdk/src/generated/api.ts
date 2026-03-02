@@ -663,12 +663,10 @@ export interface components {
       receiver_pk: string;
       sender_pk: string;
       server_evm_address: string;
-      /** Format: int64 */
-      source_amount: number;
+      source_amount: string;
       source_token: components["schemas"]["TokenInfo"];
       status: components["schemas"]["SwapStatus"];
-      /** Format: int64 */
-      target_amount: number;
+      target_amount: string;
       /** @description EVM address where tokens are swept after the claim (user's final destination). */
       target_evm_address?: string | null;
       target_token: components["schemas"]["TokenInfo"];
@@ -824,19 +822,13 @@ export interface components {
       network: string;
       /** @description Server's EVM address */
       server_evm_address: string;
-      /**
-       * Format: int64
-       * @description Amount user must send in satoshis
-       */
-      source_amount: number;
+      /** @description Amount user must send in satoshis */
+      source_amount: string;
       /** @description Source token info */
       source_token: components["schemas"]["TokenInfo"];
       status: components["schemas"]["SwapStatus"];
-      /**
-       * Format: int64
-       * @description How much the user will receive in the target token's smallest unit
-       */
-      target_amount: number;
+      /** @description How much the user will receive in the target token's smallest unit */
+      target_amount: string;
       /** @description EVM address where tokens are swept after the claim (user's final destination) */
       target_evm_address?: string | null;
       /** @description Target token info */
@@ -894,20 +886,14 @@ export interface components {
       sats_receive: number;
       /** @description Server's VHTLC public key (sender in the VHTLC) */
       server_vhtlc_pk: string;
-      /**
-       * Format: int64
-       * @description Amount user must send in satoshis
-       */
-      source_amount: number;
+      /** @description Amount user must send in satoshis */
+      source_amount: string;
       /** @description Source token info */
       source_token: components["schemas"]["TokenInfo"];
       /** @description Current status of the swap */
       status: components["schemas"]["SwapStatus"];
-      /**
-       * Format: int64
-       * @description Amount the user will receive
-       */
-      target_amount: number;
+      /** @description Amount the user will receive */
+      target_amount: string;
       /** @description User's target Arkade address */
       target_arkade_address: string;
       /** @description Target token info */
@@ -955,11 +941,8 @@ export interface components {
        *     Deprecated: please use [`source_amount`]
        */
       sats_receive: number;
-      /**
-       * Format: int64
-       * @description Amount user must send in satoshis
-       */
-      source_amount: number;
+      /** @description Amount user must send in satoshis */
+      source_amount: string;
       /**
        * Format: double
        * @description Amount the user will receive of the target asset
@@ -1180,12 +1163,10 @@ export interface components {
       receiver_pk: string;
       sender_pk: string;
       server_evm_address: string;
-      /** Format: int64 */
-      source_amount: number;
+      source_amount: string;
       source_token: components["schemas"]["TokenInfo"];
       status: components["schemas"]["SwapStatus"];
-      /** Format: int64 */
-      target_amount: number;
+      target_amount: string;
       target_arkade_address: string;
       target_token: components["schemas"]["TokenInfo"];
       /** Format: int64 */
@@ -1291,18 +1272,12 @@ export interface components {
       network: string;
       /** @description Server's EVM address (claims the EVM HTLC) */
       server_evm_address: string;
-      /**
-       * Format: int64
-       * @description Source token amount in smallest units
-       */
-      source_amount: number;
+      /** @description Source token amount in smallest units */
+      source_amount: string;
       source_token: components["schemas"]["TokenInfo"];
       status: components["schemas"]["SwapStatus"];
-      /**
-       * Format: int64
-       * @description Expected BTC amount (in sats) user will receive
-       */
-      target_amount: number;
+      /** @description Expected BTC amount (in sats) user will receive */
+      target_amount: string;
       /** @description User's target BTC address for receiving claimed funds */
       target_btc_address?: string | null;
       target_token: components["schemas"]["TokenInfo"];
@@ -1348,11 +1323,8 @@ export interface components {
       source_amount: number;
       /** @description ERC20 token address for approve target */
       source_token_address: string;
-      /**
-       * Format: int64
-       * @description Amount the user will receive in sats
-       */
-      target_amount: number;
+      /** @description Amount the user will receive in sats */
+      target_amount: string;
       /** @description User's Arkade address to receive BTC (optional) */
       user_address_arkade?: string | null;
       /** @description User's EVM address sending tokens */
@@ -1416,12 +1388,10 @@ export interface components {
       receiver_pk: string;
       sender_pk: string;
       server_evm_address: string;
-      /** Format: int64 */
-      source_amount: number;
+      source_amount: string;
       source_token: components["schemas"]["TokenInfo"];
       status: components["schemas"]["SwapStatus"];
-      /** Format: int64 */
-      target_amount: number;
+      target_amount: string;
       target_token: components["schemas"]["TokenInfo"];
       /** Format: int64 */
       unilateral_claim_delay: number;
@@ -1573,12 +1543,10 @@ export interface components {
       receiver_pk: string;
       sender_pk: string;
       server_evm_address: string;
-      /** Format: int64 */
-      source_amount: number;
+      source_amount: string;
       source_token: components["schemas"]["TokenInfo"];
       status: components["schemas"]["SwapStatus"];
-      /** Format: int64 */
-      target_amount: number;
+      target_amount: string;
       /** @description EVM address where tokens are swept after the claim */
       target_evm_address?: string | null;
       target_token: components["schemas"]["TokenInfo"];
@@ -1673,16 +1641,10 @@ export interface components {
        * @description Protocol fee rate (as decimal, e.g., 0.0025 = 0.25%)
        */
       protocol_fee_rate: number;
-      /**
-       * Format: int64
-       * @description Pre-calculated source amount in smallest unit of source token
-       */
-      source_amount: number;
-      /**
-       * Format: int64
-       * @description Pre-calculated target amount in smallest unit of target token
-       */
-      target_amount: number;
+      /** @description Pre-calculated source amount in smallest unit of source token */
+      source_amount: string;
+      /** @description Pre-calculated target amount in smallest unit of target token */
+      target_amount: string;
     };
     RecoveredSwap: components["schemas"]["GetSwapResponse"] & {
       /**

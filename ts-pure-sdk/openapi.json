@@ -1367,10 +1367,10 @@
           "receiver_pk": { "type": "string" },
           "sender_pk": { "type": "string" },
           "server_evm_address": { "type": "string" },
-          "source_amount": { "type": "integer", "format": "int64" },
+          "source_amount": { "type": "string" },
           "source_token": { "$ref": "#/components/schemas/TokenInfo" },
           "status": { "$ref": "#/components/schemas/SwapStatus" },
-          "target_amount": { "type": "integer", "format": "int64" },
+          "target_amount": { "type": "string" },
           "target_evm_address": {
             "type": ["string", "null"],
             "description": "EVM address where tokens are swept after the claim (user's final destination)."
@@ -1610,10 +1610,8 @@
             "description": "Server's EVM address"
           },
           "source_amount": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Amount user must send in satoshis",
-            "minimum": 0
+            "type": "string",
+            "description": "Amount user must send in satoshis"
           },
           "source_token": {
             "$ref": "#/components/schemas/TokenInfo",
@@ -1621,10 +1619,8 @@
           },
           "status": { "$ref": "#/components/schemas/SwapStatus" },
           "target_amount": {
-            "type": "integer",
-            "format": "int64",
-            "description": "How much the user will receive in the target token's smallest unit",
-            "minimum": 0
+            "type": "string",
+            "description": "How much the user will receive in the target token's smallest unit"
           },
           "target_evm_address": {
             "type": ["string", "null"],
@@ -1732,10 +1728,8 @@
             "description": "Server's VHTLC public key (sender in the VHTLC)"
           },
           "source_amount": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Amount user must send in satoshis",
-            "minimum": 0
+            "type": "string",
+            "description": "Amount user must send in satoshis"
           },
           "source_token": {
             "$ref": "#/components/schemas/TokenInfo",
@@ -1746,10 +1740,8 @@
             "description": "Current status of the swap"
           },
           "target_amount": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Amount the user will receive",
-            "minimum": 0
+            "type": "string",
+            "description": "Amount the user will receive"
           },
           "target_arkade_address": {
             "type": "string",
@@ -1833,10 +1825,8 @@
                 "description": "The amount of satoshis we expect to receive\nDeprecated: please use [`source_amount`]"
               },
               "source_amount": {
-                "type": "integer",
-                "format": "int64",
-                "description": "Amount user must send in satoshis",
-                "minimum": 0
+                "type": "string",
+                "description": "Amount user must send in satoshis"
               },
               "target_amount": {
                 "type": "number",
@@ -2242,10 +2232,10 @@
           "receiver_pk": { "type": "string" },
           "sender_pk": { "type": "string" },
           "server_evm_address": { "type": "string" },
-          "source_amount": { "type": "integer", "format": "int64" },
+          "source_amount": { "type": "string" },
           "source_token": { "$ref": "#/components/schemas/TokenInfo" },
           "status": { "$ref": "#/components/schemas/SwapStatus" },
-          "target_amount": { "type": "integer", "format": "int64" },
+          "target_amount": { "type": "string" },
           "target_arkade_address": { "type": "string" },
           "target_token": { "$ref": "#/components/schemas/TokenInfo" },
           "unilateral_claim_delay": { "type": "integer", "format": "int64" },
@@ -2418,15 +2408,13 @@
             "description": "Server's EVM address (claims the EVM HTLC)"
           },
           "source_amount": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
             "description": "Source token amount in smallest units"
           },
           "source_token": { "$ref": "#/components/schemas/TokenInfo" },
           "status": { "$ref": "#/components/schemas/SwapStatus" },
           "target_amount": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
             "description": "Expected BTC amount (in sats) user will receive"
           },
           "target_btc_address": {
@@ -2522,10 +2510,8 @@
                 "description": "ERC20 token address for approve target"
               },
               "target_amount": {
-                "type": "integer",
-                "format": "int64",
-                "description": "Amount the user will receive in sats",
-                "minimum": 0
+                "type": "string",
+                "description": "Amount the user will receive in sats"
               },
               "user_address_arkade": {
                 "type": ["string", "null"],
@@ -2645,10 +2631,10 @@
           "receiver_pk": { "type": "string" },
           "sender_pk": { "type": "string" },
           "server_evm_address": { "type": "string" },
-          "source_amount": { "type": "integer", "format": "int64" },
+          "source_amount": { "type": "string" },
           "source_token": { "$ref": "#/components/schemas/TokenInfo" },
           "status": { "$ref": "#/components/schemas/SwapStatus" },
-          "target_amount": { "type": "integer", "format": "int64" },
+          "target_amount": { "type": "string" },
           "target_token": { "$ref": "#/components/schemas/TokenInfo" },
           "unilateral_claim_delay": { "type": "integer", "format": "int64" },
           "unilateral_refund_delay": { "type": "integer", "format": "int64" },
@@ -2960,10 +2946,10 @@
           "receiver_pk": { "type": "string" },
           "sender_pk": { "type": "string" },
           "server_evm_address": { "type": "string" },
-          "source_amount": { "type": "integer", "format": "int64" },
+          "source_amount": { "type": "string" },
           "source_token": { "$ref": "#/components/schemas/TokenInfo" },
           "status": { "$ref": "#/components/schemas/SwapStatus" },
-          "target_amount": { "type": "integer", "format": "int64" },
+          "target_amount": { "type": "string" },
           "target_evm_address": {
             "type": ["string", "null"],
             "description": "EVM address where tokens are swept after the claim"
@@ -3098,16 +3084,12 @@
             "description": "Protocol fee rate (as decimal, e.g., 0.0025 = 0.25%)"
           },
           "source_amount": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Pre-calculated source amount in smallest unit of source token",
-            "minimum": 0
+            "type": "string",
+            "description": "Pre-calculated source amount in smallest unit of source token"
           },
           "target_amount": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Pre-calculated target amount in smallest unit of target token",
-            "minimum": 0
+            "type": "string",
+            "description": "Pre-calculated target amount in smallest unit of target token"
           }
         }
       },

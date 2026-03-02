@@ -3003,7 +3003,7 @@ export class Client {
       coordinator_address: string;
       permit2_address: string;
       source_token_address: string;
-      source_amount: number;
+      source_amount: string;
       lock_token_address: string;
       preimage_hash: string;
       claim_address: string;
@@ -3177,7 +3177,7 @@ export class Client {
       coordinator_address: string;
       permit2_address: string;
       source_token_address: string;
-      source_amount: number;
+      source_amount: string;
       lock_token_address: string;
       preimage_hash: string;
       claim_address: string;
@@ -3297,7 +3297,7 @@ export class Client {
       coordinator_address: string;
       permit2_address: string;
       source_token_address: string;
-      source_amount: number;
+      source_amount: string;
       lock_token_address: string;
       preimage_hash: string;
       claim_address: string;
