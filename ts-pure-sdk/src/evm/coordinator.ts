@@ -915,9 +915,17 @@ export function buildEip2612PermitDigest(params: Eip2612PermitParams): string {
   );
 
   // EIP-712 digest: 0x1901 || domainSeparator || structHash
-  const domainSep = params.domainSeparator.replace(/^0x/, "");
-  const structHashClean = structHash.replace(/^0x/, "");
-  return keccak256(`1901${domainSep}${structHashClean}`);
+  const prefix = new Uint8Array([0x19, 0x01]);
+  const domainBytes = hexToBytes(params.domainSeparator);
+  const structBytes = hexToBytes(structHash);
+  const message = new Uint8Array(
+    prefix.length + domainBytes.length + structBytes.length,
+  );
+  message.set(prefix, 0);
+  message.set(domainBytes, prefix.length);
+  message.set(structBytes, prefix.length + domainBytes.length);
+
+  return keccak256(message);
 }
 
 // ── Internal encoding helpers ────────────────────────────────────────────────
