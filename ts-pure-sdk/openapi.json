@@ -3,13 +3,17 @@
   "info": {
     "title": "Lendaswap API",
     "description": "Seamlessly swap between BTC and Stables on Ethereum/Polygon/etc",
-    "license": { "name": "" },
+    "license": {
+      "name": ""
+    },
     "version": "0.2.1"
   },
   "paths": {
     "/api/delegate/cosigner-pk": {
       "get": {
-        "tags": ["delegate"],
+        "tags": [
+          "delegate"
+        ],
         "summary": "Get the delegate cosigner public key.",
         "description": "Clients need this key when preparing delegate PSBTs so the backend\ncan participate in the batch ceremony as a cosigner.",
         "operationId": "get_cosigner_pk",
@@ -18,7 +22,9 @@
             "description": "Cosigner public key",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/CosignerPkResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/CosignerPkResponse"
+                }
               }
             }
           },
@@ -26,7 +32,9 @@
             "description": "Internal error",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -35,14 +43,18 @@
     },
     "/api/delegate/settle": {
       "post": {
-        "tags": ["delegate"],
+        "tags": [
+          "delegate"
+        ],
         "summary": "Settle a delegated batch.",
         "description": "The client prepares and signs delegate PSBTs (intent + forfeits), then\nPOSTs them here. The backend reconstructs the `Delegate` struct and runs\nthe full Ark batch ceremony on the client's behalf.\n\nThis endpoint blocks until the batch completes (~10-30s).",
         "operationId": "settle_delegate",
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/SettleDelegateRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/SettleDelegateRequest"
+              }
             }
           },
           "required": true
@@ -62,7 +74,9 @@
             "description": "Bad request",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -70,7 +84,9 @@
             "description": "Internal error",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -79,7 +95,9 @@
     },
     "/api/swap/arkade-evm/{id}/collab-refund": {
       "post": {
-        "tags": ["collab-refund"],
+        "tags": [
+          "collab-refund"
+        ],
         "summary": "Collaboratively refund spendable VTXOs.",
         "description": "The client builds an offchain transaction (ark_tx + checkpoints) spending the VHTLC\nvia the `refund_script` leaf, signs as sender, and sends the partially-signed PSBTs here.\nThe server cosigns as receiver and returns the countersigned PSBTs.\nThe client then submits to Arkade for the server (3rd) signature.",
         "operationId": "collab_refund",
@@ -89,13 +107,18 @@
             "in": "path",
             "description": "Swap ID",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CollabRefundRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/CollabRefundRequest"
+              }
             }
           },
           "required": true
@@ -115,7 +138,9 @@
             "description": "Bad request",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -123,7 +148,9 @@
             "description": "Refund not allowed in current swap state",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -131,7 +158,9 @@
             "description": "Swap not found",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -139,7 +168,9 @@
             "description": "Internal error",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -148,7 +179,9 @@
     },
     "/api/swap/arkade-evm/{id}/collab-refund-delegate": {
       "post": {
-        "tags": ["collab-refund"],
+        "tags": [
+          "collab-refund"
+        ],
         "summary": "Collaboratively refund recoverable VTXOs via the delegate batch flow.",
         "description": "The client prepares delegate PSBTs (intent_proof + forfeits) spending the VHTLC\nvia the `refund_script` leaf, signs as sender, and sends the partially-signed PSBTs here.\nThe server cosigns as receiver and returns the countersigned PSBTs.\nThe client then calls `/api/delegate/settle` to complete the batch ceremony.",
         "operationId": "collab_refund_delegate",
@@ -158,7 +191,10 @@
             "in": "path",
             "description": "Swap ID",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "requestBody": {
@@ -186,7 +222,9 @@
             "description": "Bad request",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -194,7 +232,9 @@
             "description": "Refund not allowed in current swap state",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -202,7 +242,9 @@
             "description": "Swap not found",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -210,7 +252,9 @@
             "description": "Internal error",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -219,13 +263,17 @@
     },
     "/api/vtxo-swap": {
       "post": {
-        "tags": ["vtxo-swap"],
+        "tags": [
+          "vtxo-swap"
+        ],
         "summary": "Create a new VTXO swap",
         "operationId": "create_vtxo_swap",
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreateVtxoSwapRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/CreateVtxoSwapRequest"
+              }
             }
           },
           "required": true
@@ -235,7 +283,9 @@
             "description": "Swap created",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/VtxoSwapResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/VtxoSwapResponse"
+                }
               }
             }
           },
@@ -243,7 +293,9 @@
             "description": "Bad request",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -251,7 +303,9 @@
             "description": "Internal error",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -260,7 +314,9 @@
     },
     "/api/vtxo-swap/estimate": {
       "post": {
-        "tags": ["vtxo-swap"],
+        "tags": [
+          "vtxo-swap"
+        ],
         "summary": "Estimate fee for VTXO swap",
         "operationId": "estimate_vtxo_swap",
         "requestBody": {
@@ -288,7 +344,9 @@
             "description": "Bad request",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -296,7 +354,9 @@
             "description": "Internal error",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -305,7 +365,9 @@
     },
     "/api/vtxo-swap/{id}": {
       "get": {
-        "tags": ["vtxo-swap"],
+        "tags": [
+          "vtxo-swap"
+        ],
         "summary": "Get VTXO swap by ID",
         "operationId": "get_vtxo_swap",
         "parameters": [
@@ -314,7 +376,10 @@
             "in": "path",
             "description": "Swap ID",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -322,7 +387,9 @@
             "description": "Swap found",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/VtxoSwapResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/VtxoSwapResponse"
+                }
               }
             }
           },
@@ -330,7 +397,9 @@
             "description": "Swap not found",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -338,7 +407,9 @@
             "description": "Internal error",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -347,7 +418,9 @@
     },
     "/evm-tokens": {
       "get": {
-        "tags": ["evm-tokens"],
+        "tags": [
+          "evm-tokens"
+        ],
         "summary": "Get available EVM tokens from 1inch for supported chains",
         "operationId": "get_evm_tokens",
         "parameters": [
@@ -356,7 +429,11 @@
             "in": "query",
             "description": "Filter by EVM chain ID (1=Ethereum, 137=Polygon, 42161=Arbitrum). Omit for all chains.",
             "required": false,
-            "schema": { "type": "integer", "format": "int64", "minimum": 0 }
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
           }
         ],
         "responses": {
@@ -364,7 +441,9 @@
             "description": "EVM tokens grouped by chain ID",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EvmTokensResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EvmTokensResponse"
+                }
               }
             }
           },
@@ -372,7 +451,9 @@
             "description": "Invalid chain ID",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -381,7 +462,9 @@
     },
     "/evm-tokens/chains": {
       "get": {
-        "tags": ["evm-tokens"],
+        "tags": [
+          "evm-tokens"
+        ],
         "summary": "Get supported EVM chains",
         "operationId": "get_evm_chains",
         "responses": {
@@ -389,7 +472,9 @@
             "description": "List of supported EVM chains",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EvmChainsResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EvmChainsResponse"
+                }
               }
             }
           }
@@ -398,20 +483,30 @@
     },
     "/health": {
       "get": {
-        "tags": ["health"],
+        "tags": [
+          "health"
+        ],
         "summary": "Health check endpoint",
         "operationId": "health_check",
         "responses": {
           "200": {
             "description": "Service is healthy",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }
     },
     "/mtp": {
       "get": {
-        "tags": ["mtp"],
+        "tags": [
+          "mtp"
+        ],
         "summary": "Return the current cached Median Time Past (MTP) and tip height.",
         "operationId": "get_mtp",
         "responses": {
@@ -419,7 +514,9 @@
             "description": "Return the current MTP and tip height",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/MtpResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/MtpResponse"
+                }
               }
             }
           },
@@ -431,7 +528,9 @@
     },
     "/quote": {
       "get": {
-        "tags": ["quote"],
+        "tags": [
+          "quote"
+        ],
         "summary": "Get a quote for swapping BTC to/from EVM tokens",
         "description": "Specify exactly one of source_amount or target_amount.\nAmounts are in the smallest unit of the respective token (satoshis for BTC, raw units for EVM\ntokens).",
         "operationId": "get_quote",
@@ -441,28 +540,36 @@
             "in": "query",
             "description": "Source blockchain (e.g., \"Arkade\", \"Lightning\", \"Bitcoin\", \"Polygon\", \"Ethereum\",\n\"Arbitrum\")",
             "required": true,
-            "schema": { "$ref": "#/components/schemas/Chain" }
+            "schema": {
+              "$ref": "#/components/schemas/Chain"
+            }
           },
           {
             "name": "source_token",
             "in": "query",
             "description": "Source token: contract address for EVM tokens, or \"btc\" for BTC",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "target_chain",
             "in": "query",
             "description": "Target blockchain",
             "required": true,
-            "schema": { "$ref": "#/components/schemas/Chain" }
+            "schema": {
+              "$ref": "#/components/schemas/Chain"
+            }
           },
           {
             "name": "target_token",
             "in": "query",
             "description": "Target token: contract address for EVM tokens, or \"btc\" for BTC",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "source_amount",
@@ -470,7 +577,10 @@
             "description": "Amount in smallest unit of source token (mutually exclusive with target_amount)",
             "required": false,
             "schema": {
-              "type": ["integer", "null"],
+              "type": [
+                "integer",
+                "null"
+              ],
               "format": "int64",
               "minimum": 0
             }
@@ -481,7 +591,10 @@
             "description": "Amount in smallest unit of target token (mutually exclusive with source_amount)",
             "required": false,
             "schema": {
-              "type": ["integer", "null"],
+              "type": [
+                "integer",
+                "null"
+              ],
               "format": "int64",
               "minimum": 0
             }
@@ -492,7 +605,9 @@
             "description": "Return a quote for swapping BTC to/from EVM tokens",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/QuoteResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/QuoteResponse"
+                }
               }
             }
           },
@@ -500,7 +615,9 @@
             "description": "Bad request - invalid parameters",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -509,7 +626,9 @@
     },
     "/support-agents": {
       "get": {
-        "tags": ["support"],
+        "tags": [
+          "support"
+        ],
         "summary": "Return the configured support agent npubs.",
         "operationId": "get_support_agents",
         "responses": {
@@ -528,7 +647,9 @@
     },
     "/swap/arkade/evm": {
       "post": {
-        "tags": ["swap-arkade-evm"],
+        "tags": [
+          "swap-arkade-evm"
+        ],
         "summary": "Create a chain-agnostic Arkade-to-EVM swap.",
         "operationId": "create_arkade_evm_swap",
         "requestBody": {
@@ -556,7 +677,9 @@
             "description": "Bad request - invalid parameters",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -564,7 +687,9 @@
             "description": "Internal server error",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -573,7 +698,9 @@
     },
     "/swap/bitcoin/arkade": {
       "post": {
-        "tags": ["swap-bitcoin-arkade"],
+        "tags": [
+          "swap-bitcoin-arkade"
+        ],
         "summary": "Create a new Bitcoin (on-chain) to Arkade swap request",
         "description": "The user provides an on-chain BTC amount to swap and receives Arkade VTXOs.\nFlow:\n1. User sends BTC to the Taproot HTLC address returned\n2. After 1 confirmation, server creates Arkade VHTLC for user\n3. User claims Arkade VHTLC with secret, revealing it\n4. Server claims on-chain BTC with the revealed secret",
         "operationId": "bitcoin_to_arkade_swap",
@@ -602,7 +729,9 @@
             "description": "Bad request - invalid parameters",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -610,7 +739,9 @@
             "description": "Internal server error",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -619,7 +750,9 @@
     },
     "/swap/bitcoin/evm": {
       "post": {
-        "tags": ["swap-bitcoin-evm"],
+        "tags": [
+          "swap-bitcoin-evm"
+        ],
         "summary": "Create a chain-agnostic Bitcoin-to-EVM swap.",
         "operationId": "create_bitcoin_evm_swap",
         "requestBody": {
@@ -647,7 +780,9 @@
             "description": "Bad request - invalid parameters",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -655,7 +790,9 @@
             "description": "Internal server error",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -664,7 +801,9 @@
     },
     "/swap/evm/arkade": {
       "post": {
-        "tags": ["swap-evm-arkade"],
+        "tags": [
+          "swap-evm-arkade"
+        ],
         "summary": "Create a chain-agnostic EVM-to-Arkade swap.",
         "operationId": "create_evm_to_arkade_swap_generic",
         "requestBody": {
@@ -692,7 +831,9 @@
             "description": "Bad request - invalid parameters",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -700,7 +841,9 @@
             "description": "Internal server error",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -709,7 +852,9 @@
     },
     "/swap/evm/bitcoin": {
       "post": {
-        "tags": ["swap-evm-bitcoin"],
+        "tags": [
+          "swap-evm-bitcoin"
+        ],
         "summary": "Create a chain-agnostic EVM-to-Bitcoin swap.",
         "operationId": "create_evm_to_bitcoin_swap",
         "requestBody": {
@@ -737,7 +882,9 @@
             "description": "Bad request - invalid parameters",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -745,7 +892,9 @@
             "description": "Internal server error",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -754,7 +903,9 @@
     },
     "/swap/evm/lightning": {
       "post": {
-        "tags": ["swap-evm-lightning"],
+        "tags": [
+          "swap-evm-lightning"
+        ],
         "summary": "Create a chain-agnostic EVM-to-Lightning swap.",
         "description": "Flow:\n1. User provides their Lightning invoice (they want to receive BTC)\n2. Server prepares Boltz submarine swap to pay the invoice\n3. User funds EVM HTLCErc20 with tokens\n4. Server pays Lightning invoice via Boltz (gets preimage)\n5. Server claims EVM HTLCErc20 using preimage",
         "operationId": "create_evm_to_lightning_swap_generic",
@@ -783,7 +934,9 @@
             "description": "Bad request - invalid parameters",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -791,7 +944,9 @@
             "description": "Internal server error",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -800,7 +955,9 @@
     },
     "/swap/lightning/evm": {
       "post": {
-        "tags": ["swap-lightning-evm"],
+        "tags": [
+          "swap-lightning-evm"
+        ],
         "summary": "Create a chain-agnostic Lightning-to-EVM swap.",
         "operationId": "create_lightning_evm_swap",
         "requestBody": {
@@ -828,7 +985,9 @@
             "description": "Bad request - invalid parameters",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -836,7 +995,9 @@
             "description": "Internal server error",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -845,14 +1006,18 @@
     },
     "/swap/recover": {
       "post": {
-        "tags": ["recovery"],
+        "tags": [
+          "recovery"
+        ],
         "summary": "Recover swaps by deriving user_id keys from an Xpub",
         "description": "This endpoint allows clients to recover their swap history after importing a mnemonic. The\nclient provides an Xpub they used to derive `user_id`s, and the server derives `user_id` keys at\nm/9419/121923/<index> for indices 0-99 and searches for matching swaps.",
         "operationId": "recover_swaps",
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/RecoveryRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/RecoveryRequest"
+              }
             }
           },
           "required": true
@@ -862,7 +1027,9 @@
             "description": "Swaps recovered successfully",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/RecoveryResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/RecoveryResponse"
+                }
               }
             }
           },
@@ -870,7 +1037,9 @@
             "description": "Bad request - invalid xpub format",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -878,7 +1047,9 @@
             "description": "Internal server error",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -887,7 +1058,9 @@
     },
     "/swap/{id}": {
       "get": {
-        "tags": ["swaps"],
+        "tags": [
+          "swaps"
+        ],
         "summary": "Get swap status and details by ID",
         "operationId": "get_swap",
         "parameters": [
@@ -896,7 +1069,10 @@
             "in": "path",
             "description": "Swap ID",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -904,7 +1080,9 @@
             "description": "Swap found successfully",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/GetSwapResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/GetSwapResponse"
+                }
               }
             }
           },
@@ -912,7 +1090,9 @@
             "description": "Bad request - swap not found",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -920,7 +1100,9 @@
             "description": "Internal server error",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -929,7 +1111,9 @@
     },
     "/swap/{id}/claim-gasless": {
       "post": {
-        "tags": ["gasless"],
+        "tags": [
+          "gasless"
+        ],
         "summary": "Claims an EVM-targeted swap gaslessly via the HTLCCoordinator contract.",
         "description": "Supports both Arkade-to-EVM and Bitcoin-to-EVM swaps. The server submits\n`coordinator.redeemAndExecute` on the client's behalf, using the client's\nEIP-712 signature and secret.",
         "operationId": "claim_via_gasless",
@@ -939,13 +1123,18 @@
             "in": "path",
             "description": "Swap ID",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/ClaimGaslessRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/ClaimGaslessRequest"
+              }
             }
           },
           "required": true
@@ -965,7 +1154,9 @@
             "description": "Bad request - swap not found or in wrong state",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -973,7 +1164,9 @@
             "description": "Internal server error",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -982,7 +1175,9 @@
     },
     "/swap/{id}/fund-gasless": {
       "post": {
-        "tags": ["gasless"],
+        "tags": [
+          "gasless"
+        ],
         "summary": "Fund an EVM-sourced swap gaslessly via Permit2.",
         "description": "The server submits the `executeAndCreateWithPermit2` transaction on the\ndepositor's behalf, pulling tokens via the depositor's Permit2 signature.\nIf an EIP-2612 permit is provided, the server first submits that to approve\nthe Permit2 contract.",
         "operationId": "fund_gasless",
@@ -992,13 +1187,18 @@
             "in": "path",
             "description": "Swap ID",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/FundGaslessRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/FundGaslessRequest"
+              }
             }
           },
           "required": true
@@ -1008,7 +1208,9 @@
             "description": "Swap funded successfully via gasless relay",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/FundGaslessResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/FundGaslessResponse"
+                }
               }
             }
           },
@@ -1016,7 +1218,9 @@
             "description": "Bad request - swap not found or in wrong state",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1024,7 +1228,9 @@
             "description": "Internal server error",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1033,7 +1239,9 @@
     },
     "/swap/{id}/redeem-and-swap-calldata": {
       "get": {
-        "tags": ["redeem-and-swap-calldata"],
+        "tags": [
+          "redeem-and-swap-calldata"
+        ],
         "summary": "Returns the gasless claim data for an EVM-targeted swap.",
         "description": "For non-WBTC targets: fetches fresh 1inch DEX calldata with `receiver = destination`.\nFor WBTC-direct targets: returns only the gasless fee and calls_hash (no DEX data).\n\nAlways returns `calls_hash` which the client must include in the EIP-712 redeem signature.",
         "operationId": "get_dex_calldata",
@@ -1043,21 +1251,29 @@
             "in": "path",
             "description": "Swap ID",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           {
             "name": "destination",
             "in": "query",
             "description": "EVM destination address for output tokens",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "slippage",
             "in": "query",
             "description": "Slippage tolerance percentage (default: 1.0)",
             "required": false,
-            "schema": { "type": "number", "format": "double" }
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
           }
         ],
         "responses": {
@@ -1075,7 +1291,9 @@
             "description": "Bad request",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1083,7 +1301,9 @@
             "description": "Internal server error",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1092,7 +1312,9 @@
     },
     "/swap/{id}/refund-and-swap-calldata": {
       "get": {
-        "tags": ["refund-and-swap-calldata"],
+        "tags": [
+          "refund-and-swap-calldata"
+        ],
         "summary": "Returns calldata to refund an expired EVM-to-Arkade HTLC via the coordinator.",
         "description": "Two modes:\n- `mode=swap-back` (default): calls `refundAndExecute` — refund WBTC from expired HTLC, swap\n  WBTC → source token via 1inch, sweep to caller.\n- `mode=direct`: calls `refundTo` — refund WBTC directly to caller (no DEX).\n\nBoth are permissionless after the timelock expires.",
         "operationId": "get_refund_calldata",
@@ -1102,14 +1324,19 @@
             "in": "path",
             "description": "Swap ID",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           {
             "name": "mode",
             "in": "query",
             "description": "Refund mode: \"swap-back\" (default) or \"direct\"",
             "required": false,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1127,7 +1354,9 @@
             "description": "Bad request",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1135,7 +1364,9 @@
             "description": "Internal server error",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1144,7 +1375,9 @@
     },
     "/swap/{id}/swap-and-lock-calldata-permit2": {
       "get": {
-        "tags": ["swap-and-lock-calldata-permit2"],
+        "tags": [
+          "swap-and-lock-calldata-permit2"
+        ],
         "summary": "Returns structured data for funding an EVM-to-BTC swap via Permit2.",
         "description": "Instead of pre-encoded calldata, this returns the individual components\nso the SDK can construct the Permit2 EIP-712 signature and\n`executeAndCreateWithPermit2` calldata client-side.\n\nThe calls array contains only [approve(dexRouter, amount), dexSwap(...)].\nNo `transferFrom` — Permit2 handles the token pull.",
         "operationId": "get_coordinator_funding_calldata_permit2",
@@ -1154,19 +1387,30 @@
             "in": "path",
             "description": "Swap ID",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "Permit2 funding data",
-            "content": { "text/plain": { "schema": { "type": "string" } } }
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "description": "Bad request",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           },
@@ -1174,7 +1418,9 @@
             "description": "Internal server error",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1183,7 +1429,9 @@
     },
     "/tokens": {
       "get": {
-        "tags": ["tokens"],
+        "tags": [
+          "tokens"
+        ],
         "summary": "Get list of available tokens for swaps.",
         "description": "Optionally pass `source_chain` + `source_token` **or** `target_chain` + `target_token`\nto filter the response to valid counterparty tokens.",
         "operationId": "get_tokens",
@@ -1195,8 +1443,12 @@
             "required": false,
             "schema": {
               "oneOf": [
-                { "type": "null" },
-                { "$ref": "#/components/schemas/Chain" }
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/components/schemas/Chain"
+                }
               ]
             }
           },
@@ -1207,8 +1459,12 @@
             "required": false,
             "schema": {
               "oneOf": [
-                { "type": "null" },
-                { "$ref": "#/components/schemas/Chain" }
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/components/schemas/Chain"
+                }
               ]
             }
           }
@@ -1218,7 +1474,9 @@
             "description": "Return list of available tokens for swaps",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/TokenInfos" }
+                "schema": {
+                  "$ref": "#/components/schemas/TokenInfos"
+                }
               }
             }
           }
@@ -1227,7 +1485,9 @@
     },
     "/version": {
       "get": {
-        "tags": ["version"],
+        "tags": [
+          "version"
+        ],
         "summary": "Return the current git tag and commit hash.",
         "operationId": "get_version",
         "responses": {
@@ -1235,7 +1495,155 @@
             "description": "Return the deployed version and commit hash",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/Version" }
+                "schema": {
+                  "$ref": "#/components/schemas/Version"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/swap/{id}/collab-refund-evm": {
+      "post": {
+        "tags": [
+          "collab-refund-evm"
+        ],
+        "summary": "Collaboratively refund an EVM HTLC before timelock expiry.",
+        "description": "The client signs a coordinator-level CollabRefund EIP-712 message authorizing the refund parameters. The server cosigns with an HTLC-level Refund signature (as claimAddress, waiving the timelock) and submits the transaction on-chain. Supports EVM-to-Arkade, EVM-to-Bitcoin, and EVM-to-Lightning swaps.",
+        "operationId": "collab_refund_evm",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Swap ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollabRefundEvmRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "EVM HTLC refunded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollabRefundEvmResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Refund not allowed in current swap state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Swap not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/swap/{id}/collab-refund-evm/params": {
+      "get": {
+        "tags": [
+          "collab-refund-evm"
+        ],
+        "summary": "Get EIP-712 parameters for collaborative EVM HTLC refund.",
+        "description": "Returns the addresses, amounts, and struct fields the client needs to construct and sign the CollabRefund EIP-712 typed data.",
+        "operationId": "collab_refund_evm_params",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Swap ID"
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Settlement mode: direct (default) or swap-back"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "EIP-712 CollabRefund parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollabRefundEvmParams"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Swap not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             }
           }
@@ -1259,13 +1667,19 @@
         ],
         "properties": {
           "amount_in": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "How many sats the user wants to send (mutually exclusive with `amount_out`).\nValue is in satoshis (smallest BTC unit).",
             "minimum": 0
           },
           "amount_out": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "How much target token the user wants to receive (mutually exclusive with `amount_in`).\nValue is in the target token's smallest unit (e.g. for USDC with 6 decimals, 1000000 = 1\nUSDC).",
             "minimum": 0
@@ -1289,7 +1703,10 @@
             "description": "Hash lock provided by the client (32-byte hex string with 0x prefix)."
           },
           "referral_code": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Optional referral code for tracking."
           },
           "refund_pk": {
@@ -1343,46 +1760,125 @@
           "network"
         ],
         "properties": {
-          "arkade_server_pk": { "type": "string" },
-          "btc_claim_txid": { "type": ["string", "null"] },
-          "btc_fund_txid": { "type": ["string", "null"] },
-          "btc_vhtlc_address": { "type": "string" },
-          "chain": { "type": "string" },
+          "arkade_server_pk": {
+            "type": "string"
+          },
+          "btc_claim_txid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "btc_fund_txid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "btc_vhtlc_address": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string"
+          },
           "client_evm_address": {
             "type": "string",
             "description": "EVM address that will sign the HTLC claim (SDK-derived for gasless claims)."
           },
-          "created_at": { "type": "string", "format": "date-time" },
-          "evm_chain_id": { "type": "integer", "format": "int64" },
-          "evm_claim_txid": { "type": ["string", "null"] },
-          "evm_coordinator_address": { "type": "string" },
-          "evm_expected_sats": { "type": "integer", "format": "int64" },
-          "evm_fund_txid": { "type": ["string", "null"] },
-          "evm_htlc_address": { "type": "string" },
-          "evm_refund_locktime": { "type": "integer", "format": "int64" },
-          "fee_sats": { "type": "integer", "format": "int64" },
-          "hash_lock": { "type": "string" },
-          "id": { "type": "string" },
-          "network": { "type": "string" },
-          "receiver_pk": { "type": "string" },
-          "sender_pk": { "type": "string" },
-          "server_evm_address": { "type": "string" },
-          "source_amount": { "type": "string" },
-          "source_token": { "$ref": "#/components/schemas/TokenInfo" },
-          "status": { "$ref": "#/components/schemas/SwapStatus" },
-          "target_amount": { "type": "string" },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "evm_chain_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "evm_claim_txid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "evm_coordinator_address": {
+            "type": "string"
+          },
+          "evm_expected_sats": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "evm_fund_txid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "evm_htlc_address": {
+            "type": "string"
+          },
+          "evm_refund_locktime": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "fee_sats": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "hash_lock": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "network": {
+            "type": "string"
+          },
+          "receiver_pk": {
+            "type": "string"
+          },
+          "sender_pk": {
+            "type": "string"
+          },
+          "server_evm_address": {
+            "type": "string"
+          },
+          "source_amount": {
+            "type": "string"
+          },
+          "source_token": {
+            "$ref": "#/components/schemas/TokenInfo"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SwapStatus"
+          },
+          "target_amount": {
+            "type": "string"
+          },
           "target_evm_address": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "EVM address where tokens are swept after the claim (user's final destination)."
           },
-          "target_token": { "$ref": "#/components/schemas/TokenInfo" },
-          "unilateral_claim_delay": { "type": "integer", "format": "int64" },
-          "unilateral_refund_delay": { "type": "integer", "format": "int64" },
+          "target_token": {
+            "$ref": "#/components/schemas/TokenInfo"
+          },
+          "unilateral_claim_delay": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "unilateral_refund_delay": {
+            "type": "integer",
+            "format": "int64"
+          },
           "unilateral_refund_without_receiver_delay": {
             "type": "integer",
             "format": "int64"
           },
-          "vhtlc_refund_locktime": { "type": "integer", "format": "int64" },
+          "vhtlc_refund_locktime": {
+            "type": "integer",
+            "format": "int64"
+          },
           "wbtc_address": {
             "type": "string",
             "description": "WBTC token contract address on the target EVM chain (the token locked in the HTLC)."
@@ -1409,7 +1905,10 @@
             "description": "Hash lock provided by the client (20-byte hex string, no 0x prefix).\nThe client generates a secret and computes HASH160(secret) = RIPEMD160(SHA256(secret)).\nThis hash is used for both the on-chain Bitcoin HTLC (OP_HASH160) and the Arkade VHTLC.\nClient will use the secret to claim the Arkade VHTLC later."
           },
           "referral_code": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Optional referral code for fee exemption"
           },
           "refund_pk": {
@@ -1445,13 +1944,19 @@
         ],
         "properties": {
           "amount_in": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "How many sats the user wants to send (mutually exclusive with `amount_out`).\nValue is in satoshis (smallest BTC unit).",
             "minimum": 0
           },
           "amount_out": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "How much target token the user wants to receive (mutually exclusive with `amount_in`).\nValue is in the target token's smallest unit (e.g. for USDC with 6 decimals, 1000000 = 1\nUSDC).",
             "minimum": 0
@@ -1475,7 +1980,10 @@
             "description": "Hash lock provided by the client (32-byte hex string with 0x prefix)."
           },
           "referral_code": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Optional referral code for tracking."
           },
           "refund_pk": {
@@ -1526,11 +2034,17 @@
         ],
         "properties": {
           "btc_claim_txid": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "On-chain claim transaction ID (server claim)"
           },
           "btc_fund_txid": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "On-chain funding transaction ID"
           },
           "btc_hash_lock": {
@@ -1569,7 +2083,10 @@
             "description": "Numeric EVM chain ID (e.g. 137, 1, 42161)"
           },
           "evm_claim_txid": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "EVM HTLC claim transaction ID (user claim)"
           },
           "evm_coordinator_address": {
@@ -1582,7 +2099,10 @@
             "description": "Amount of WBTC sats locked in the EVM HTLC"
           },
           "evm_fund_txid": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "EVM HTLC fund transaction ID"
           },
           "evm_hash_lock": {
@@ -1603,8 +2123,14 @@
             "format": "int64",
             "description": "Protocol fee in satoshis"
           },
-          "id": { "type": "string", "format": "uuid" },
-          "network": { "type": "string", "description": "Bitcoin network" },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "network": {
+            "type": "string",
+            "description": "Bitcoin network"
+          },
           "server_evm_address": {
             "type": "string",
             "description": "Server's EVM address"
@@ -1617,13 +2143,18 @@
             "$ref": "#/components/schemas/TokenInfo",
             "description": "Source token info"
           },
-          "status": { "$ref": "#/components/schemas/SwapStatus" },
+          "status": {
+            "$ref": "#/components/schemas/SwapStatus"
+          },
           "target_amount": {
             "type": "string",
             "description": "How much the user will receive in the target token's smallest unit"
           },
           "target_evm_address": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "EVM address where tokens are swept after the claim (user's final destination)"
           },
           "target_token": {
@@ -1665,11 +2196,17 @@
         ],
         "properties": {
           "arkade_claim_txid": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Arkade VHTLC claim transaction ID (user claim)"
           },
           "arkade_fund_txid": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Arkade VHTLC fund transaction ID"
           },
           "arkade_server_pk": {
@@ -1686,11 +2223,17 @@
             "description": "Amount user must send in satoshis\nDeprecated: please use [`target_amount`]"
           },
           "btc_claim_txid": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "On-chain claim transaction ID (server claim)"
           },
           "btc_fund_txid": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "On-chain funding transaction ID"
           },
           "btc_htlc_address": {
@@ -1716,8 +2259,14 @@
             "type": "string",
             "description": "Hash lock (32-byte hex, no 0x prefix)"
           },
-          "id": { "type": "string", "description": "Unique swap identifier" },
-          "network": { "type": "string", "description": "Bitcoin network" },
+          "id": {
+            "type": "string",
+            "description": "Unique swap identifier"
+          },
+          "network": {
+            "type": "string",
+            "description": "Bitcoin network"
+          },
           "sats_receive": {
             "type": "integer",
             "format": "int64",
@@ -1792,19 +2341,31 @@
             ],
             "properties": {
               "bitcoin_htlc_claim_txid": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "Bitcoin HTLC claim transaction ID"
               },
               "bitcoin_htlc_fund_txid": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "Bitcoin HTLC fund transaction ID"
               },
               "evm_htlc_claim_txid": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "EVM HTLC claim transaction ID"
               },
               "evm_htlc_fund_txid": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "EVM HTLC fund transaction ID"
               },
               "htlc_address_arkade": {
@@ -1845,21 +2406,44 @@
       "CallJson": {
         "type": "object",
         "description": "A single call in the coordinator's Call[] array.",
-        "required": ["target", "value", "call_data"],
+        "required": [
+          "target",
+          "value",
+          "call_data"
+        ],
         "properties": {
-          "call_data": { "type": "string" },
-          "target": { "type": "string" },
-          "value": { "type": "string" }
+          "call_data": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
         }
       },
       "Chain": {
         "type": "string",
         "description": "Supported blockchain networks.\nEVM chains serialize to their chain ID as a string (e.g. \"137\" for Polygon).",
-        "enum": ["Arkade", "Lightning", "Bitcoin", "137", "1", "42161"]
+        "enum": [
+          "Arkade",
+          "Lightning",
+          "Bitcoin",
+          "137",
+          "1",
+          "42161"
+        ]
       },
       "ClaimGaslessRequest": {
         "type": "object",
-        "required": ["secret", "destination", "v", "r", "s"],
+        "required": [
+          "secret",
+          "destination",
+          "v",
+          "r",
+          "s"
+        ],
         "properties": {
           "destination": {
             "type": "string",
@@ -1867,7 +2451,9 @@
           },
           "dex_calldata": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/DexCalldata",
                 "description": "Optional DEX calldata from the client. If provided, the server uses this\ninstead of fetching from 1inch. Client should fetch via\n`GET /swap/{id}/redeem-and-swap-calldata?destination=...`"
@@ -1896,22 +2482,44 @@
       },
       "ClaimGaslessResponse": {
         "type": "object",
-        "required": ["id", "status", "tx_hash", "message"],
+        "required": [
+          "id",
+          "status",
+          "tx_hash",
+          "message"
+        ],
         "properties": {
-          "id": { "type": "string", "description": "Swap ID" },
-          "message": { "type": "string", "description": "Success message" },
-          "status": { "type": "string", "description": "Current swap status" },
-          "tx_hash": { "type": "string", "description": "Transaction hash" }
+          "id": {
+            "type": "string",
+            "description": "Swap ID"
+          },
+          "message": {
+            "type": "string",
+            "description": "Success message"
+          },
+          "status": {
+            "type": "string",
+            "description": "Current swap status"
+          },
+          "tx_hash": {
+            "type": "string",
+            "description": "Transaction hash"
+          }
         }
       },
       "CollabRefundDelegateRequest": {
         "type": "object",
         "description": "Request for collaborative refund of recoverable VTXOs (delegate batch flow).",
-        "required": ["intent_proof", "forfeit_psbts"],
+        "required": [
+          "intent_proof",
+          "forfeit_psbts"
+        ],
         "properties": {
           "forfeit_psbts": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Base64-encoded forfeit PSBTs (partially signed by the sender/client)."
           },
           "intent_proof": {
@@ -1923,11 +2531,16 @@
       "CollabRefundDelegateResponse": {
         "type": "object",
         "description": "Response with countersigned delegate PSBTs.",
-        "required": ["intent_proof", "forfeit_psbts"],
+        "required": [
+          "intent_proof",
+          "forfeit_psbts"
+        ],
         "properties": {
           "forfeit_psbts": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Base64-encoded countersigned forfeit PSBTs."
           },
           "intent_proof": {
@@ -1939,7 +2552,10 @@
       "CollabRefundRequest": {
         "type": "object",
         "description": "Request for collaborative refund of spendable VTXOs (offchain send flow).",
-        "required": ["ark_tx", "checkpoint_txs"],
+        "required": [
+          "ark_tx",
+          "checkpoint_txs"
+        ],
         "properties": {
           "ark_tx": {
             "type": "string",
@@ -1947,7 +2563,9 @@
           },
           "checkpoint_txs": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Base64-encoded checkpoint PSBTs."
           }
         }
@@ -1955,7 +2573,10 @@
       "CollabRefundResponse": {
         "type": "object",
         "description": "Response with countersigned PSBTs.",
-        "required": ["ark_tx", "checkpoint_txs"],
+        "required": [
+          "ark_tx",
+          "checkpoint_txs"
+        ],
         "properties": {
           "ark_tx": {
             "type": "string",
@@ -1963,14 +2584,18 @@
           },
           "checkpoint_txs": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "Base64-encoded countersigned checkpoint PSBTs."
           }
         }
       },
       "CosignerPkResponse": {
         "type": "object",
-        "required": ["cosigner_pk"],
+        "required": [
+          "cosigner_pk"
+        ],
         "properties": {
           "cosigner_pk": {
             "type": "string",
@@ -1980,7 +2605,12 @@
       },
       "CreateVtxoSwapRequest": {
         "type": "object",
-        "required": ["vtxos", "preimage_hash", "client_pk", "user_id"],
+        "required": [
+          "vtxos",
+          "preimage_hash",
+          "client_pk",
+          "user_id"
+        ],
         "properties": {
           "client_pk": {
             "type": "string",
@@ -1996,7 +2626,9 @@
           },
           "vtxos": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "List of VTXO outpoints to refresh"
           }
         }
@@ -2004,23 +2636,39 @@
       "DexCallData": {
         "type": "object",
         "description": "DEX swap calldata for the coordinator contract.",
-        "required": ["to", "data", "value"],
+        "required": [
+          "to",
+          "data",
+          "value"
+        ],
         "properties": {
-          "data": { "type": "string" },
-          "to": { "type": "string" },
-          "value": { "type": "string" }
+          "data": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
         }
       },
       "DexCalldata": {
         "type": "object",
         "description": "DEX calldata for the swap (from 1inch or another aggregator)",
-        "required": ["to", "data"],
+        "required": [
+          "to",
+          "data"
+        ],
         "properties": {
           "data": {
             "type": "string",
             "description": "Encoded swap calldata (hex string, with or without 0x prefix)"
           },
-          "to": { "type": "string", "description": "DEX router address" },
+          "to": {
+            "type": "string",
+            "description": "DEX router address"
+          },
           "value": {
             "type": "string",
             "description": "Native token value (usually \"0\")"
@@ -2030,27 +2678,57 @@
       "Eip2612Permit": {
         "type": "object",
         "description": "EIP-2612 permit signature for gasless token->Permit2 approval.",
-        "required": ["v", "r", "s", "value", "deadline"],
+        "required": [
+          "v",
+          "r",
+          "s",
+          "value",
+          "deadline"
+        ],
         "properties": {
-          "deadline": { "type": "integer", "format": "int64", "minimum": 0 },
-          "r": { "type": "string" },
-          "s": { "type": "string" },
-          "v": { "type": "integer", "format": "int32", "minimum": 0 },
-          "value": { "type": "string" }
+          "deadline": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "r": {
+            "type": "string"
+          },
+          "s": {
+            "type": "string"
+          },
+          "v": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "value": {
+            "type": "string"
+          }
         }
       },
       "ErrorResponse": {
         "type": "object",
-        "required": ["error"],
-        "properties": { "error": { "type": "string" } }
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        }
       },
       "EstimateVtxoSwapRequest": {
         "type": "object",
-        "required": ["vtxos"],
+        "required": [
+          "vtxos"
+        ],
         "properties": {
           "vtxos": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "List of VTXO outpoints to refresh (\"txid:vout\" format)"
           }
         }
@@ -2094,19 +2772,32 @@
       },
       "EvmChainInfo": {
         "type": "object",
-        "required": ["chain_id", "name"],
+        "required": [
+          "chain_id",
+          "name"
+        ],
         "properties": {
-          "chain_id": { "type": "integer", "format": "int64", "minimum": 0 },
-          "name": { "type": "string" }
+          "chain_id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          }
         }
       },
       "EvmChainsResponse": {
         "type": "object",
-        "required": ["chains"],
+        "required": [
+          "chains"
+        ],
         "properties": {
           "chains": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/EvmChainInfo" }
+            "items": {
+              "$ref": "#/components/schemas/EvmChainInfo"
+            }
           }
         }
       },
@@ -2124,13 +2815,19 @@
         ],
         "properties": {
           "amount_in": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "Source token amount in smallest units (mutually exclusive with `amount_out`).",
             "minimum": 0
           },
           "amount_out": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "Desired BTC output in sats (mutually exclusive with `amount_in`).",
             "minimum": 0
@@ -2154,7 +2851,10 @@
             "description": "User's Arkade VHTLC claim key (receiver)."
           },
           "referral_code": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Optional referral code for tracking."
           },
           "target_address": {
@@ -2208,43 +2908,121 @@
           "gasless"
         ],
         "properties": {
-          "arkade_server_pk": { "type": "string" },
-          "btc_claim_txid": { "type": ["string", "null"] },
-          "btc_fund_txid": { "type": ["string", "null"] },
-          "btc_vhtlc_address": { "type": "string" },
-          "chain": { "type": "string" },
-          "client_evm_address": { "type": "string" },
-          "created_at": { "type": "string", "format": "date-time" },
-          "evm_chain_id": { "type": "integer", "format": "int64" },
-          "evm_claim_txid": { "type": ["string", "null"] },
-          "evm_expected_sats": { "type": "integer", "format": "int64" },
-          "evm_fund_txid": { "type": ["string", "null"] },
-          "evm_htlc_address": { "type": "string" },
-          "evm_refund_locktime": { "type": "integer", "format": "int64" },
-          "fee_sats": { "type": "integer", "format": "int64" },
+          "arkade_server_pk": {
+            "type": "string"
+          },
+          "btc_claim_txid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "btc_fund_txid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "btc_vhtlc_address": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string"
+          },
+          "client_evm_address": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "evm_chain_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "evm_claim_txid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "evm_expected_sats": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "evm_fund_txid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "evm_htlc_address": {
+            "type": "string"
+          },
+          "evm_refund_locktime": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "fee_sats": {
+            "type": "integer",
+            "format": "int64"
+          },
           "gasless": {
             "type": "boolean",
             "description": "Whether this swap was created with gasless relay (Permit2)"
           },
-          "hash_lock": { "type": "string" },
-          "id": { "type": "string" },
-          "network": { "type": "string" },
-          "receiver_pk": { "type": "string" },
-          "sender_pk": { "type": "string" },
-          "server_evm_address": { "type": "string" },
-          "source_amount": { "type": "string" },
-          "source_token": { "$ref": "#/components/schemas/TokenInfo" },
-          "status": { "$ref": "#/components/schemas/SwapStatus" },
-          "target_amount": { "type": "string" },
-          "target_arkade_address": { "type": "string" },
-          "target_token": { "$ref": "#/components/schemas/TokenInfo" },
-          "unilateral_claim_delay": { "type": "integer", "format": "int64" },
-          "unilateral_refund_delay": { "type": "integer", "format": "int64" },
+          "hash_lock": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "network": {
+            "type": "string"
+          },
+          "receiver_pk": {
+            "type": "string"
+          },
+          "sender_pk": {
+            "type": "string"
+          },
+          "server_evm_address": {
+            "type": "string"
+          },
+          "source_amount": {
+            "type": "string"
+          },
+          "source_token": {
+            "$ref": "#/components/schemas/TokenInfo"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SwapStatus"
+          },
+          "target_amount": {
+            "type": "string"
+          },
+          "target_arkade_address": {
+            "type": "string"
+          },
+          "target_token": {
+            "$ref": "#/components/schemas/TokenInfo"
+          },
+          "unilateral_claim_delay": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "unilateral_refund_delay": {
+            "type": "integer",
+            "format": "int64"
+          },
           "unilateral_refund_without_receiver_delay": {
             "type": "integer",
             "format": "int64"
           },
-          "vhtlc_refund_locktime": { "type": "integer", "format": "int64" }
+          "vhtlc_refund_locktime": {
+            "type": "integer",
+            "format": "int64"
+          }
         }
       },
       "EvmToBitcoinSwapRequest": {
@@ -2260,13 +3038,19 @@
         ],
         "properties": {
           "amount_in": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "Source token amount in smallest units (mutually exclusive with `amount_out`).",
             "minimum": 0
           },
           "amount_out": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "Desired BTC output in sats (mutually exclusive with `amount_in`).",
             "minimum": 0
@@ -2290,11 +3074,17 @@
             "description": "Hash lock (0x-prefixed 32-byte hex). Client generates secret, computes SHA256(secret)."
           },
           "referral_code": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Optional referral code for tracking."
           },
           "target_address": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "User's target BTC address to receive claimed funds."
           },
           "token_address": {
@@ -2341,9 +3131,25 @@
           "gasless"
         ],
         "properties": {
-          "btc_claim_txid": { "type": ["string", "null"] },
-          "btc_fund_txid": { "type": ["string", "null"] },
-          "btc_fund_vout": { "type": ["integer", "null"], "format": "int64" },
+          "btc_claim_txid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "btc_fund_txid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "btc_fund_vout": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
           "btc_hash_lock": {
             "type": "string",
             "description": "BTC hash lock (RIPEMD160 of EVM hash lock)"
@@ -2365,24 +3171,40 @@
             "type": "string",
             "description": "User's x-only public key for claiming BTC"
           },
-          "chain": { "type": "string", "description": "EVM chain name" },
+          "chain": {
+            "type": "string",
+            "description": "EVM chain name"
+          },
           "client_evm_address": {
             "type": "string",
             "description": "User's EVM address (funds the EVM HTLC)"
           },
-          "created_at": { "type": "string", "format": "date-time" },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
           "evm_chain_id": {
             "type": "integer",
             "format": "int64",
             "description": "Numeric EVM chain ID"
           },
-          "evm_claim_txid": { "type": ["string", "null"] },
+          "evm_claim_txid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "evm_expected_sats": {
             "type": "integer",
             "format": "int64",
             "description": "Expected WBTC amount (in sats) on EVM"
           },
-          "evm_fund_txid": { "type": ["string", "null"] },
+          "evm_fund_txid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "evm_hash_lock": {
             "type": "string",
             "description": "EVM hash lock (SHA-256, 0x-prefixed 32-byte hex)"
@@ -2396,13 +3218,20 @@
             "format": "int64",
             "description": "EVM HTLC refund locktime (unix timestamp)"
           },
-          "fee_sats": { "type": "integer", "format": "int64" },
+          "fee_sats": {
+            "type": "integer",
+            "format": "int64"
+          },
           "gasless": {
             "type": "boolean",
             "description": "Whether this swap was created with gasless relay (Permit2)"
           },
-          "id": { "type": "string" },
-          "network": { "type": "string" },
+          "id": {
+            "type": "string"
+          },
+          "network": {
+            "type": "string"
+          },
           "server_evm_address": {
             "type": "string",
             "description": "Server's EVM address (claims the EVM HTLC)"
@@ -2411,17 +3240,26 @@
             "type": "string",
             "description": "Source token amount in smallest units"
           },
-          "source_token": { "$ref": "#/components/schemas/TokenInfo" },
-          "status": { "$ref": "#/components/schemas/SwapStatus" },
+          "source_token": {
+            "$ref": "#/components/schemas/TokenInfo"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SwapStatus"
+          },
           "target_amount": {
             "type": "string",
             "description": "Expected BTC amount (in sats) user will receive"
           },
           "target_btc_address": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "User's target BTC address for receiving claimed funds"
           },
-          "target_token": { "$ref": "#/components/schemas/TokenInfo" },
+          "target_token": {
+            "$ref": "#/components/schemas/TokenInfo"
+          },
           "wbtc_address": {
             "type": "string",
             "description": "WBTC token contract address on the EVM chain"
@@ -2448,39 +3286,66 @@
             ],
             "properties": {
               "approve_tx": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "Token approval transaction hash"
               },
               "bitcoin_htlc_claim_txid": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "Bitcoin HTLC claim transaction ID"
               },
               "bitcoin_htlc_fund_txid": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "Bitcoin HTLC fund transaction ID"
               },
               "create_swap_tx": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "Create swap transaction hash"
               },
               "evm_htlc_claim_txid": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "EVM HTLC claim transaction ID"
               },
               "evm_htlc_fund_txid": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "EVM HTLC fund transaction ID"
               },
               "gelato_forwarder_address": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "Gelato forwarder contract address"
               },
               "gelato_user_deadline": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "Gelato user deadline timestamp"
               },
               "gelato_user_nonce": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "Gelato user nonce for replay protection"
               },
               "htlc_address_arkade": {
@@ -2514,7 +3379,10 @@
                 "description": "Amount the user will receive in sats"
               },
               "user_address_arkade": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "User's Arkade address to receive BTC (optional)"
               },
               "user_address_evm": {
@@ -2552,7 +3420,10 @@
             "description": "User's Lightning BOLT11 invoice to receive payment.\nThe payment hash from this invoice becomes the HTLC hash_lock."
           },
           "referral_code": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Optional referral code for tracking."
           },
           "token_address": {
@@ -2602,70 +3473,158 @@
           "gasless"
         ],
         "properties": {
-          "arkade_server_pk": { "type": "string" },
-          "chain": { "type": "string" },
-          "client_evm_address": { "type": "string" },
+          "arkade_server_pk": {
+            "type": "string"
+          },
+          "chain": {
+            "type": "string"
+          },
+          "client_evm_address": {
+            "type": "string"
+          },
           "client_lightning_invoice": {
             "type": "string",
             "description": "User's Lightning invoice to receive payment"
           },
-          "created_at": { "type": "string", "format": "date-time" },
-          "evm_chain_id": { "type": "integer", "format": "int64" },
-          "evm_claim_txid": { "type": ["string", "null"] },
-          "evm_expected_sats": { "type": "integer", "format": "int64" },
-          "evm_fund_txid": { "type": ["string", "null"] },
-          "evm_htlc_address": { "type": "string" },
-          "evm_refund_locktime": { "type": "integer", "format": "int64" },
-          "fee_sats": { "type": "integer", "format": "int64" },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "evm_chain_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "evm_claim_txid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "evm_expected_sats": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "evm_fund_txid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "evm_htlc_address": {
+            "type": "string"
+          },
+          "evm_refund_locktime": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "fee_sats": {
+            "type": "integer",
+            "format": "int64"
+          },
           "gasless": {
             "type": "boolean",
             "description": "Whether this swap was created with gasless relay (Permit2)"
           },
-          "hash_lock": { "type": "string" },
-          "id": { "type": "string" },
+          "hash_lock": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
           "lightning_paid": {
             "type": "boolean",
             "description": "Whether the Lightning payment has been made"
           },
-          "network": { "type": "string" },
-          "receiver_pk": { "type": "string" },
-          "sender_pk": { "type": "string" },
-          "server_evm_address": { "type": "string" },
-          "source_amount": { "type": "string" },
-          "source_token": { "$ref": "#/components/schemas/TokenInfo" },
-          "status": { "$ref": "#/components/schemas/SwapStatus" },
-          "target_amount": { "type": "string" },
-          "target_token": { "$ref": "#/components/schemas/TokenInfo" },
-          "unilateral_claim_delay": { "type": "integer", "format": "int64" },
-          "unilateral_refund_delay": { "type": "integer", "format": "int64" },
+          "network": {
+            "type": "string"
+          },
+          "receiver_pk": {
+            "type": "string"
+          },
+          "sender_pk": {
+            "type": "string"
+          },
+          "server_evm_address": {
+            "type": "string"
+          },
+          "source_amount": {
+            "type": "string"
+          },
+          "source_token": {
+            "$ref": "#/components/schemas/TokenInfo"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SwapStatus"
+          },
+          "target_amount": {
+            "type": "string"
+          },
+          "target_token": {
+            "$ref": "#/components/schemas/TokenInfo"
+          },
+          "unilateral_claim_delay": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "unilateral_refund_delay": {
+            "type": "integer",
+            "format": "int64"
+          },
           "unilateral_refund_without_receiver_delay": {
             "type": "integer",
             "format": "int64"
           },
-          "vhtlc_refund_locktime": { "type": "integer", "format": "int64" }
+          "vhtlc_refund_locktime": {
+            "type": "integer",
+            "format": "int64"
+          }
         }
       },
       "EvmTokenInfo": {
         "type": "object",
-        "required": ["address", "symbol", "name", "decimals"],
+        "required": [
+          "address",
+          "symbol",
+          "name",
+          "decimals"
+        ],
         "properties": {
-          "address": { "type": "string" },
-          "decimals": { "type": "integer", "format": "int32", "minimum": 0 },
-          "logo_uri": { "type": ["string", "null"] },
-          "name": { "type": "string" },
-          "symbol": { "type": "string" }
+          "address": {
+            "type": "string"
+          },
+          "decimals": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "logo_uri": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          }
         }
       },
       "EvmTokensResponse": {
         "type": "object",
-        "required": ["chains"],
+        "required": [
+          "chains"
+        ],
         "properties": {
           "chains": {
             "type": "object",
             "description": "chain_id -> tokens",
             "additionalProperties": {
               "type": "array",
-              "items": { "$ref": "#/components/schemas/EvmTokenInfo" }
+              "items": {
+                "$ref": "#/components/schemas/EvmTokenInfo"
+              }
             },
             "propertyNames": {
               "type": "integer",
@@ -2686,12 +3645,16 @@
         "properties": {
           "calls": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/CallJson" },
+            "items": {
+              "$ref": "#/components/schemas/CallJson"
+            },
             "description": "The calls array (includes fee transfer + DEX swap)"
           },
           "eip2612_permit": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/Eip2612Permit",
                 "description": "Optional EIP-2612 permit for gasless token->Permit2 approval"
@@ -2716,85 +3679,41 @@
       },
       "FundGaslessResponse": {
         "type": "object",
-        "required": ["id", "tx_hash", "message"],
+        "required": [
+          "id",
+          "tx_hash",
+          "message"
+        ],
         "properties": {
-          "id": { "type": "string" },
-          "message": { "type": "string" },
-          "tx_hash": { "type": "string" }
+          "id": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "tx_hash": {
+            "type": "string"
+          }
         }
       },
       "GetSwapResponse": {
         "oneOf": [
           {
             "allOf": [
-              { "$ref": "#/components/schemas/BtcToArkadeSwapResponse" },
+              {
+                "$ref": "#/components/schemas/BtcToArkadeSwapResponse"
+              },
               {
                 "type": "object",
-                "required": ["direction"],
-                "properties": {
-                  "direction": { "type": "string", "enum": ["btc_to_arkade"] }
-                }
-              }
-            ]
-          },
-          {
-            "allOf": [
-              { "$ref": "#/components/schemas/BitcoinToEvmSwapResponse" },
-              {
-                "type": "object",
-                "required": ["direction"],
-                "properties": {
-                  "direction": { "type": "string", "enum": ["bitcoin_to_evm"] }
-                }
-              }
-            ]
-          },
-          {
-            "allOf": [
-              { "$ref": "#/components/schemas/ArkadeToEvmSwapResponse" },
-              {
-                "type": "object",
-                "required": ["direction"],
-                "properties": {
-                  "direction": { "type": "string", "enum": ["arkade_to_evm"] }
-                }
-              }
-            ]
-          },
-          {
-            "allOf": [
-              { "$ref": "#/components/schemas/EvmToArkadeSwapResponse" },
-              {
-                "type": "object",
-                "required": ["direction"],
-                "properties": {
-                  "direction": { "type": "string", "enum": ["evm_to_arkade"] }
-                }
-              }
-            ]
-          },
-          {
-            "allOf": [
-              { "$ref": "#/components/schemas/EvmToBitcoinSwapResponse" },
-              {
-                "type": "object",
-                "required": ["direction"],
-                "properties": {
-                  "direction": { "type": "string", "enum": ["evm_to_bitcoin"] }
-                }
-              }
-            ]
-          },
-          {
-            "allOf": [
-              { "$ref": "#/components/schemas/LightningToEvmSwapResponse" },
-              {
-                "type": "object",
-                "required": ["direction"],
+                "required": [
+                  "direction"
+                ],
                 "properties": {
                   "direction": {
                     "type": "string",
-                    "enum": ["lightning_to_evm"]
+                    "enum": [
+                      "btc_to_arkade"
+                    ]
                   }
                 }
               }
@@ -2802,14 +3721,125 @@
           },
           {
             "allOf": [
-              { "$ref": "#/components/schemas/EvmToLightningSwapResponse" },
+              {
+                "$ref": "#/components/schemas/BitcoinToEvmSwapResponse"
+              },
               {
                 "type": "object",
-                "required": ["direction"],
+                "required": [
+                  "direction"
+                ],
                 "properties": {
                   "direction": {
                     "type": "string",
-                    "enum": ["evm_to_lightning"]
+                    "enum": [
+                      "bitcoin_to_evm"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ArkadeToEvmSwapResponse"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "direction"
+                ],
+                "properties": {
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "arkade_to_evm"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/EvmToArkadeSwapResponse"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "direction"
+                ],
+                "properties": {
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "evm_to_arkade"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/EvmToBitcoinSwapResponse"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "direction"
+                ],
+                "properties": {
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "evm_to_bitcoin"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LightningToEvmSwapResponse"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "direction"
+                ],
+                "properties": {
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "lightning_to_evm"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/EvmToLightningSwapResponse"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "direction"
+                ],
+                "properties": {
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "evm_to_lightning"
+                    ]
                   }
                 }
               }
@@ -2831,13 +3861,19 @@
         ],
         "properties": {
           "amount_in": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "How many sats the user wants to send (mutually exclusive with `amount_out`).\nValue is in satoshis (smallest BTC unit).",
             "minimum": 0
           },
           "amount_out": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64",
             "description": "How much target token the user wants to receive (mutually exclusive with `amount_in`).\nValue is in the target token's smallest unit (e.g. for USDC with 6 decimals, 1000000 = 1\nUSDC).",
             "minimum": 0
@@ -2861,7 +3897,10 @@
             "description": "Hash lock provided by the client (32-byte hex string with 0x prefix)."
           },
           "referral_code": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Optional referral code for tracking."
           },
           "refund_pk": {
@@ -2916,52 +3955,125 @@
           "network"
         ],
         "properties": {
-          "arkade_server_pk": { "type": "string" },
+          "arkade_server_pk": {
+            "type": "string"
+          },
           "boltz_invoice": {
             "type": "string",
             "description": "Lightning invoice to pay"
           },
-          "boltz_swap_id": { "type": "string", "description": "Boltz swap ID" },
+          "boltz_swap_id": {
+            "type": "string",
+            "description": "Boltz swap ID"
+          },
           "btc_claim_txid": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Server's claim transaction ID on Arkade (Boltz VHTLC claim)"
           },
-          "chain": { "type": "string" },
+          "chain": {
+            "type": "string"
+          },
           "client_evm_address": {
             "type": "string",
             "description": "EVM address that will sign the HTLC claim"
           },
-          "created_at": { "type": "string", "format": "date-time" },
-          "evm_chain_id": { "type": "integer", "format": "int64" },
-          "evm_claim_txid": { "type": ["string", "null"] },
-          "evm_coordinator_address": { "type": "string" },
-          "evm_expected_sats": { "type": "integer", "format": "int64" },
-          "evm_fund_txid": { "type": ["string", "null"] },
-          "evm_htlc_address": { "type": "string" },
-          "evm_refund_locktime": { "type": "integer", "format": "int64" },
-          "fee_sats": { "type": "integer", "format": "int64" },
-          "hash_lock": { "type": "string" },
-          "id": { "type": "string" },
-          "network": { "type": "string" },
-          "receiver_pk": { "type": "string" },
-          "sender_pk": { "type": "string" },
-          "server_evm_address": { "type": "string" },
-          "source_amount": { "type": "string" },
-          "source_token": { "$ref": "#/components/schemas/TokenInfo" },
-          "status": { "$ref": "#/components/schemas/SwapStatus" },
-          "target_amount": { "type": "string" },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "evm_chain_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "evm_claim_txid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "evm_coordinator_address": {
+            "type": "string"
+          },
+          "evm_expected_sats": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "evm_fund_txid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "evm_htlc_address": {
+            "type": "string"
+          },
+          "evm_refund_locktime": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "fee_sats": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "hash_lock": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "network": {
+            "type": "string"
+          },
+          "receiver_pk": {
+            "type": "string"
+          },
+          "sender_pk": {
+            "type": "string"
+          },
+          "server_evm_address": {
+            "type": "string"
+          },
+          "source_amount": {
+            "type": "string"
+          },
+          "source_token": {
+            "$ref": "#/components/schemas/TokenInfo"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SwapStatus"
+          },
+          "target_amount": {
+            "type": "string"
+          },
           "target_evm_address": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "EVM address where tokens are swept after the claim"
           },
-          "target_token": { "$ref": "#/components/schemas/TokenInfo" },
-          "unilateral_claim_delay": { "type": "integer", "format": "int64" },
-          "unilateral_refund_delay": { "type": "integer", "format": "int64" },
+          "target_token": {
+            "$ref": "#/components/schemas/TokenInfo"
+          },
+          "unilateral_claim_delay": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "unilateral_refund_delay": {
+            "type": "integer",
+            "format": "int64"
+          },
           "unilateral_refund_without_receiver_delay": {
             "type": "integer",
             "format": "int64"
           },
-          "vhtlc_refund_locktime": { "type": "integer", "format": "int64" },
+          "vhtlc_refund_locktime": {
+            "type": "integer",
+            "format": "int64"
+          },
           "wbtc_address": {
             "type": "string",
             "description": "WBTC token contract address on the target EVM chain"
@@ -2970,7 +4082,10 @@
       },
       "MtpResponse": {
         "type": "object",
-        "required": ["mtp", "tip_height"],
+        "required": [
+          "mtp",
+          "tip_height"
+        ],
         "properties": {
           "mtp": {
             "type": "integer",
@@ -2988,7 +4103,12 @@
       },
       "PriceTiers": {
         "type": "object",
-        "required": ["tier_1", "tier_100", "tier_1000", "tier_5000"],
+        "required": [
+          "tier_1",
+          "tier_100",
+          "tier_1000",
+          "tier_5000"
+        ],
         "properties": {
           "tier_1": {
             "type": "number",
@@ -3015,11 +4135,16 @@
       "PriceUpdateMessage": {
         "type": "object",
         "description": "WebSocket message containing tiered prices for all trading pairs",
-        "required": ["timestamp", "pairs"],
+        "required": [
+          "timestamp",
+          "pairs"
+        ],
         "properties": {
           "pairs": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/TradingPairPrices" },
+            "items": {
+              "$ref": "#/components/schemas/TradingPairPrices"
+            },
             "description": "List of trading pairs with their tiered prices"
           },
           "timestamp": {
@@ -3101,7 +4226,9 @@
           },
           {
             "type": "object",
-            "required": ["index"],
+            "required": [
+              "index"
+            ],
             "properties": {
               "index": {
                 "type": "integer",
@@ -3115,7 +4242,9 @@
       },
       "RecoveryRequest": {
         "type": "object",
-        "required": ["xpub"],
+        "required": [
+          "xpub"
+        ],
         "properties": {
           "xpub": {
             "type": "string",
@@ -3125,7 +4254,10 @@
       },
       "RecoveryResponse": {
         "type": "object",
-        "required": ["swaps", "highest_index"],
+        "required": [
+          "swaps",
+          "highest_index"
+        ],
         "properties": {
           "highest_index": {
             "type": "integer",
@@ -3135,7 +4267,9 @@
           },
           "swaps": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/RecoveredSwap" },
+            "items": {
+              "$ref": "#/components/schemas/RecoveredSwap"
+            },
             "description": "List of recovered swaps with their derivation indices"
           }
         }
@@ -3143,7 +4277,10 @@
       "RedeemAndSwapResponse": {
         "type": "object",
         "description": "Response containing fresh DEX calldata and the gasless fee that will be deducted at claim time.",
-        "required": ["gasless_fee_sats", "calls_hash"],
+        "required": [
+          "gasless_fee_sats",
+          "calls_hash"
+        ],
         "properties": {
           "calls_hash": {
             "type": "string",
@@ -3151,7 +4288,9 @@
           },
           "dex_calldata": {
             "oneOf": [
-              { "type": "null" },
+              {
+                "type": "null"
+              },
               {
                 "$ref": "#/components/schemas/DexCallData",
                 "description": "DEX swap calldata from 1inch. None for direct WBTC swaps (no DEX component)."
@@ -3169,7 +4308,10 @@
       "RefundCalldataResponse": {
         "type": "object",
         "description": "Response containing refund calldata for an EVM-to-Arkade swap.",
-        "required": ["coordinator_address", "calldata"],
+        "required": [
+          "coordinator_address",
+          "calldata"
+        ],
         "properties": {
           "calldata": {
             "type": "string",
@@ -3196,7 +4338,9 @@
           },
           "forfeit_psbts": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "description": "List of base64-encoded partial forfeit PSBTs (signed with SIGHASH_ALL|ANYONECANPAY)."
           },
           "intent_message": {
@@ -3208,18 +4352,26 @@
             "description": "Base64-encoded intent proof PSBT (signed by the VTXO owner)."
           },
           "preimage": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Optional hex-encoded preimage (the HTLC secret). Required together with `swap_id`."
           },
           "swap_id": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Optional swap ID. When provided alongside `preimage`, the backend marks the\nswap as ClientRedeemed so the EVM claimer can proceed."
           }
         }
       },
       "SettleDelegateResponse": {
         "type": "object",
-        "required": ["commitment_txid"],
+        "required": [
+          "commitment_txid"
+        ],
         "properties": {
           "commitment_txid": {
             "type": "string",
@@ -3229,16 +4381,26 @@
       },
       "SupportAgentInfo": {
         "type": "object",
-        "required": ["npub"],
-        "properties": { "npub": { "type": "string" } }
+        "required": [
+          "npub"
+        ],
+        "properties": {
+          "npub": {
+            "type": "string"
+          }
+        }
       },
       "SupportAgentsResponse": {
         "type": "object",
-        "required": ["agents"],
+        "required": [
+          "agents"
+        ],
         "properties": {
           "agents": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/SupportAgentInfo" }
+            "items": {
+              "$ref": "#/components/schemas/SupportAgentInfo"
+            }
           }
         }
       },
@@ -3290,7 +4452,10 @@
             "type": "string",
             "description": "Hash lock for the HTLC (32-byte hex string with 0x prefix)"
           },
-          "id": { "type": "string", "description": "Unique swap identifier" },
+          "id": {
+            "type": "string",
+            "description": "Unique swap identifier"
+          },
           "network": {
             "type": "string",
             "description": "Bitcoin network (e.g., \"signet\", \"mainnet\")"
@@ -3364,44 +4529,88 @@
         ]
       },
       "TokenId": {
-        "oneOf": [{ "type": "string", "enum": ["btc"] }, { "type": "string" }],
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "btc"
+            ]
+          },
+          {
+            "type": "string"
+          }
+        ],
         "description": "Token identifier. Known values: btc, 0x123456"
       },
       "TokenInfo": {
         "type": "object",
-        "required": ["token_id", "symbol", "chain", "name", "decimals"],
+        "required": [
+          "token_id",
+          "symbol",
+          "chain",
+          "name",
+          "decimals"
+        ],
         "properties": {
-          "chain": { "$ref": "#/components/schemas/Chain" },
-          "decimals": { "type": "integer", "format": "int32", "minimum": 0 },
-          "name": { "type": "string" },
-          "symbol": { "type": "string" },
-          "token_id": { "$ref": "#/components/schemas/TokenId" }
+          "chain": {
+            "$ref": "#/components/schemas/Chain"
+          },
+          "decimals": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "token_id": {
+            "$ref": "#/components/schemas/TokenId"
+          }
         }
       },
       "TokenInfos": {
         "type": "object",
-        "required": ["btc_tokens", "evm_tokens"],
+        "required": [
+          "btc_tokens",
+          "evm_tokens"
+        ],
         "properties": {
           "btc_tokens": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/TokenInfo" }
+            "items": {
+              "$ref": "#/components/schemas/TokenInfo"
+            }
           },
           "evm_tokens": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/TokenInfo" }
+            "items": {
+              "$ref": "#/components/schemas/TokenInfo"
+            }
           }
         }
       },
       "TradingPairPrices": {
         "type": "object",
-        "required": ["pair", "source", "target", "tiers"],
+        "required": [
+          "pair",
+          "source",
+          "target",
+          "tiers"
+        ],
         "properties": {
           "pair": {
             "type": "string",
             "description": "Trading pair identifier (e.g., \"USDC_POL-BTC\" or \"USDT0_POL-BTC\")\nkept for backwards compatibility, equals [`source`]-[`target`]"
           },
-          "source": { "$ref": "#/components/schemas/TokenId" },
-          "target": { "$ref": "#/components/schemas/TokenId" },
+          "source": {
+            "$ref": "#/components/schemas/TokenId"
+          },
+          "target": {
+            "$ref": "#/components/schemas/TokenId"
+          },
           "tiers": {
             "$ref": "#/components/schemas/PriceTiers",
             "description": "Price tiers for different swap amounts"
@@ -3410,10 +4619,17 @@
       },
       "Version": {
         "type": "object",
-        "required": ["tag", "commit_hash"],
+        "required": [
+          "tag",
+          "commit_hash"
+        ],
         "properties": {
-          "commit_hash": { "type": "string" },
-          "tag": { "type": "string" }
+          "commit_hash": {
+            "type": "string"
+          },
+          "tag": {
+            "type": "string"
+          }
         }
       },
       "VtxoSwapResponse": {
@@ -3442,14 +4658,21 @@
           "network"
         ],
         "properties": {
-          "arkade_server_pk": { "type": "string" },
-          "client_fund_amount_sats": { "type": "integer", "format": "int64" },
+          "arkade_server_pk": {
+            "type": "string"
+          },
+          "client_fund_amount_sats": {
+            "type": "integer",
+            "format": "int64"
+          },
           "client_locktime": {
             "type": "integer",
             "format": "int64",
             "minimum": 0
           },
-          "client_pk": { "type": "string" },
+          "client_pk": {
+            "type": "string"
+          },
           "client_unilateral_claim_delay": {
             "type": "integer",
             "format": "int64"
@@ -3462,27 +4685,41 @@
             "type": "integer",
             "format": "int64"
           },
-          "client_vhtlc_address": { "type": "string" },
+          "client_vhtlc_address": {
+            "type": "string"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
             "description": "Creation timestamp"
           },
-          "fee_sats": { "type": "integer", "format": "int64" },
+          "fee_sats": {
+            "type": "integer",
+            "format": "int64"
+          },
           "id": {
             "type": "string",
             "format": "uuid",
             "description": "Swap ID"
           },
-          "network": { "type": "string" },
-          "preimage_hash": { "type": "string" },
-          "server_fund_amount_sats": { "type": "integer", "format": "int64" },
+          "network": {
+            "type": "string"
+          },
+          "preimage_hash": {
+            "type": "string"
+          },
+          "server_fund_amount_sats": {
+            "type": "integer",
+            "format": "int64"
+          },
           "server_locktime": {
             "type": "integer",
             "format": "int64",
             "minimum": 0
           },
-          "server_pk": { "type": "string" },
+          "server_pk": {
+            "type": "string"
+          },
           "server_unilateral_claim_delay": {
             "type": "integer",
             "format": "int64"
@@ -3495,7 +4732,9 @@
             "type": "integer",
             "format": "int64"
           },
-          "server_vhtlc_address": { "type": "string" },
+          "server_vhtlc_address": {
+            "type": "string"
+          },
           "status": {
             "$ref": "#/components/schemas/VtxoSwapStatus",
             "description": "Swap status"
@@ -3515,17 +4754,206 @@
           "clientfundedserverrefunded",
           "expired"
         ]
+      },
+      "CollabRefundEvmRequest": {
+        "type": "object",
+        "description": "Request for collaborative refund of an EVM HTLC.",
+        "required": [
+          "v",
+          "r",
+          "s",
+          "depositor_address"
+        ],
+        "properties": {
+          "v": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0,
+            "description": "EIP-712 signature v (depositor's coordinator-level signature)"
+          },
+          "r": {
+            "type": "string",
+            "description": "EIP-712 signature r (32-byte hex string, with or without 0x prefix)"
+          },
+          "s": {
+            "type": "string",
+            "description": "EIP-712 signature s (32-byte hex string, with or without 0x prefix)"
+          },
+          "depositor_address": {
+            "type": "string",
+            "description": "On-chain depositor address (the address that funded the HTLC via the coordinator). In the Permit2 flow this is a derived key, not the user's wallet address."
+          },
+          "mode": {
+            "type": "string",
+            "description": "Refund mode: \"direct\" (WBTC back to depositor) or \"swap\" (DEX swap-back to original token)",
+            "default": "direct"
+          },
+          "sweep_token": {
+            "type": "string",
+            "nullable": true,
+            "description": "Token to sweep to depositor after refund. Required for \"swap\" mode. For \"direct\" mode, defaults to WBTC."
+          },
+          "min_amount_out": {
+            "type": "string",
+            "description": "Minimum amount out for the sweep (0 = no minimum). Defaults to 0.",
+            "default": "0"
+          },
+          "dex_calldata": {
+            "nullable": true,
+            "description": "Optional DEX calldata for swap-back mode.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DexCalldata"
+              }
+            ]
+          }
+        }
+      },
+      "CollabRefundEvmResponse": {
+        "type": "object",
+        "description": "Response for collaborative refund of an EVM HTLC.",
+        "required": [
+          "id",
+          "tx_hash",
+          "message"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Swap ID"
+          },
+          "tx_hash": {
+            "type": "string",
+            "description": "Transaction hash of the on-chain refund"
+          },
+          "message": {
+            "type": "string",
+            "description": "Success message"
+          }
+        }
+      },
+      "CollabRefundEvmParams": {
+        "type": "object",
+        "description": "EIP-712 parameters the client needs to sign for collaborative refund.",
+        "required": [
+          "coordinator_address",
+          "server_signer_address",
+          "preimage_hash",
+          "amount",
+          "token",
+          "claim_address",
+          "timelock",
+          "chain_id",
+          "mode",
+          "sweep_token",
+          "min_amount_out"
+        ],
+        "properties": {
+          "coordinator_address": {
+            "type": "string",
+            "description": "HTLCCoordinator contract address (EIP-712 verifyingContract)"
+          },
+          "server_signer_address": {
+            "type": "string",
+            "description": "Server signer EOA address (the caller field in the EIP-712 struct)"
+          },
+          "preimage_hash": {
+            "type": "string",
+            "description": "Preimage hash (0x-prefixed, 32-byte hex)"
+          },
+          "amount": {
+            "type": "string",
+            "description": "WBTC amount locked in the HTLC (decimal string)"
+          },
+          "token": {
+            "type": "string",
+            "description": "WBTC token address"
+          },
+          "claim_address": {
+            "type": "string",
+            "description": "Claim address (server EVM address)"
+          },
+          "timelock": {
+            "type": "integer",
+            "format": "int64",
+            "description": "HTLC timelock (unix timestamp)"
+          },
+          "chain_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "EVM chain ID"
+          },
+          "mode": {
+            "type": "string",
+            "description": "Settlement mode: direct or swap-back"
+          },
+          "sweep_token": {
+            "type": "string",
+            "description": "Token the depositor receives after refund (EIP-712 sweepToken field)"
+          },
+          "min_amount_out": {
+            "type": "string",
+            "description": "Minimum output amount for the sweep (EIP-712 minAmountOut field)"
+          },
+          "source_token_address": {
+            "type": "string",
+            "nullable": true,
+            "description": "Source token address (only present for swap-back)"
+          },
+          "dex_calldata": {
+            "nullable": true,
+            "description": "DEX calldata for swap-back mode",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CollabRefundDexCalldata"
+              }
+            ]
+          }
+        }
+      },
+      "CollabRefundDexCalldata": {
+        "type": "object",
+        "description": "DEX calldata returned by the params endpoint for swap-back mode.",
+        "required": [
+          "to",
+          "data",
+          "value"
+        ],
+        "properties": {
+          "to": {
+            "type": "string",
+            "description": "DEX router address"
+          },
+          "data": {
+            "type": "string",
+            "description": "Encoded swap calldata (0x-prefixed hex string)"
+          },
+          "value": {
+            "type": "string",
+            "description": "Native token value (usually 0)"
+          }
+        }
       }
     }
   },
   "tags": [
-    { "name": "version", "description": "Check API version information." },
-    { "name": "tokens", "description": "Get available tokens for swaps." },
+    {
+      "name": "version",
+      "description": "Check API version information."
+    },
+    {
+      "name": "tokens",
+      "description": "Get available tokens for swaps."
+    },
     {
       "name": "asset-pairs",
       "description": "Get supported asset pair combinations."
     },
-    { "name": "quote", "description": "Get quotes for token swaps." },
+    {
+      "name": "quote",
+      "description": "Get quotes for token swaps."
+    },
     {
       "name": "swap-arkade-polygon",
       "description": "Create BTC to Polygon swaps."
@@ -3602,7 +5030,10 @@
       "name": "swap-evm-lightning",
       "description": "Create chain-agnostic EVM to Lightning swaps."
     },
-    { "name": "swaps", "description": "Get swap details and status." },
+    {
+      "name": "swaps",
+      "description": "Get swap details and status."
+    },
     {
       "name": "recovery",
       "description": "Recover swaps from extended public key."
@@ -3611,7 +5042,10 @@
       "name": "evm-tokens",
       "description": "Get available EVM tokens from 1inch."
     },
-    { "name": "health", "description": "Health check endpoint." },
+    {
+      "name": "health",
+      "description": "Health check endpoint."
+    },
     {
       "name": "mtp",
       "description": "Bitcoin Median Time Past (MTP) information."
@@ -3620,6 +5054,9 @@
       "name": "websocket",
       "description": "WebSocket endpoints for real-time data streaming."
     },
-    { "name": "support", "description": "Support agent configuration." }
+    {
+      "name": "support",
+      "description": "Support agent configuration."
+    }
   ]
 }

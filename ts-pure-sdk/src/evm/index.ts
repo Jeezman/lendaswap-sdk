@@ -5,11 +5,15 @@
  */
 
 export {
+  buildCollabRefundEvmDigest,
+  buildCollabRefundEvmTypedData,
   buildEip2612PermitDigest,
   buildPermit2FundingDigest,
   buildPermit2TypedData,
   buildRedeemCalls,
   buildRedeemDigest,
+  type CollabRefundEvmDigestParams,
+  type CollabRefundEvmTypedData,
   type CoordinatorCall,
   type Eip2612PermitParams,
   type ExecuteAndCreateCallData,

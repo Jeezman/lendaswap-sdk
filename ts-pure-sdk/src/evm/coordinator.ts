@@ -452,6 +452,172 @@ export function encodeRefundTo(
   };
 }
 
+// ── Collaborative EVM refund EIP-712 ─────────────────────────────────────────
+
+const COORDINATOR_NAME = "HTLCCoordinator";
+const COORDINATOR_VERSION = "3";
+
+const COLLAB_REFUND_TYPEHASH =
+  "CollabRefund(bytes32 preimageHash,uint256 amount,address token,address claimAddress,uint256 timelock,address caller,address sweepToken,uint256 minAmountOut)";
+
+/** Parameters for building the EIP-712 CollabRefund digest */
+export interface CollabRefundEvmDigestParams {
+  /** HTLCCoordinator contract address (verifyingContract) */
+  coordinatorAddress: string;
+  /** EVM chain ID */
+  chainId: number;
+  /** SHA-256 preimage hash (32-byte hex with 0x prefix) */
+  preimageHash: string;
+  /** WBTC amount locked in the HTLC (in smallest unit) */
+  amount: bigint;
+  /** WBTC token address */
+  token: string;
+  /** Claim address (server's EVM address) */
+  claimAddress: string;
+  /** HTLC timelock (unix timestamp) */
+  timelock: number;
+  /** Caller address (server EOA that submits the tx) */
+  caller: string;
+  /** Token to sweep after refund (WBTC for direct mode, source token for swap mode) */
+  sweepToken: string;
+  /** Minimum amount out (slippage protection, 0 for no check) */
+  minAmountOut: bigint;
+}
+
+/**
+ * EIP-712 typed data structure for CollabRefund.
+ *
+ * Compatible with viem/wagmi's `signTypedData` and `eth_signTypedData_v4`.
+ */
+export interface CollabRefundEvmTypedData {
+  domain: {
+    name: string;
+    version: string;
+    chainId: number;
+    verifyingContract: string;
+  };
+  types: {
+    CollabRefund: Array<{ name: string; type: string }>;
+  };
+  primaryType: "CollabRefund";
+  message: {
+    preimageHash: string;
+    amount: bigint;
+    token: string;
+    claimAddress: string;
+    timelock: bigint;
+    caller: string;
+    sweepToken: string;
+    minAmountOut: bigint;
+  };
+}
+
+/**
+ * Builds the EIP-712 digest for collaborative EVM HTLC refund.
+ *
+ * The depositor signs this digest to authorize the server to submit
+ * `collabRefundTo` or `collabRefundAndExecute` on the coordinator.
+ *
+ * @param params - CollabRefund parameters
+ * @returns The 32-byte digest as hex string with 0x prefix
+ */
+export function buildCollabRefundEvmDigest(
+  params: CollabRefundEvmDigestParams,
+): string {
+  // Coordinator domain separator
+  const domainSeparator = keccak256(
+    abiEncode([
+      {
+        type: "bytes32",
+        value: keccak256(stringToUtf8Bytes(EIP712_DOMAIN_TYPEHASH)),
+      },
+      {
+        type: "bytes32",
+        value: keccak256(stringToUtf8Bytes(COORDINATOR_NAME)),
+      },
+      {
+        type: "bytes32",
+        value: keccak256(stringToUtf8Bytes(COORDINATOR_VERSION)),
+      },
+      { type: "uint256", value: BigInt(params.chainId) },
+      { type: "address", value: params.coordinatorAddress },
+    ]),
+  );
+
+  // CollabRefund struct hash
+  const typeHash = keccak256(stringToUtf8Bytes(COLLAB_REFUND_TYPEHASH));
+  const structHash = keccak256(
+    abiEncode([
+      { type: "bytes32", value: typeHash },
+      { type: "bytes32", value: params.preimageHash },
+      { type: "uint256", value: params.amount },
+      { type: "address", value: params.token },
+      { type: "address", value: params.claimAddress },
+      { type: "uint256", value: BigInt(params.timelock) },
+      { type: "address", value: params.caller },
+      { type: "address", value: params.sweepToken },
+      { type: "uint256", value: params.minAmountOut },
+    ]),
+  );
+
+  // EIP-712 digest: \x19\x01 ‖ domainSeparator ‖ structHash
+  const prefix = new Uint8Array([0x19, 0x01]);
+  const domainBytes = hexToBytes(domainSeparator);
+  const structBytes = hexToBytes(structHash);
+  const message = new Uint8Array(
+    prefix.length + domainBytes.length + structBytes.length,
+  );
+  message.set(prefix, 0);
+  message.set(domainBytes, prefix.length);
+  message.set(structBytes, prefix.length + domainBytes.length);
+
+  return keccak256(message);
+}
+
+/**
+ * Builds the EIP-712 typed data structure for CollabRefund.
+ *
+ * For use with browser wallets via `eth_signTypedData_v4` / wagmi's `signTypedData`.
+ *
+ * @param params - CollabRefund parameters
+ * @returns EIP-712 typed data compatible with viem/wagmi
+ */
+export function buildCollabRefundEvmTypedData(
+  params: CollabRefundEvmDigestParams,
+): CollabRefundEvmTypedData {
+  return {
+    domain: {
+      name: COORDINATOR_NAME,
+      version: COORDINATOR_VERSION,
+      chainId: params.chainId,
+      verifyingContract: params.coordinatorAddress,
+    },
+    types: {
+      CollabRefund: [
+        { name: "preimageHash", type: "bytes32" },
+        { name: "amount", type: "uint256" },
+        { name: "token", type: "address" },
+        { name: "claimAddress", type: "address" },
+        { name: "timelock", type: "uint256" },
+        { name: "caller", type: "address" },
+        { name: "sweepToken", type: "address" },
+        { name: "minAmountOut", type: "uint256" },
+      ],
+    },
+    primaryType: "CollabRefund",
+    message: {
+      preimageHash: params.preimageHash,
+      amount: params.amount,
+      token: params.token,
+      claimAddress: params.claimAddress,
+      timelock: BigInt(params.timelock),
+      caller: params.caller,
+      sweepToken: params.sweepToken,
+      minAmountOut: params.minAmountOut,
+    },
+  };
+}
+
 // ── Permit2 constants ─────────────────────────────────────────────────────────
 
 /** Canonical Permit2 deployment address (same on all EVM chains) */

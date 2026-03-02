@@ -42,9 +42,13 @@ import {
 import { delegateClaim, delegateRefund } from "./delegate.js";
 import { broadcastTransaction, findOutputByAddress } from "./esplora.js";
 import {
+  buildCollabRefundEvmDigest,
+  buildCollabRefundEvmTypedData,
   buildEip2612PermitDigest,
   buildPermit2FundingDigest,
   buildPermit2TypedData,
+  type CollabRefundEvmDigestParams,
+  type CollabRefundEvmTypedData,
   encodeApproveCallData,
   encodeExecuteAndCreateWithPermit2,
   encodeHtlcErc20RefundCallData,
@@ -109,10 +113,14 @@ import type { BitcoinToEvmSwapResponse } from "./create";
 
 // Re-export coordinator utilities for Arkade-to-EVM redeemAndExecute flow
 export {
+  buildCollabRefundEvmDigest,
+  buildCollabRefundEvmTypedData,
   buildEip2612PermitDigest,
   buildPermit2FundingDigest,
   buildRedeemCalls,
   buildRedeemDigest,
+  type CollabRefundEvmDigestParams,
+  type CollabRefundEvmTypedData,
   type CoordinatorCall,
   type Eip2612PermitParams,
   type ExecuteAndCreateWithPermit2Params,
@@ -196,11 +204,57 @@ export interface ArkadeRefundOptions {
 /** Options for EVM refund via coordinator */
 export interface EvmRefundOptions {
   /**
-   * Refund mode:
+   * Settlement mode — what asset you receive:
    * - "swap-back" (default): Swap WBTC back to original token via DEX
-   * - "direct": Return WBTC directly (useful when DEX calldata is stale)
+   * - "direct": Return WBTC directly
    */
   mode?: "swap-back" | "direct";
+  /**
+   * Whether to use collaborative refund (server cosigns + submits, gasless, no timelock wait).
+   * When false/undefined, the refund requires timelock expiry and the caller submits the tx.
+   * @default false
+   */
+  collaborative?: boolean;
+}
+
+/** Result of a collaborative EVM refund */
+export interface CollabRefundEvmResult {
+  /** Swap ID */
+  id: string;
+  /** On-chain transaction hash */
+  txHash: string;
+  /** Success message */
+  message: string;
+}
+
+/** Parameters for building CollabRefund EIP-712 typed data (returned by getCollabRefundEvmParams) */
+export interface CollabRefundEvmParams {
+  /** HTLCCoordinator contract address (EIP-712 verifyingContract) */
+  coordinatorAddress: string;
+  /** Server's signer EOA address (the `caller` field in the EIP-712 struct) */
+  serverSignerAddress: string;
+  /** Preimage hash (0x-prefixed, 32-byte hex) */
+  preimageHash: string;
+  /** WBTC amount locked in the HTLC (decimal string) */
+  amount: string;
+  /** WBTC token address */
+  token: string;
+  /** Claim address (server's EVM address) */
+  claimAddress: string;
+  /** HTLC timelock (unix timestamp) */
+  timelock: number;
+  /** EVM chain ID */
+  chainId: number;
+  /** Settlement mode: "direct" or "swap-back" */
+  mode: string;
+  /** Token the depositor receives (WBTC for direct, source token for swap-back) — the EIP-712 `sweepToken` field */
+  sweepToken: string;
+  /** Minimum output amount for the sweep — the EIP-712 `minAmountOut` field */
+  minAmountOut: string;
+  /** Source token address (only present for swap-back) */
+  sourceTokenAddress?: string;
+  /** DEX calldata for swap-back (only present when mode=swap-back) */
+  dexCalldata?: { to: string; data: string; value: string };
 }
 
 /** General refund options — the method picks the right variant based on swap type */
@@ -1527,22 +1581,27 @@ export class Client {
       );
     }
 
-    // EVM-sourced swaps return calldata for manual execution
-    if (direction === "evm_to_arkade") {
+    // EVM-sourced swaps: collaborative refund (gasless, no timelock wait) or
+    // timelock-based refund (returns calldata for user to sign + submit)
+    if (
+      direction === "evm_to_arkade" ||
+      direction === "evm_to_bitcoin" ||
+      direction === "evm_to_lightning"
+    ) {
       const evmOptions = options as EvmRefundOptions | undefined;
-      return this.#buildEvmToArkadeRefund(id, swap, evmOptions?.mode);
-    }
+      const settlement = evmOptions?.mode ?? "swap-back";
 
-    // EVM-to-Bitcoin uses coordinator refund (same pattern as EVM-to-Arkade)
-    if (direction === "evm_to_bitcoin") {
-      const evmOptions = options as EvmRefundOptions | undefined;
-      return this.#buildEvmToBitcoinRefund(id, swap, evmOptions?.mode);
-    }
+      if (evmOptions?.collaborative) {
+        return this.#collabRefundEvm(id, settlement);
+      }
 
-    // EVM-to-Lightning uses coordinator refund (same pattern as EVM-to-Arkade)
-    if (direction === "evm_to_lightning") {
-      const evmOptions = options as EvmRefundOptions | undefined;
-      return this.#buildEvmToLightningRefund(id, swap, evmOptions?.mode);
+      if (direction === "evm_to_arkade") {
+        return this.#buildEvmToArkadeRefund(id, swap, settlement);
+      }
+      if (direction === "evm_to_bitcoin") {
+        return this.#buildEvmToBitcoinRefund(id, swap, settlement);
+      }
+      return this.#buildEvmToLightningRefund(id, swap, settlement);
     }
 
     return {
@@ -2555,6 +2614,189 @@ export class Client {
         timelockExpiry: timelock,
       },
     };
+  }
+
+  // =========================================================================
+  // Collaborative EVM Refund
+  // =========================================================================
+
+  /**
+   * Fetches the EIP-712 parameters for collaborative EVM HTLC refund.
+   *
+   * Returns the addresses and values needed to build the `CollabRefund`
+   * EIP-712 typed data that the depositor signs.
+   *
+   * @param swapId - Swap ID
+   * @returns CollabRefund parameters
+   */
+  async getCollabRefundEvmParams(
+    swapId: string,
+    settlement: "swap-back" | "direct" = "direct",
+  ): Promise<CollabRefundEvmParams> {
+    const response = await this.#apiClient.GET(
+      "/api/swap/{id}/collab-refund-evm/params",
+      {
+        params: {
+          path: { id: swapId },
+          query: { mode: settlement },
+        },
+      },
+    );
+
+    if (response.error) {
+      throw new Error(
+        `Failed to fetch collab refund params: ${response.error.error || "Unknown error"}`,
+      );
+    }
+
+    const d = response.data;
+    return {
+      coordinatorAddress: d.coordinator_address,
+      serverSignerAddress: d.server_signer_address,
+      preimageHash: d.preimage_hash,
+      amount: d.amount,
+      token: d.token,
+      claimAddress: d.claim_address,
+      timelock: d.timelock,
+      chainId: d.chain_id,
+      mode: d.mode,
+      sweepToken: d.sweep_token,
+      minAmountOut: d.min_amount_out,
+      sourceTokenAddress: d.source_token_address ?? undefined,
+      dexCalldata: d.dex_calldata
+        ? {
+            to: d.dex_calldata.to,
+            data: d.dex_calldata.data,
+            value: d.dex_calldata.value,
+          }
+        : undefined,
+    };
+  }
+
+  /**
+   * Builds the EIP-712 typed data for collaborative EVM refund.
+   *
+   * The depositor signs this with their wallet (via `eth_signTypedData_v4`
+   * or the SDK's `signEvmDigest`) to authorize the server to submit the
+   * refund on-chain.
+   *
+   * @param swapId - Swap ID
+   * @param settlement - Settlement mode: "direct" (WBTC) or "swap-back" (original token via DEX)
+   * @returns Typed data and digest for signing
+   */
+  async buildCollabRefundEvmTypedData(
+    swapId: string,
+    settlement: "swap-back" | "direct" = "direct",
+  ): Promise<{
+    typedData: CollabRefundEvmTypedData;
+    digest: string;
+    params: CollabRefundEvmParams;
+  }> {
+    const params = await this.getCollabRefundEvmParams(swapId, settlement);
+
+    const digestParams: CollabRefundEvmDigestParams = {
+      coordinatorAddress: params.coordinatorAddress,
+      chainId: params.chainId,
+      preimageHash: params.preimageHash,
+      amount: BigInt(params.amount),
+      token: params.token,
+      claimAddress: params.claimAddress,
+      timelock: params.timelock,
+      caller: params.serverSignerAddress,
+      sweepToken: params.sweepToken,
+      minAmountOut: BigInt(params.minAmountOut),
+    };
+
+    const typedData = buildCollabRefundEvmTypedData(digestParams);
+    const digest = buildCollabRefundEvmDigest(digestParams);
+
+    return { typedData, digest, params };
+  }
+
+  /**
+   * Performs a collaborative EVM refund using the SDK's embedded wallet.
+   *
+   * The SDK signs the EIP-712 `CollabRefund` digest with the depositor's
+   * derived EVM key and POSTs to the server, which cosigns and submits
+   * the transaction on-chain. Gasless for the client — no timelock wait.
+   *
+   * @param swapId - Swap ID
+   * @param settlement - Settlement mode: "direct" (WBTC) or "swap-back" (original token via DEX)
+   * @returns Refund result with transaction hash
+   */
+  async collabRefundEvmSwap(
+    swapId: string,
+    settlement: "swap-back" | "direct" = "direct",
+  ): Promise<CollabRefundEvmResult> {
+    const { params, digest } = await this.buildCollabRefundEvmTypedData(
+      swapId,
+      settlement,
+    );
+
+    // Sign using the SDK's stored EVM secret key for this swap
+    const storedSwap = await this.getStoredSwap(swapId);
+    if (!storedSwap?.secretKey) {
+      throw new Error(
+        "No secret key found for this swap. Cannot sign collab refund.",
+      );
+    }
+    const sig = signEvmDigest(storedSwap.secretKey, digest);
+
+    // Derive the on-chain depositor address (the key that funded the HTLC)
+    const { deriveEvmAddress } = await import("./evm/signing.js");
+    const depositorAddress = deriveEvmAddress(storedSwap.secretKey);
+
+    // POST to the server
+    const response = await this.#apiClient.POST(
+      "/api/swap/{id}/collab-refund-evm",
+      {
+        params: { path: { id: swapId } },
+        body: {
+          v: sig.v,
+          r: sig.r,
+          s: sig.s,
+          depositor_address: depositorAddress,
+          mode: settlement === "swap-back" ? "swap" : "direct",
+          sweep_token: params.sweepToken,
+          min_amount_out: params.minAmountOut,
+          dex_calldata: params.dexCalldata ?? undefined,
+        },
+      },
+    );
+
+    if (response.error) {
+      throw new Error(
+        `Collaborative EVM refund failed: ${response.error.error || "Unknown error"}`,
+      );
+    }
+
+    return {
+      id: response.data.id,
+      txHash: response.data.tx_hash,
+      message: response.data.message,
+    };
+  }
+
+  /**
+   * Collaborative EVM refund — internal method called by refundSwap.
+   * @internal
+   */
+  async #collabRefundEvm(
+    id: string,
+    settlement: "swap-back" | "direct" = "direct",
+  ): Promise<RefundResult> {
+    try {
+      const result = await this.collabRefundEvmSwap(id, settlement);
+      return {
+        success: true,
+        message: `${result.message} (tx: ${result.txHash})`,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `Collaborative EVM refund failed: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
   }
 
   // =========================================================================
