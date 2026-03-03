@@ -1608,6 +1608,7 @@ export class Client {
 
     // Map network string
     const networkMap: Record<string, BitcoinNetwork> = {
+      bitcoin: "mainnet",
       mainnet: "mainnet",
       testnet: "testnet",
       signet: "signet",
@@ -1857,6 +1858,7 @@ export class Client {
 
     // Map network string to BitcoinNetwork type
     const networkMap: Record<string, BitcoinNetwork> = {
+      bitcoin: "mainnet",
       mainnet: "mainnet",
       testnet: "testnet",
       signet: "signet",
