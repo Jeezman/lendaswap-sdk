@@ -52,15 +52,21 @@ export async function createEvmToLightningSwapGeneric(
     ? deriveEvmAddress(bytesToHex(swapParams.secretKey))
     : options.userAddress;
 
-  const body = {
+  const body: Record<string, unknown> = {
     user_id: userId,
-    lightning_invoice: options.lightningInvoice,
     evm_chain_id: options.evmChainId,
     token_address: options.tokenAddress,
     user_address: userAddress,
     referral_code: options.referralCode,
     gasless: options.gasless ?? false,
   };
+
+  if (options.lightningInvoice) {
+    body.lightning_invoice = options.lightningInvoice;
+  } else if (options.lightningAddress) {
+    body.lightning_address = options.lightningAddress;
+    body.amount_sats = options.amountSats;
+  }
 
   // Use fetch directly since the generated types don't have this endpoint yet
   const response = await fetch(`${ctx.baseUrl}/swap/evm/lightning`, {

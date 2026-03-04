@@ -2729,6 +2729,34 @@ export class Client {
           "userAddress is required for EVM → Lightning swaps (unless gasless)",
         );
       }
+
+      // Detect whether targetAddress is a Lightning address (user@domain)
+      // or a BOLT11 invoice (starts with ln...).
+      const isAddress = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(
+        options.targetAddress,
+      );
+
+      if (isAddress) {
+        if (
+          options.targetAmount == null ||
+          !Number.isFinite(options.targetAmount) ||
+          options.targetAmount <= 0
+        ) {
+          throw new Error(
+            "targetAmount (in sats) is required when using a Lightning address",
+          );
+        }
+        return this.createEvmToLightningSwapGeneric({
+          lightningAddress: options.targetAddress,
+          amountSats: options.targetAmount,
+          evmChainId: Number(sourceChain),
+          tokenAddress: sourceAsset.token_id,
+          userAddress: options.userAddress ?? "",
+          referralCode: options.referralCode,
+          gasless: options.gasless,
+        });
+      }
+
       return this.createEvmToLightningSwapGeneric({
         lightningInvoice: options.targetAddress,
         evmChainId: Number(sourceChain),

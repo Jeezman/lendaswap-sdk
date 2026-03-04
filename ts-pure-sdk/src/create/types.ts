@@ -149,10 +149,17 @@ export interface LightningToEvmSwapGenericResult {
   swapParams: SwapParams;
 }
 
-/** Options for creating an EVM-to-Lightning swap via the generic endpoint */
+/** Options for creating an EVM-to-Lightning swap via the generic endpoint.
+ *
+ * Provide **either** `lightningInvoice` **or** `lightningAddress` + `amountSats`.
+ */
 export interface EvmToLightningSwapGenericOptions {
-  /** User's Lightning invoice to receive payment. Amount is derived from the invoice. */
-  lightningInvoice: string;
+  /** User's BOLT11 Lightning invoice. Mutually exclusive with `lightningAddress`. */
+  lightningInvoice?: string;
+  /** Lightning address (e.g. `user@speed.app`). Mutually exclusive with `lightningInvoice`. Requires `amountSats`. */
+  lightningAddress?: string;
+  /** Amount in satoshis the recipient should receive. Required when `lightningAddress` is provided. */
+  amountSats?: number;
   /** Numeric EVM chain ID: 1 (Ethereum), 137 (Polygon), 42161 (Arbitrum) */
   evmChainId: number;
   /** ERC-20 contract address of the source token on the EVM chain */
