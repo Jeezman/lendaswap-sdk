@@ -83,7 +83,7 @@ export function createEvmWallet(
     throw new Error(`Unsupported chain: ${chainName}`);
   }
 
-  const url = rpcUrl || process.env.EVM_RPC_URL || DEFAULT_RPC_URLS[chainName];
+  const url = rpcUrl || DEFAULT_RPC_URLS[chainName];
 
   // Derive account from mnemonic (default path: m/44'/60'/0'/0/0)
   const account = mnemonicToAccount(mnemonic);

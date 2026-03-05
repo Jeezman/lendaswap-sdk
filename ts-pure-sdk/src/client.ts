@@ -1583,8 +1583,7 @@ export class Client {
       );
     }
 
-    // EVM-sourced swaps: collaborative refund (gasless, no timelock wait) or
-    // timelock-based refund (returns calldata for user to sign + submit)
+    // EVM-sourced swaps: collaborative refund or timelock-based refund
     if (
       direction === "evm_to_arkade" ||
       direction === "evm_to_bitcoin" ||
