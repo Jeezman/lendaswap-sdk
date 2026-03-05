@@ -4424,7 +4424,8 @@
           "chain_id",
           "mode",
           "sweep_token",
-          "min_amount_out"
+          "min_amount_out",
+          "calls_hash"
         ],
         "properties": {
           "coordinator_address": {
@@ -4472,6 +4473,10 @@
           "min_amount_out": {
             "type": "string",
             "description": "Minimum output amount for the sweep (EIP-712 minAmountOut field)"
+          },
+          "calls_hash": {
+            "type": "string",
+            "description": "keccak256(abi.encode(calls)) for the exact calls array signed in CollabRefund"
           },
           "source_token_address": {
             "type": "string",

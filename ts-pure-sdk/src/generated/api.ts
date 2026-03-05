@@ -2059,6 +2059,8 @@ export interface components {
       sweep_token: string;
       /** @description Minimum output amount for the sweep (EIP-712 minAmountOut field) */
       min_amount_out: string;
+      /** @description keccak256(abi.encode(calls)) for the exact calls array signed in CollabRefund */
+      calls_hash: string;
       /** @description Source token address (only present for swap-back) */
       source_token_address?: string | null;
       /** @description DEX calldata for swap-back mode */

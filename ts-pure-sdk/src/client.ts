@@ -251,6 +251,8 @@ export interface CollabRefundEvmParams {
   sweepToken: string;
   /** Minimum output amount for the sweep — the EIP-712 `minAmountOut` field */
   minAmountOut: string;
+  /** keccak256(abi.encode(calls)) for the exact calls array signed in CollabRefund */
+  callsHash: string;
   /** Source token address (only present for swap-back) */
   sourceTokenAddress?: string;
   /** DEX calldata for swap-back (only present when mode=swap-back) */
@@ -2662,6 +2664,7 @@ export class Client {
       mode: d.mode,
       sweepToken: d.sweep_token,
       minAmountOut: d.min_amount_out,
+      callsHash: d.calls_hash,
       sourceTokenAddress: d.source_token_address ?? undefined,
       dexCalldata: d.dex_calldata
         ? {
@@ -2705,6 +2708,7 @@ export class Client {
       caller: params.serverSignerAddress,
       sweepToken: params.sweepToken,
       minAmountOut: BigInt(params.minAmountOut),
+      callsHash: params.callsHash,
     };
 
     const typedData = buildCollabRefundEvmTypedData(digestParams);

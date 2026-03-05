@@ -458,7 +458,7 @@ const COORDINATOR_NAME = "HTLCCoordinator";
 const COORDINATOR_VERSION = "3";
 
 const COLLAB_REFUND_TYPEHASH =
-  "CollabRefund(bytes32 preimageHash,uint256 amount,address token,address claimAddress,uint256 timelock,address caller,address sweepToken,uint256 minAmountOut)";
+  "CollabRefund(bytes32 preimageHash,uint256 amount,address token,address claimAddress,uint256 timelock,address caller,address sweepToken,uint256 minAmountOut,bytes32 callsHash)";
 
 /** Parameters for building the EIP-712 CollabRefund digest */
 export interface CollabRefundEvmDigestParams {
@@ -482,6 +482,8 @@ export interface CollabRefundEvmDigestParams {
   sweepToken: string;
   /** Minimum amount out (slippage protection, 0 for no check) */
   minAmountOut: bigint;
+  /** keccak256(abi.encode(calls)) binding the coordinator calls array */
+  callsHash: string;
 }
 
 /**
@@ -509,6 +511,7 @@ export interface CollabRefundEvmTypedData {
     caller: string;
     sweepToken: string;
     minAmountOut: bigint;
+    callsHash: string;
   };
 }
 
@@ -557,6 +560,7 @@ export function buildCollabRefundEvmDigest(
       { type: "address", value: params.caller },
       { type: "address", value: params.sweepToken },
       { type: "uint256", value: params.minAmountOut },
+      { type: "bytes32", value: params.callsHash },
     ]),
   );
 
@@ -602,6 +606,7 @@ export function buildCollabRefundEvmTypedData(
         { name: "caller", type: "address" },
         { name: "sweepToken", type: "address" },
         { name: "minAmountOut", type: "uint256" },
+        { name: "callsHash", type: "bytes32" },
       ],
     },
     primaryType: "CollabRefund",
@@ -614,6 +619,7 @@ export function buildCollabRefundEvmTypedData(
       caller: params.caller,
       sweepToken: params.sweepToken,
       minAmountOut: params.minAmountOut,
+      callsHash: params.callsHash,
     },
   };
 }
