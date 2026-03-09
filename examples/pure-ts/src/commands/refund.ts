@@ -15,21 +15,40 @@ export async function refundSwap(
   destinationAddress: string | undefined,
   feeRateStr: string | undefined,
   dryRunFlag: string | undefined,
+  collaborativeFlag: boolean = false,
+  settlementMode: "direct" | "swap-back" = "swap-back",
 ): Promise<void> {
   if (!swapId) {
-    console.error("Usage: tsx src/index.ts refund <swap-id> [destination-address] [fee-rate] [--dry-run]");
+    console.error(
+      "Usage: tsx src/index.ts refund <swap-id> [destination-address] [fee-rate] [--dry-run] [--collaborative] [--direct] [--swap-back]",
+    );
     console.error("");
     console.error("Arguments:");
     console.error("  swap-id             The swap ID to refund");
     console.error("  destination-address Address to receive refund:");
     console.error("                      - Bitcoin address for on-chain swaps");
     console.error("                      - Arkade address for Arkade swaps");
-    console.error("  fee-rate            Fee rate in sat/vB (on-chain only, default: 2)");
-    console.error("  --dry-run           Build transaction without broadcasting (on-chain only)");
+    console.error(
+      "  fee-rate            Fee rate in sat/vB (on-chain only, default: 2)",
+    );
+    console.error(
+      "  --dry-run           Build transaction without broadcasting (on-chain only)",
+    );
+    console.error(
+      "  --collaborative     Use collaborative refund for EVM swaps (gasless, no timelock wait)",
+    );
+    console.error(
+      "  --direct            Return WBTC directly (EVM collab refund only, default: swap-back)",
+    );
+    console.error(
+      "  --swap-back         Swap WBTC back to original token via DEX (default for collab refund)",
+    );
     console.error("");
     console.error("Examples:");
     console.error("  # Check if refund is available");
-    console.error("  tsx src/index.ts refund 12345678-1234-1234-1234-123456789abc");
+    console.error(
+      "  tsx src/index.ts refund 12345678-1234-1234-1234-123456789abc",
+    );
     console.error("");
     console.error("  # Refund on-chain swap to a Bitcoin address");
     console.error("  tsx src/index.ts refund 12345678-... bc1q... 5");
@@ -37,7 +56,15 @@ export async function refundSwap(
     console.error("  # Refund Arkade swap to an Arkade address");
     console.error("  tsx src/index.ts refund 12345678-... ark1...");
     console.error("");
-    console.error("  # Build refund transaction without broadcasting (on-chain only)");
+    console.error("  # Collaborative refund of EVM HTLC (gasless, instant)");
+    console.error("  tsx src/index.ts refund 12345678-... --collaborative");
+    console.error(
+      "  tsx src/index.ts refund 12345678-... --collaborative --direct",
+    );
+    console.error("");
+    console.error(
+      "  # Build refund transaction without broadcasting (on-chain only)",
+    );
     console.error("  tsx src/index.ts refund 12345678-... bc1q... 5 --dry-run");
     process.exit(1);
   }
@@ -69,9 +96,13 @@ export async function refundSwap(
   console.log("");
 
   // Check which type of swap this is based on direction
-  const isOnchainSwap = swap.direction === "bitcoin_to_evm" || swap.direction === "btc_to_arkade";
+  const isOnchainSwap =
+    swap.direction === "bitcoin_to_evm" || swap.direction === "btc_to_arkade";
   const isArkadeSwap = swap.direction === "arkade_to_evm";
-  const isEvmSwap = swap.direction === "evm_to_arkade" || swap.direction === "evm_to_bitcoin" || swap.direction === "evm_to_lightning";
+  const isEvmSwap =
+    swap.direction === "evm_to_arkade" ||
+    swap.direction === "evm_to_bitcoin" ||
+    swap.direction === "evm_to_lightning";
 
   // Require destination address for refundable swaps (not EVM swaps)
   if ((isOnchainSwap || isArkadeSwap) && !actualDestination) {
@@ -80,21 +111,31 @@ export async function refundSwap(
     console.error("=".repeat(60));
     console.error("");
     if (isOnchainSwap) {
-      console.error("On-chain swaps require a Bitcoin address to receive the refund.");
+      console.error(
+        "On-chain swaps require a Bitcoin address to receive the refund.",
+      );
       console.error("");
       console.error("Usage:");
-      console.error(`  npm run refund -- ${swapId} <bitcoin-address> [fee-rate]`);
+      console.error(
+        `  npm run refund -- ${swapId} <bitcoin-address> [fee-rate]`,
+      );
       console.error("");
       console.error("Example:");
-      console.error(`  npm run refund -- ${swapId} bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4 5`);
+      console.error(
+        `  npm run refund -- ${swapId} bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4 5`,
+      );
     } else {
-      console.error("Arkade swaps require an Arkade address to receive the refund.");
+      console.error(
+        "Arkade swaps require an Arkade address to receive the refund.",
+      );
       console.error("");
       console.error("Usage:");
       console.error(`  npm run refund -- ${swapId} <arkade-address>`);
       console.error("");
       console.error("Example:");
-      console.error(`  npm run refund -- ${swapId} ark1...your_arkade_address...`);
+      console.error(
+        `  npm run refund -- ${swapId} ark1...your_arkade_address...`,
+      );
     }
     console.error("");
     console.error("=".repeat(60));
@@ -102,8 +143,13 @@ export async function refundSwap(
   }
 
   // Parse fee rate (only for on-chain swaps)
-  const feeRateSatPerVb = actualFeeRate ? Number.parseFloat(actualFeeRate) : undefined;
-  if (actualFeeRate && (Number.isNaN(feeRateSatPerVb) || feeRateSatPerVb! <= 0)) {
+  const feeRateSatPerVb = actualFeeRate
+    ? Number.parseFloat(actualFeeRate)
+    : undefined;
+  if (
+    actualFeeRate &&
+    (Number.isNaN(feeRateSatPerVb) || feeRateSatPerVb! <= 0)
+  ) {
     console.error("Invalid fee rate. Must be a positive number.");
     process.exit(1);
   }
@@ -119,14 +165,23 @@ export async function refundSwap(
     console.log(`  Destination: ${actualDestination}`);
     console.log("  Type:        Arkade off-chain refund");
   } else if (isEvmSwap) {
-    console.log("  Type:        EVM HTLC refund");
+    if (collaborativeFlag) {
+      console.log(
+        "  Type:        EVM collaborative refund (gasless, no timelock wait)",
+      );
+      console.log(`  Settlement:  ${settlementMode}`);
+    } else {
+      console.log("  Type:        EVM HTLC refund");
+    }
   }
   console.log("");
 
   try {
-    // Build options based on swap type (EVM swaps don't need options)
+    // Build options based on swap type
     const options = isEvmSwap
-      ? undefined
+      ? collaborativeFlag
+        ? { collaborative: true, mode: settlementMode }
+        : undefined
       : isOnchainSwap
         ? {
             destinationAddress: actualDestination ?? "",
@@ -142,7 +197,7 @@ export async function refundSwap(
 
     if (result.success) {
       console.log("=".repeat(60));
-      if (result.broadcast) {
+      if (result.broadcast || collaborativeFlag) {
         console.log("REFUND EXECUTED SUCCESSFULLY!");
       } else {
         console.log("REFUND TRANSACTION BUILT");
@@ -172,20 +227,29 @@ export async function refundSwap(
         console.log("You can broadcast using:");
         console.log("  - https://mempool.space/tx/push");
         console.log("  - bitcoin-cli sendrawtransaction <txhex>");
-        console.log("  - Any Bitcoin wallet that supports raw transaction broadcast");
+        console.log(
+          "  - Any Bitcoin wallet that supports raw transaction broadcast",
+        );
       }
       if (result.evmRefundData) {
-        const { to, data, timelockExpired, timelockExpiry } = result.evmRefundData;
+        const { to, data, timelockExpired, timelockExpiry } =
+          result.evmRefundData;
         console.log(`  Contract:       ${to}`);
-        console.log(`  Timelock:       ${new Date(timelockExpiry * 1000).toISOString()}`);
+        console.log(
+          `  Timelock:       ${new Date(timelockExpiry * 1000).toISOString()}`,
+        );
         console.log(`  Timelock expired: ${timelockExpired}`);
         console.log("");
         if (!timelockExpired) {
           const remaining = timelockExpiry - Math.floor(Date.now() / 1000);
           const hours = Math.floor(remaining / 3600);
           const minutes = Math.floor((remaining % 3600) / 60);
-          console.log(`  WARNING: Timelock has not expired yet. ${hours}h ${minutes}m remaining.`);
-          console.log("  You must wait for the timelock to expire before submitting.");
+          console.log(
+            `  WARNING: Timelock has not expired yet. ${hours}h ${minutes}m remaining.`,
+          );
+          console.log(
+            "  You must wait for the timelock to expire before submitting.",
+          );
         } else {
           console.log("  Submit this transaction with your EVM wallet:");
           console.log(`    to:   ${to}`);

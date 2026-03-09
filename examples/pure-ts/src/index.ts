@@ -24,8 +24,8 @@
 // Load .env file before anything else
 import "dotenv/config";
 
-import {Client} from "@lendasat/lendaswap-sdk-pure";
-import {sqliteStorageFactory} from "@lendasat/lendaswap-sdk-pure/node";
+import { Client } from "@lendasat/lendaswap-sdk-pure";
+import { sqliteStorageFactory } from "@lendasat/lendaswap-sdk-pure/node";
 import * as path from "node:path";
 import * as os from "node:os";
 
@@ -49,12 +49,13 @@ import { deriveSwapEvmAddress } from "./commands/derive-evm-address.js";
 
 // Configuration from environment variables
 export const CONFIG = {
-  apiUrl:
-    process.env.LENDASWAP_API_URL || "https://apilendaswap.lendasat.com/",
+  apiUrl: process.env.LENDASWAP_API_URL || "https://apilendaswap.lendasat.com/",
   mnemonic: process.env.MNEMONIC,
   evmMnemonic: process.env.EVM_MNEMONIC, // Separate mnemonic for EVM wallet
   apiKey: process.env.LENDASWAP_API_KEY,
-  dbPath: process.env.LENDASWAP_DB_PATH || path.join(os.homedir(), ".lendaswap", "data.db"),
+  dbPath:
+    process.env.LENDASWAP_DB_PATH ||
+    path.join(os.homedir(), ".lendaswap", "data.db"),
   esploraUrl: process.env.ESPLORA_URL, // Optional, defaults by network
   arkadeUrl: process.env.ARKADE_URL, // Optional, for regtest/custom Arkade servers
 };
@@ -64,13 +65,17 @@ import * as fs from "node:fs";
 
 const dbDir = path.dirname(CONFIG.dbPath);
 if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, {recursive: true});
+  fs.mkdirSync(dbDir, { recursive: true });
 }
 
 // SQLite storage (persists to disk)
-const {walletStorage, swapStorage, close: closeStorage} = sqliteStorageFactory(CONFIG.dbPath);
+const {
+  walletStorage,
+  swapStorage,
+  close: closeStorage,
+} = sqliteStorageFactory(CONFIG.dbPath);
 
-export {swapStorage};
+export { swapStorage };
 
 /**
  * Create and initialize the client.
@@ -116,7 +121,7 @@ Commands:
   fund-gasless <id>                  Fund via gasless relay (no wallet/ETH needed)
   watch <id>                         Watch a swap's status (polls backend)
   redeem <id> [destination]          Redeem a swap (when serverfunded)
-  refund <id> [addr] [fee]           Refund a swap (addr/fee for on-chain)
+  refund <id> [addr] [fee]           Refund a swap (addr/fee for on-chain, --collaborative for EVM collab refund)
   evm-refund <id> [--direct] [--force] Refund EVM HTLC (--direct: WBTC, --force: skip timelock check)
   evm-claim <id>                     Claim EVM tokens (BTC-to-Ethereum only)
   evm-balances                       Show EVM wallet balances (all chains)
@@ -196,7 +201,15 @@ async function main(): Promise<void> {
       break;
     case "swap": {
       const gaslessFlag = process.argv.includes("--gasless");
-      await createSwap(client, args[1], args[2], args[3], args[4], CONFIG.evmMnemonic, gaslessFlag);
+      await createSwap(
+        client,
+        args[1],
+        args[2],
+        args[3],
+        args[4],
+        CONFIG.evmMnemonic,
+        gaslessFlag,
+      );
       break;
     }
     case "evm-fund":
@@ -214,15 +227,38 @@ async function main(): Promise<void> {
     case "redeem":
       await redeemSwap(client, swapStorage, args[1], args[2]);
       break;
-    case "refund":
-      await refundSwap(client, swapStorage, args[1], args[2], args[3], args[4]);
+    case "refund": {
+      const collaborativeFlag = args.includes("--collaborative");
+      const directFlag = args.includes("--direct");
+      const settlement = directFlag
+        ? ("direct" as const)
+        : ("swap-back" as const);
+      // Filter out flags to get positional args
+      const refundArgs = args.filter((a, i) => i > 0 && !a.startsWith("--"));
+      await refundSwap(
+        client,
+        swapStorage,
+        refundArgs[0],
+        refundArgs[1],
+        refundArgs[2],
+        refundArgs[3],
+        collaborativeFlag,
+        settlement,
+      );
       break;
+    }
     case "evm-refund": {
       // Parse --direct and --force flags from any position
       const directMode = args.includes("--direct");
       const forceMode = args.includes("--force");
       const swapIdArg = args.find((a, i) => i > 0 && !a.startsWith("--"));
-      await evmRefundSwap(client, swapIdArg, CONFIG.evmMnemonic, directMode, forceMode);
+      await evmRefundSwap(
+        client,
+        swapIdArg,
+        CONFIG.evmMnemonic,
+        directMode,
+        forceMode,
+      );
       break;
     }
     case "evm-claim":
