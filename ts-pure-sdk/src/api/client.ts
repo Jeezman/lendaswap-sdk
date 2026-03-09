@@ -54,6 +54,10 @@ export type EvmToLightningSwapResponse =
 export type LightningToEvmSwapResponse =
   components["schemas"]["LightningToEvmSwapResponse"];
 
+// Lightning-to-Arkade types
+export type LightningToArkadeSwapResponse =
+  components["schemas"]["LightningToArkadeSwapResponse"];
+
 export interface ApiClientOptions {
   baseUrl: string;
   apiKey?: string;

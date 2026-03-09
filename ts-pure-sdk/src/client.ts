@@ -29,6 +29,7 @@ import {
   createEvmToArkadeSwapGeneric,
   createEvmToBitcoinSwap,
   createEvmToLightningSwapGeneric,
+  createLightningToArkadeSwap,
   createLightningToEvmSwapGeneric,
   type EvmToArkadeSwapGenericOptions,
   type EvmToArkadeSwapGenericResult,
@@ -36,6 +37,8 @@ import {
   type EvmToBitcoinSwapResult,
   type EvmToLightningSwapGenericOptions,
   type EvmToLightningSwapGenericResult,
+  type LightningToArkadeSwapOptions,
+  type LightningToArkadeSwapResult,
   type LightningToEvmSwapGenericOptions,
   type LightningToEvmSwapGenericResult,
 } from "./create";
@@ -2943,6 +2946,20 @@ export class Client {
       });
     }
 
+    // Lightning → Arkade
+    if (isLightning(sourceAsset) && isArkade(targetAsset)) {
+      if (options.targetAmount == null) {
+        throw new Error(
+          "targetAmount (sats to receive on Arkade) is required for Lightning → Arkade swaps",
+        );
+      }
+      return this.createLightningToArkadeSwap({
+        satsReceive: options.targetAmount,
+        targetAddress: options.targetAddress,
+        referralCode: options.referralCode,
+      });
+    }
+
     // Bitcoin (on-chain) → EVM
     if (isBtcOnchain(sourceAsset) && isEvmToken(targetChain)) {
       return this.createBitcoinToEvmSwap({
@@ -3158,6 +3175,35 @@ export class Client {
     options: BitcoinToArkadeSwapOptions,
   ): Promise<BitcoinToArkadeSwapResult> {
     return createBitcoinToArkadeSwap(options, this.#getCreateContext());
+  }
+
+  // =========================================================================
+  // Swap Creation - Lightning to Arkade
+  // =========================================================================
+
+  /**
+   * Creates a new Lightning to Arkade swap.
+   *
+   * The user pays a Lightning invoice and receives Arkade VTXOs
+   * after Boltz funds the Arkade VHTLC.
+   *
+   * @param options - The swap options.
+   * @returns The swap response and parameters for storage.
+   * @throws Error if the swap creation fails.
+   *
+   * @example
+   * ```ts
+   * const result = await client.createLightningToArkadeSwap({
+   *   satsReceive: 100000, // 100k sats to receive on Arkade
+   *   targetAddress: "ark1q...", // Arkade address
+   * });
+   * console.log("Pay this invoice:", result.response.boltz_invoice);
+   * ```
+   */
+  async createLightningToArkadeSwap(
+    options: LightningToArkadeSwapOptions,
+  ): Promise<LightningToArkadeSwapResult> {
+    return createLightningToArkadeSwap(options, this.#getCreateContext());
   }
 
   // =========================================================================

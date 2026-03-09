@@ -10,6 +10,7 @@ import type {
   BtcToArkadeSwapResponse,
   EvmToArkadeSwapResponse,
   EvmToLightningSwapResponse,
+  LightningToArkadeSwapResponse,
   LightningToEvmSwapResponse,
   TokenId,
   TokenInfo,
@@ -280,12 +281,31 @@ export interface CreateSwapOptions {
   gasless?: boolean;
 }
 
+/** Options for creating a Lightning-to-Arkade swap */
+export interface LightningToArkadeSwapOptions {
+  /** Amount in satoshis to receive on Arkade */
+  satsReceive: number;
+  /** Target Arkade address to receive VTXOs */
+  targetAddress: string;
+  /** Optional referral code for fee exemption */
+  referralCode?: string;
+}
+
+/** Result of creating a Lightning-to-Arkade swap */
+export interface LightningToArkadeSwapResult {
+  /** The swap response from the API */
+  response: LightningToArkadeSwapResponse;
+  /** The swap parameters used (for storage/recovery) */
+  swapParams: SwapParams;
+}
+
 /** Union of all swap creation results returned by `createSwap`. */
 export type CreateSwapResult =
   | ArkadeToEvmSwapResult
   | BitcoinToEvmSwapResult
   | BitcoinToArkadeSwapResult
   | LightningToEvmSwapGenericResult
+  | LightningToArkadeSwapResult
   | EvmToArkadeSwapGenericResult
   | EvmToBitcoinSwapResult
   | EvmToLightningSwapGenericResult;

@@ -371,7 +371,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/swap/lightning/evm": {
+    "/swap/lightning/arkade": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Create a new Lightning-to-Arkade swap.
+     * @description Flow:
+     *     1. User pays the Lightning invoice returned
+     *     2. Server receives BTC via Boltz and creates Arkade VHTLC for user
+     *     3. User claims Arkade VHTLC with secret, revealing it
+     *     4. Server claims Boltz VHTLC with the revealed secret
+     */
+    post: operations["create_lightning_to_arkade_swap"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/swap/lightning/evm": {
         parameters: {
             query?: never;
             header?: never;
@@ -1496,8 +1520,97 @@ export interface components {
         }) | (components["schemas"]["EvmToLightningSwapResponse"] & {
             /** @enum {string} */
             direction: "evm_to_lightning";
+        })
+      | (components["schemas"]["LightningToArkadeSwapResponse"] & {
+          /** @enum {string} */
+          direction: "lightning_to_arkade";
         });
         /**
+     * @description Request for creating a Lightning-to-Arkade swap.
+     *
+     *     The user pays a Lightning invoice and receives Arkade VTXOs.
+     */
+    LightningToArkadeSwapRequest: {
+      /** @description User's claim public key for the Arkade VHTLC */
+      claim_pk: string;
+      /**
+       * @description Hash lock provided by the client (32-byte hex string with 0x prefix).
+       *     Used for the Boltz VHTLC. RIPEMD160 of this is used for the Arkade VHTLC.
+       */
+      hash_lock: string;
+      /** @description Optional referral code for fee exemption */
+      referral_code?: string | null;
+      /** @description User's refund public key used to generate the Boltz VHTLC */
+      refund_pk: string;
+      /**
+       * Format: int64
+       * @description Amount the user wants to receive on Arkade in satoshis
+       */
+      sats_receive: number;
+      /** @description User's target Arkade address to receive VTXOs */
+      target_arkade_address: string;
+      /** @description User ID derived from wallet for recovery purposes */
+      user_id: string;
+    };
+    /** @description Lightning → Arkade swap response */
+    LightningToArkadeSwapResponse: {
+      /** @description Arkade VHTLC claim transaction ID (user claim) */
+      arkade_claim_txid?: string | null;
+      /** @description Arkade VHTLC fund transaction ID */
+      arkade_fund_txid?: string | null;
+      /** @description Arkade server's public key */
+      arkade_server_pk: string;
+      /** @description Arkade VHTLC address (server creates, user claims) */
+      arkade_vhtlc_address: string;
+      /** @description Lightning invoice to pay */
+      boltz_invoice: string;
+      /** @description Boltz swap ID */
+      boltz_swap_id: string;
+      /** @description Server's VHTLC claim transaction ID (Boltz claim) */
+      btc_claim_txid?: string | null;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: int64 */
+      fee_sats: number;
+      hash_lock: string;
+      id: string;
+      /** @description Bitcoin network */
+      network: string;
+      /** @description User's claim public key (receiver in the VHTLC) */
+      receiver_pk: string;
+      /** @description Server's VHTLC public key (sender in the VHTLC) */
+      sender_pk: string;
+      /** @description Amount user must send via Lightning in sats */
+      source_amount: string;
+      source_token: components["schemas"]["TokenInfo"];
+      status: components["schemas"]["SwapStatus"];
+      /** @description Amount user will receive on Arkade in sats */
+      target_amount: string;
+      /** @description User's target Arkade address */
+      target_arkade_address: string;
+      target_token: components["schemas"]["TokenInfo"];
+      /**
+       * Format: int64
+       * @description Unilateral claim delay in seconds
+       */
+      unilateral_claim_delay: number;
+      /**
+       * Format: int64
+       * @description Unilateral refund delay in seconds
+       */
+      unilateral_refund_delay: number;
+      /**
+       * Format: int64
+       * @description Unilateral refund without receiver delay in seconds
+       */
+      unilateral_refund_without_receiver_delay: number;
+      /**
+       * Format: int64
+       * @description VHTLC refund locktime (unix timestamp)
+       */
+      vhtlc_refund_locktime: number;
+    };
+    /**
          * @description Chain-agnostic request for Lightning-to-EVM swaps.
          *
          *     The caller specifies the target chain via `evm_chain_id` and the token
@@ -2796,502 +2909,544 @@ export interface operations {
             };
         };
     };
-    create_lightning_evm_swap: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LightningToEvmSwapRequest"];
-            };
-        };
-        responses: {
-            /** @description Swap created successfully */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LightningToEvmSwapResponse"];
-                };
-            };
-            /** @description Bad request - invalid parameters */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
+    create_lightning_to_arkade_swap: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    recover_swaps: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RecoveryRequest"];
-            };
-        };
-        responses: {
-            /** @description Swaps recovered successfully */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RecoveryResponse"];
-                };
-            };
-            /** @description Bad request - invalid xpub format */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["LightningToArkadeSwapRequest"];
+      };
     };
-    get_swap: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Swap ID */
-                id: string;
-            };
-            cookie?: never;
+    responses: {
+      /** @description Swap created successfully */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Swap found successfully */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GetSwapResponse"];
-                };
-            };
-            /** @description Bad request - swap not found */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["LightningToArkadeSwapResponse"];
         };
+      };
+      /** @description Bad request - invalid parameters */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal server error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
     };
-    claim_via_gasless: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Swap ID */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ClaimGaslessRequest"];
-            };
-        };
-        responses: {
-            /** @description Swap claimed successfully via gasless execution */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClaimGaslessResponse"];
-                };
-            };
-            /** @description Bad request - swap not found or in wrong state */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
+  };
+  create_lightning_evm_swap: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    fund_gasless: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Swap ID */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FundGaslessRequest"];
-            };
-        };
-        responses: {
-            /** @description Swap funded successfully via gasless relay */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FundGaslessResponse"];
-                };
-            };
-            /** @description Bad request - swap not found or in wrong state */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["LightningToEvmSwapRequest"];
+      };
     };
-    get_dex_calldata: {
-        parameters: {
-            query: {
-                /** @description EVM destination address for output tokens */
-                destination: string;
-                /** @description Slippage tolerance percentage (default: 1.0) */
-                slippage?: number;
-            };
-            header?: never;
-            path: {
-                /** @description Swap ID */
-                id: string;
-            };
-            cookie?: never;
+    responses: {
+      /** @description Swap created successfully */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Fresh DEX calldata with gasless fee estimate */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RedeemAndSwapResponse"];
-                };
-            };
-            /** @description Bad request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["LightningToEvmSwapResponse"];
         };
+      };
+      /** @description Bad request - invalid parameters */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal server error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
     };
-    get_refund_calldata: {
-        parameters: {
-            query?: {
-                /** @description Refund mode: "swap-back" (default) or "direct" */
-                mode?: string;
-            };
-            header?: never;
-            path: {
-                /** @description Swap ID */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Refund calldata */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RefundCalldataResponse"];
-                };
-            };
-            /** @description Bad request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
+  };
+  recover_swaps: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    get_coordinator_funding_calldata_permit2: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Swap ID */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Permit2 funding data */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/plain": string;
-                };
-            };
-            /** @description Bad request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RecoveryRequest"];
+      };
     };
-    get_tokens: {
-        parameters: {
-            query?: {
-                /** @description If set together with `source_token`, return only valid target tokens. */
-                source_chain?: null | components["schemas"]["Chain"];
-                /** @description If set together with `target_token`, return only valid source tokens. */
-                target_chain?: null | components["schemas"]["Chain"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
+    responses: {
+      /** @description Swaps recovered successfully */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Return list of available tokens for swaps */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TokenInfos"];
-                };
-            };
+        content: {
+          "application/json": components["schemas"]["RecoveryResponse"];
         };
+      };
+      /** @description Bad request - invalid xpub format */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal server error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
     };
-    get_version: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Return the deployed version and commit hash */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Version"];
-                };
-            };
-        };
+  };
+  get_swap: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Swap ID */
+        id: string;
+      };
+      cookie?: never;
     };
-    collab_refund_evm: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Swap ID */
-                id: string;
-            };
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Swap found successfully */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CollabRefundEvmRequest"];
-            };
+        content: {
+          "application/json": components["schemas"]["GetSwapResponse"];
         };
-        responses: {
-            /** @description EVM HTLC refunded successfully */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CollabRefundEvmResponse"];
-                };
-            };
-            /** @description Bad request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Refund not allowed in current swap state */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Swap not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
+      };
+      /** @description Bad request - swap not found */
+      400: {
+        headers: {
+          [name: string]: unknown;
         };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal server error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
     };
-    collab_refund_evm_params: {
-        parameters: {
-            query?: {
-                /** @description Settlement mode: direct (default) or swap-back */
-                mode?: string;
-            };
-            header?: never;
-            path: {
-                /** @description Swap ID */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description EIP-712 CollabRefund parameters */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CollabRefundEvmParams"];
-                };
-            };
-            /** @description Swap not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Internal error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
+  };
+  claim_via_gasless: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Swap ID */
+        id: string;
+      };
+      cookie?: never;
     };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ClaimGaslessRequest"];
+      };
+    };
+    responses: {
+      /** @description Swap claimed successfully via gasless execution */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ClaimGaslessResponse"];
+        };
+      };
+      /** @description Bad request - swap not found or in wrong state */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal server error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  fund_gasless: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Swap ID */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FundGaslessRequest"];
+      };
+    };
+    responses: {
+      /** @description Swap funded successfully via gasless relay */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["FundGaslessResponse"];
+        };
+      };
+      /** @description Bad request - swap not found or in wrong state */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal server error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  get_dex_calldata: {
+    parameters: {
+      query: {
+        /** @description EVM destination address for output tokens */
+        destination: string;
+        /** @description Slippage tolerance percentage (default: 1.0) */
+        slippage?: number;
+      };
+      header?: never;
+      path: {
+        /** @description Swap ID */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Fresh DEX calldata with gasless fee estimate */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RedeemAndSwapResponse"];
+        };
+      };
+      /** @description Bad request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal server error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  get_refund_calldata: {
+    parameters: {
+      query?: {
+        /** @description Refund mode: "swap-back" (default) or "direct" */
+        mode?: string;
+      };
+      header?: never;
+      path: {
+        /** @description Swap ID */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Refund calldata */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RefundCalldataResponse"];
+        };
+      };
+      /** @description Bad request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal server error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  get_coordinator_funding_calldata_permit2: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Swap ID */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Permit2 funding data */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "text/plain": string;
+        };
+      };
+      /** @description Bad request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal server error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  get_tokens: {
+    parameters: {
+      query?: {
+        /** @description If set together with `source_token`, return only valid target tokens. */
+        source_chain?: null | components["schemas"]["Chain"];
+        /** @description If set together with `target_token`, return only valid source tokens. */
+        target_chain?: null | components["schemas"]["Chain"];
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Return list of available tokens for swaps */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TokenInfos"];
+        };
+      };
+    };
+  };
+  get_version: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Return the deployed version and commit hash */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Version"];
+        };
+      };
+    };
+  };
+  collab_refund_evm: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Swap ID */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CollabRefundEvmRequest"];
+      };
+    };
+    responses: {
+      /** @description EVM HTLC refunded successfully */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CollabRefundEvmResponse"];
+        };
+      };
+      /** @description Bad request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Refund not allowed in current swap state */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Swap not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
+  collab_refund_evm_params: {
+    parameters: {
+      query?: {
+        /** @description Settlement mode: direct (default) or swap-back */
+        mode?: string;
+      };
+      header?: never;
+      path: {
+        /** @description Swap ID */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description EIP-712 CollabRefund parameters */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CollabRefundEvmParams"];
+        };
+      };
+      /** @description Swap not found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+      /** @description Internal error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ErrorResponse"];
+        };
+      };
+    };
+  };
 }
