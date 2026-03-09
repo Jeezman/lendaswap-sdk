@@ -2781,6 +2781,52 @@ export class Client {
   }
 
   /**
+   * Submits a pre-signed collaborative EVM refund.
+   *
+   * Use this when an external wallet (e.g. MetaMask) signs the EIP-712
+   * `CollabRefund` digest instead of the SDK's embedded key.
+   * Call {@link buildCollabRefundEvmTypedData} first to obtain the typed data
+   * for the wallet to sign, then pass the resulting signature here.
+   *
+   * @param swapId - Swap ID
+   * @param body   - Signed refund request (signature + refund parameters)
+   * @returns Refund result with transaction hash
+   */
+  async submitCollabRefundEvm(
+    swapId: string,
+    body: {
+      v: number;
+      r: string;
+      s: string;
+      depositor_address: string;
+      mode: string;
+      sweep_token?: string;
+      min_amount_out: string;
+      dex_calldata?: { to: string; data: string; value: string };
+    },
+  ): Promise<CollabRefundEvmResult> {
+    const response = await this.#apiClient.POST(
+      "/api/swap/{id}/collab-refund-evm",
+      {
+        params: { path: { id: swapId } },
+        body,
+      },
+    );
+
+    if (response.error) {
+      throw new Error(
+        `Collaborative EVM refund failed: ${response.error.error || "Unknown error"}`,
+      );
+    }
+
+    return {
+      id: response.data.id,
+      txHash: response.data.tx_hash,
+      message: response.data.message,
+    };
+  }
+
+  /**
    * Collaborative EVM refund — internal method called by refundSwap.
    * @internal
    */
