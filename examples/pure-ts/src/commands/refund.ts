@@ -269,6 +269,7 @@ export async function refundSwap(
         await swapStorage.update(swapId, updatedSwap);
       }
     } else {
+      console.error("Refund failed:", result.message);
       // #region check-locktime
       const lockSwap = await client.getSwap(swapId);
       console.log("Status:", lockSwap.status);
