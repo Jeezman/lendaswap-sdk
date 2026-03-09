@@ -56,39 +56,21 @@ export function signEvmDigest(
 
   const digestBytes = hexToBytes(digest.replace(/^0x/, ""));
 
-  // sign returns a RecoveredSignature object
-  const sigBytes = secp256k1.sign(digestBytes, keyBytes, { prehash: false });
-  const sigObj = secp256k1.Signature.fromBytes(sigBytes);
+  // secp256k1.sign() returns a RecoveredSignature at runtime (with r, s, recovery)
+  // but @noble/curves types it as Uint8Array — cast to access the properties.
+  const sig = secp256k1.sign(digestBytes, keyBytes, {
+    prehash: false,
+  }) as unknown as {
+    r: bigint;
+    s: bigint;
+    recovery: number;
+  };
 
-  const r = sigObj.r.toString(16).padStart(64, "0");
-  const s = sigObj.s.toString(16).padStart(64, "0");
+  const r = sig.r.toString(16).padStart(64, "0");
+  const s = sig.s.toString(16).padStart(64, "0");
+  const v = (sig.recovery ?? 0) + 27;
 
-  // Determine recovery bit by trying both values against the known public key
-  const pubkey = secp256k1.getPublicKey(keyBytes, false);
-  let recoveryBit = 0;
-  for (let bit = 0; bit < 2; bit++) {
-    try {
-      const recovered = sigObj
-        .addRecoveryBit(bit)
-        .recoverPublicKey(digestBytes);
-      if (arraysEqual(recovered.toBytes(false), pubkey)) {
-        recoveryBit = bit;
-        break;
-      }
-    } catch {
-      // Try the other bit
-    }
-  }
-
-  return { v: recoveryBit + 27, r: `0x${r}`, s: `0x${s}` };
-}
-
-function arraysEqual(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return false;
-  }
-  return true;
+  return { v, r: `0x${r}`, s: `0x${s}` };
 }
 
 /**
