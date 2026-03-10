@@ -1,4 +1,4 @@
-import type {Chain, TokenId, TokenInfo} from "./api/client.js";
+import type { Chain, TokenId, TokenInfo } from "./api/client.js";
 
 /** A token identifier: either a plain string TokenId or a TokenInfo object. */
 export type TokenInput = TokenId;

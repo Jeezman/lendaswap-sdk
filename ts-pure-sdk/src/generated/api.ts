@@ -95,6 +95,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/swap/{id}/collab-refund-evm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Collaboratively refund an EVM HTLC before timelock expiry.
+         * @description The client signs a coordinator-level `CollabRefund` EIP-712 message authorizing
+         *     the refund parameters. The server cosigns with an HTLC-level `Refund` signature
+         *     (as claimAddress, waiving the timelock) and submits the transaction on-chain.
+         *
+         *     Supports EVM-to-Arkade, EVM-to-Bitcoin, and EVM-to-Lightning swaps.
+         */
+        post: operations["collab_refund_evm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/swap/{id}/collab-refund-evm/params": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get EIP-712 parameters for collaborative EVM HTLC refund.
+         * @description Returns the addresses, amounts, and struct fields the client needs to
+         *     construct and sign the `CollabRefund` EIP-712 typed data. The client signs
+         *     this, then POSTs the signature to the collab-refund-evm endpoint.
+         *
+         *     Two settlement modes:
+         *     - `mode=direct` (default): `sweepToken` = WBTC, `minAmountOut` = 0
+         *     - `mode=swap-back`: `sweepToken` = original source token, includes DEX calldata from 1inch
+         */
+        get: operations["collab_refund_evm_params"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/vtxo-swap": {
         parameters: {
             query?: never;
@@ -372,30 +422,30 @@ export interface paths {
         trace?: never;
     };
     "/swap/lightning/arkade": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a new Lightning-to-Arkade swap.
+         * @description Flow:
+         *     1. User pays the Lightning invoice returned
+         *     2. Server receives BTC via Boltz and creates Arkade VHTLC for user
+         *     3. User claims Arkade VHTLC with secret, revealing it
+         *     4. Server claims Boltz VHTLC with the revealed secret
+         */
+        post: operations["create_lightning_to_arkade_swap"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Create a new Lightning-to-Arkade swap.
-     * @description Flow:
-     *     1. User pays the Lightning invoice returned
-     *     2. Server receives BTC via Boltz and creates Arkade VHTLC for user
-     *     3. User claims Arkade VHTLC with secret, revealing it
-     *     4. Server claims Boltz VHTLC with the revealed secret
-     */
-    post: operations["create_lightning_to_arkade_swap"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/swap/lightning/evm": {
+    "/swap/lightning/evm": {
         parameters: {
             query?: never;
             header?: never;
@@ -599,46 +649,6 @@ export interface paths {
         };
         /** Return the current git tag and commit hash. */
         get: operations["get_version"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/swap/{id}/collab-refund-evm": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Collaboratively refund an EVM HTLC before timelock expiry.
-         * @description The client signs a coordinator-level CollabRefund EIP-712 message authorizing the refund parameters. The server cosigns with an HTLC-level Refund signature (as claimAddress, waiving the timelock) and submits the transaction on-chain. Supports EVM-to-Arkade, EVM-to-Bitcoin, and EVM-to-Lightning swaps.
-         */
-        post: operations["collab_refund_evm"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/swap/{id}/collab-refund-evm/params": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get EIP-712 parameters for collaborative EVM HTLC refund.
-         * @description Returns the addresses, amounts, and struct fields the client needs to construct and sign the CollabRefund EIP-712 typed data.
-         */
-        get: operations["collab_refund_evm_params"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1067,6 +1077,99 @@ export interface components {
             /** @description Base64-encoded countersigned intent proof PSBT. */
             intent_proof: string;
         };
+        /** @description DEX calldata returned by the params endpoint for swap-back mode. */
+        CollabRefundDexCalldata: {
+            /** @description Encoded swap calldata (0x-prefixed hex string) */
+            data: string;
+            /** @description DEX router address */
+            to: string;
+            /** @description Native token value (usually "0") */
+            value: string;
+        };
+        /** @description EIP-712 parameters the client needs to sign for collaborative refund. */
+        CollabRefundEvmParams: {
+            /** @description WBTC amount locked in the HTLC (decimal string) */
+            amount: string;
+            /** @description keccak256(abi.encode(calls)) for the exact calls array the depositor signs over. */
+            calls_hash: string;
+            /**
+             * Format: int64
+             * @description EVM chain ID
+             */
+            chain_id: number;
+            /** @description Claim address (server's EVM address) */
+            claim_address: string;
+            /** @description HTLCCoordinator contract address (EIP-712 verifyingContract) */
+            coordinator_address: string;
+            dex_calldata?: null | components["schemas"]["CollabRefundDexCalldata"];
+            /**
+             * @description Minimum output amount for the sweep (0 for direct, DEX-quoted for swap-back).
+             *     This is the `minAmountOut` field in the EIP-712 struct.
+             */
+            min_amount_out: string;
+            /** @description Settlement mode used to compute sweep fields. */
+            mode: components["schemas"]["RefundMode"];
+            /** @description Preimage hash (0x-prefixed, 32-byte hex) */
+            preimage_hash: string;
+            /** @description Server's signer EOA address (the `caller` field in the EIP-712 struct) */
+            server_signer_address: string;
+            /**
+             * @description Source token address (the token the user originally deposited).
+             *     Only relevant for swap-back mode.
+             */
+            source_token_address?: string | null;
+            /**
+             * @description Token the depositor receives after refund (WBTC for direct, source token for swap-back).
+             *     This is the `sweepToken` field in the EIP-712 struct.
+             */
+            sweep_token: string;
+            /**
+             * Format: int64
+             * @description HTLC timelock (unix timestamp)
+             */
+            timelock: number;
+            /** @description WBTC token address */
+            token: string;
+        };
+        /** @description Request for collaborative refund of an EVM HTLC. */
+        CollabRefundEvmRequest: {
+            /**
+             * @description On-chain depositor address (the address that funded the HTLC via the coordinator).
+             *     In the Permit2 flow this is a derived key, not the user's wallet address.
+             *     Required so the server can sign the correct HTLC refund digest.
+             */
+            depositor_address: string;
+            /** @description Minimum amount out for the sweep (0 = no minimum). Defaults to 0. */
+            min_amount_out?: string;
+            /**
+             * @description Refund mode: "direct" (WBTC back to depositor) or "swap"/"swap-back" (DEX swap-back to
+             *     original token)
+             */
+            mode?: components["schemas"]["RefundMode"];
+            /** @description EIP-712 signature r (32-byte hex string, with or without 0x prefix) */
+            r: string;
+            /** @description EIP-712 signature s (32-byte hex string, with or without 0x prefix) */
+            s: string;
+            /**
+             * @description Token to sweep to depositor after refund. Required for "swap" mode.
+             *     For "direct" mode, defaults to WBTC.
+             */
+            sweep_token?: string | null;
+            /**
+             * Format: int32
+             * @description EIP-712 signature v (depositor's coordinator-level signature)
+             */
+            v: number;
+        };
+        /** @description Response for collaborative refund of an EVM HTLC. */
+        CollabRefundEvmResponse: {
+            /** @description Swap ID */
+            id: string;
+            /** @description Success message */
+            message: string;
+            /** @description Transaction hash of the on-chain refund */
+            tx_hash: string;
+        };
         /** @description Request for collaborative refund of spendable VTXOs (offchain send flow). */
         CollabRefundRequest: {
             /** @description Base64-encoded ark transaction PSBT (partially signed by the sender/client). */
@@ -1399,8 +1502,19 @@ export interface components {
          *
          *     User sends any ERC-20 token on EVM, receives BTC via Lightning.
          *     The hash_lock is derived from the Lightning invoice's payment hash.
+         *
+         *     Provide **either** `lightning_invoice` (a BOLT11 invoice) **or**
+         *     `lightning_address` + `amount_sats` (a Lightning address that will be
+         *     resolved server-side via LNURL-pay).
          */
         EvmToLightningSwapRequest: {
+            /**
+             * Format: int64
+             * @description Amount in satoshis the recipient should receive on Lightning.
+             *     Required when `lightning_address` is provided; ignored when
+             *     `lightning_invoice` is provided (amount is read from the invoice).
+             */
+            amount_sats?: number | null;
             /**
              * Format: int64
              * @description Numeric EVM chain ID: 1 (Ethereum), 137 (Polygon), 42161 (Arbitrum).
@@ -1409,10 +1523,15 @@ export interface components {
             /** @description Whether to use gasless relay for funding (server submits tx on behalf of user). */
             gasless?: boolean;
             /**
-             * @description User's Lightning BOLT11 invoice to receive payment.
-             *     The payment hash from this invoice becomes the HTLC hash_lock.
+             * @description Lightning address (e.g. `user@speed.app`) to resolve via LNURL-pay.
+             *     Mutually exclusive with `lightning_invoice`. Requires `amount_sats`.
              */
-            lightning_invoice: string;
+            lightning_address?: string | null;
+            /**
+             * @description User's Lightning BOLT11 invoice to receive payment.
+             *     Mutually exclusive with `lightning_address`.
+             */
+            lightning_invoice?: string | null;
             /** @description Optional referral code for tracking. */
             referral_code?: string | null;
             /** @description ERC-20 contract address of the source token on the EVM chain. */
@@ -1520,97 +1639,96 @@ export interface components {
         }) | (components["schemas"]["EvmToLightningSwapResponse"] & {
             /** @enum {string} */
             direction: "evm_to_lightning";
-        })
-      | (components["schemas"]["LightningToArkadeSwapResponse"] & {
-          /** @enum {string} */
-          direction: "lightning_to_arkade";
+        }) | (components["schemas"]["LightningToArkadeSwapResponse"] & {
+            /** @enum {string} */
+            direction: "lightning_to_arkade";
         });
         /**
-     * @description Request for creating a Lightning-to-Arkade swap.
-     *
-     *     The user pays a Lightning invoice and receives Arkade VTXOs.
-     */
-    LightningToArkadeSwapRequest: {
-      /** @description User's claim public key for the Arkade VHTLC */
-      claim_pk: string;
-      /**
-       * @description Hash lock provided by the client (32-byte hex string with 0x prefix).
-       *     Used for the Boltz VHTLC. RIPEMD160 of this is used for the Arkade VHTLC.
-       */
-      hash_lock: string;
-      /** @description Optional referral code for fee exemption */
-      referral_code?: string | null;
-      /** @description User's refund public key used to generate the Boltz VHTLC */
-      refund_pk: string;
-      /**
-       * Format: int64
-       * @description Amount the user wants to receive on Arkade in satoshis
-       */
-      sats_receive: number;
-      /** @description User's target Arkade address to receive VTXOs */
-      target_arkade_address: string;
-      /** @description User ID derived from wallet for recovery purposes */
-      user_id: string;
-    };
-    /** @description Lightning → Arkade swap response */
-    LightningToArkadeSwapResponse: {
-      /** @description Arkade VHTLC claim transaction ID (user claim) */
-      arkade_claim_txid?: string | null;
-      /** @description Arkade VHTLC fund transaction ID */
-      arkade_fund_txid?: string | null;
-      /** @description Arkade server's public key */
-      arkade_server_pk: string;
-      /** @description Arkade VHTLC address (server creates, user claims) */
-      arkade_vhtlc_address: string;
-      /** @description Lightning invoice to pay */
-      boltz_invoice: string;
-      /** @description Boltz swap ID */
-      boltz_swap_id: string;
-      /** @description Server's VHTLC claim transaction ID (Boltz claim) */
-      btc_claim_txid?: string | null;
-      /** Format: date-time */
-      created_at: string;
-      /** Format: int64 */
-      fee_sats: number;
-      hash_lock: string;
-      id: string;
-      /** @description Bitcoin network */
-      network: string;
-      /** @description User's claim public key (receiver in the VHTLC) */
-      receiver_pk: string;
-      /** @description Server's VHTLC public key (sender in the VHTLC) */
-      sender_pk: string;
-      /** @description Amount user must send via Lightning in sats */
-      source_amount: string;
-      source_token: components["schemas"]["TokenInfo"];
-      status: components["schemas"]["SwapStatus"];
-      /** @description Amount user will receive on Arkade in sats */
-      target_amount: string;
-      /** @description User's target Arkade address */
-      target_arkade_address: string;
-      target_token: components["schemas"]["TokenInfo"];
-      /**
-       * Format: int64
-       * @description Unilateral claim delay in seconds
-       */
-      unilateral_claim_delay: number;
-      /**
-       * Format: int64
-       * @description Unilateral refund delay in seconds
-       */
-      unilateral_refund_delay: number;
-      /**
-       * Format: int64
-       * @description Unilateral refund without receiver delay in seconds
-       */
-      unilateral_refund_without_receiver_delay: number;
-      /**
-       * Format: int64
-       * @description VHTLC refund locktime (unix timestamp)
-       */
-      vhtlc_refund_locktime: number;
-    };
-    /**
+         * @description Request for creating a Lightning-to-Arkade swap.
+         *
+         *     The user pays a Lightning invoice and receives Arkade VTXOs.
+         */
+        LightningToArkadeSwapRequest: {
+            /** @description User's claim public key for the Arkade VHTLC */
+            claim_pk: string;
+            /**
+             * @description Hash lock provided by the client (32-byte hex string with 0x prefix).
+             *     Used for the Boltz VHTLC. RIPEMD160 of this is used for the Arkade VHTLC.
+             */
+            hash_lock: string;
+            /** @description Optional referral code for fee exemption */
+            referral_code?: string | null;
+            /** @description User's refund public key used to generate the Boltz VHTLC */
+            refund_pk: string;
+            /**
+             * Format: int64
+             * @description Amount the user wants to receive on Arkade in satoshis
+             */
+            sats_receive: number;
+            /** @description User's target Arkade address to receive VTXOs */
+            target_arkade_address: string;
+            /** @description User ID derived from wallet for recovery purposes */
+            user_id: string;
+        };
+        /** @description Lightning → Arkade swap response */
+        LightningToArkadeSwapResponse: {
+            /** @description Arkade VHTLC claim transaction ID (user claim) */
+            arkade_claim_txid?: string | null;
+            /** @description Arkade VHTLC fund transaction ID */
+            arkade_fund_txid?: string | null;
+            /** @description Arkade server's public key */
+            arkade_server_pk: string;
+            /** @description Arkade VHTLC address (server creates, user claims) */
+            arkade_vhtlc_address: string;
+            /** @description Lightning invoice to pay */
+            boltz_invoice: string;
+            /** @description Boltz swap ID */
+            boltz_swap_id: string;
+            /** @description Server's VHTLC claim transaction ID (Boltz claim) */
+            btc_claim_txid?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: int64 */
+            fee_sats: number;
+            hash_lock: string;
+            id: string;
+            /** @description Bitcoin network */
+            network: string;
+            /** @description User's claim public key (receiver in the VHTLC) */
+            receiver_pk: string;
+            /** @description Server's VHTLC public key (sender in the VHTLC) */
+            sender_pk: string;
+            /** @description Amount user must send via Lightning in sats */
+            source_amount: string;
+            source_token: components["schemas"]["TokenInfo"];
+            status: components["schemas"]["SwapStatus"];
+            /** @description Amount user will receive on Arkade in sats */
+            target_amount: string;
+            /** @description User's target Arkade address */
+            target_arkade_address: string;
+            target_token: components["schemas"]["TokenInfo"];
+            /**
+             * Format: int64
+             * @description Unilateral claim delay in seconds
+             */
+            unilateral_claim_delay: number;
+            /**
+             * Format: int64
+             * @description Unilateral refund delay in seconds
+             */
+            unilateral_refund_delay: number;
+            /**
+             * Format: int64
+             * @description Unilateral refund without receiver delay in seconds
+             */
+            unilateral_refund_without_receiver_delay: number;
+            /**
+             * Format: int64
+             * @description VHTLC refund locktime (unix timestamp)
+             */
+            vhtlc_refund_locktime: number;
+        };
+        /**
          * @description Chain-agnostic request for Lightning-to-EVM swaps.
          *
          *     The caller specifies the target chain via `evm_chain_id` and the token
@@ -1840,6 +1958,11 @@ export interface components {
             /** @description The HTLCCoordinator contract address */
             coordinator_address: string;
         };
+        /**
+         * @description Settlement mode for collaborative refund.
+         * @enum {string}
+         */
+        RefundMode: "direct" | "swap-back";
         SettleDelegateRequest: {
             /** @description Hex-encoded compressed cosigner public key (must match our static key). */
             cosigner_pk: string;
@@ -2072,96 +2195,6 @@ export interface components {
          * @enum {string}
          */
         VtxoSwapStatus: "pending" | "clientfunded" | "serverfunded" | "clientredeemed" | "serverredeemed" | "clientrefunded" | "clientfundedserverrefunded" | "expired";
-        /** @description Request for collaborative refund of an EVM HTLC. */
-        CollabRefundEvmRequest: {
-            /**
-             * Format: uint8
-             * @description EIP-712 signature v (depositor's coordinator-level signature)
-             */
-            v: number;
-            /** @description EIP-712 signature r (32-byte hex string, with or without 0x prefix) */
-            r: string;
-            /** @description EIP-712 signature s (32-byte hex string, with or without 0x prefix) */
-            s: string;
-            /** @description On-chain depositor address (the address that funded the HTLC via the coordinator). In the Permit2 flow this is a derived key, not the user's wallet address. */
-            depositor_address: string;
-            /**
-             * @description Refund mode: "direct" (WBTC back to depositor) or "swap"/"swap-back" (DEX swap-back to original token)
-             * @default direct
-             */
-            mode: components["schemas"]["RefundMode"];
-            /** @description Token to sweep to depositor after refund. Required for "swap" mode. For "direct" mode, defaults to WBTC. */
-            sweep_token?: string | null;
-            /**
-             * @description Minimum amount out for the sweep (0 = no minimum). Defaults to 0.
-             * @default 0
-             */
-            min_amount_out: string;
-        };
-        /** @description Response for collaborative refund of an EVM HTLC. */
-        CollabRefundEvmResponse: {
-            /**
-             * Format: uuid
-             * @description Swap ID
-             */
-            id: string;
-            /** @description Transaction hash of the on-chain refund */
-            tx_hash: string;
-            /** @description Success message */
-            message: string;
-        };
-        /** @description EIP-712 parameters the client needs to sign for collaborative refund. */
-        CollabRefundEvmParams: {
-            /** @description HTLCCoordinator contract address (EIP-712 verifyingContract) */
-            coordinator_address: string;
-            /** @description Server signer EOA address (the caller field in the EIP-712 struct) */
-            server_signer_address: string;
-            /** @description Preimage hash (0x-prefixed, 32-byte hex) */
-            preimage_hash: string;
-            /** @description WBTC amount locked in the HTLC (decimal string) */
-            amount: string;
-            /** @description WBTC token address */
-            token: string;
-            /** @description Claim address (server EVM address) */
-            claim_address: string;
-            /**
-             * Format: int64
-             * @description HTLC timelock (unix timestamp)
-             */
-            timelock: number;
-            /**
-             * Format: int64
-             * @description EVM chain ID
-             */
-            chain_id: number;
-            /** @description Settlement mode used to compute sweep fields. */
-            mode: components["schemas"]["RefundMode"];
-            /** @description Token the depositor receives after refund (EIP-712 sweepToken field) */
-            sweep_token: string;
-            /** @description Minimum output amount for the sweep (EIP-712 minAmountOut field) */
-            min_amount_out: string;
-            /** @description keccak256(abi.encode(calls)) for the exact calls array signed in CollabRefund */
-            calls_hash: string;
-            /** @description Source token address (only present for swap-back) */
-            source_token_address?: string | null;
-            /** @description DEX calldata for swap-back mode */
-            dex_calldata?: components["schemas"]["CollabRefundDexCalldata"] | null;
-        };
-        /** @description DEX calldata returned by the params endpoint for swap-back mode. */
-        CollabRefundDexCalldata: {
-            /** @description DEX router address */
-            to: string;
-            /** @description Encoded swap calldata (0x-prefixed hex string) */
-            data: string;
-            /** @description Native token value (usually 0) */
-            value: string;
-        };
-        /**
-         * @description Settlement mode for collaborative refund.
-         * @default direct
-         * @enum {string}
-         */
-        RefundMode: "direct" | "swap-back";
     };
     responses: never;
     parameters: never;
@@ -2346,6 +2379,113 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Swap not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    collab_refund_evm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Swap ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollabRefundEvmRequest"];
+            };
+        };
+        responses: {
+            /** @description EVM HTLC refunded successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollabRefundEvmResponse"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refund not allowed in current swap state */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Swap not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    collab_refund_evm_params: {
+        parameters: {
+            query?: {
+                /** @description Settlement mode: "direct" (default) or "swap-back" */
+                mode?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Swap ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description EIP-712 CollabRefund parameters */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollabRefundEvmParams"];
                 };
             };
             /** @description Swap not found */
@@ -2910,543 +3050,436 @@ export interface operations {
         };
     };
     create_lightning_to_arkade_swap: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LightningToArkadeSwapRequest"];
+            };
+        };
+        responses: {
+            /** @description Swap created successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LightningToArkadeSwapResponse"];
+                };
+            };
+            /** @description Bad request - invalid parameters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
     };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["LightningToArkadeSwapRequest"];
-      };
+    create_lightning_evm_swap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LightningToEvmSwapRequest"];
+            };
+        };
+        responses: {
+            /** @description Swap created successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LightningToEvmSwapResponse"];
+                };
+            };
+            /** @description Bad request - invalid parameters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
     };
-    responses: {
-      /** @description Swap created successfully */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    recover_swaps: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["LightningToArkadeSwapResponse"];
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecoveryRequest"];
+            };
         };
-      };
-      /** @description Bad request - invalid parameters */
-      400: {
-        headers: {
-          [name: string]: unknown;
+        responses: {
+            /** @description Swaps recovered successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecoveryResponse"];
+                };
+            };
+            /** @description Bad request - invalid xpub format */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-      /** @description Internal server error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
     };
-  };
-  create_lightning_evm_swap: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    get_swap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Swap ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Swap found successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetSwapResponse"];
+                };
+            };
+            /** @description Bad request - swap not found */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
     };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["LightningToEvmSwapRequest"];
-      };
+    claim_via_gasless: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Swap ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClaimGaslessRequest"];
+            };
+        };
+        responses: {
+            /** @description Swap claimed successfully via gasless execution */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClaimGaslessResponse"];
+                };
+            };
+            /** @description Bad request - swap not found or in wrong state */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
     };
-    responses: {
-      /** @description Swap created successfully */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    fund_gasless: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Swap ID */
+                id: string;
+            };
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["LightningToEvmSwapResponse"];
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FundGaslessRequest"];
+            };
         };
-      };
-      /** @description Bad request - invalid parameters */
-      400: {
-        headers: {
-          [name: string]: unknown;
+        responses: {
+            /** @description Swap funded successfully via gasless relay */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FundGaslessResponse"];
+                };
+            };
+            /** @description Bad request - swap not found or in wrong state */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-      /** @description Internal server error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
     };
-  };
-  recover_swaps: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    get_dex_calldata: {
+        parameters: {
+            query: {
+                /** @description EVM destination address for output tokens */
+                destination: string;
+                /** @description Slippage tolerance percentage (default: 1.0) */
+                slippage?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Swap ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fresh DEX calldata with gasless fee estimate */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RedeemAndSwapResponse"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
     };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["RecoveryRequest"];
-      };
+    get_refund_calldata: {
+        parameters: {
+            query?: {
+                /** @description Refund mode: "swap-back" (default) or "direct" */
+                mode?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Swap ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Refund calldata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefundCalldataResponse"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
     };
-    responses: {
-      /** @description Swaps recovered successfully */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    get_coordinator_funding_calldata_permit2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Swap ID */
+                id: string;
+            };
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["RecoveryResponse"];
+        requestBody?: never;
+        responses: {
+            /** @description Permit2 funding data */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
-      };
-      /** @description Bad request - invalid xpub format */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-      /** @description Internal server error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
     };
-  };
-  get_swap: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Swap ID */
-        id: string;
-      };
-      cookie?: never;
+    get_tokens: {
+        parameters: {
+            query?: {
+                /** @description If set together with `source_token`, return only valid target tokens. */
+                source_chain?: null | components["schemas"]["Chain"];
+                /** @description If set together with `target_token`, return only valid source tokens. */
+                target_chain?: null | components["schemas"]["Chain"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Return list of available tokens for swaps */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenInfos"];
+                };
+            };
+        };
     };
-    requestBody?: never;
-    responses: {
-      /** @description Swap found successfully */
-      200: {
-        headers: {
-          [name: string]: unknown;
+    get_version: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
         };
-        content: {
-          "application/json": components["schemas"]["GetSwapResponse"];
+        requestBody?: never;
+        responses: {
+            /** @description Return the deployed version and commit hash */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Version"];
+                };
+            };
         };
-      };
-      /** @description Bad request - swap not found */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-      /** @description Internal server error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
     };
-  };
-  claim_via_gasless: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Swap ID */
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ClaimGaslessRequest"];
-      };
-    };
-    responses: {
-      /** @description Swap claimed successfully via gasless execution */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ClaimGaslessResponse"];
-        };
-      };
-      /** @description Bad request - swap not found or in wrong state */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-      /** @description Internal server error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-    };
-  };
-  fund_gasless: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Swap ID */
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["FundGaslessRequest"];
-      };
-    };
-    responses: {
-      /** @description Swap funded successfully via gasless relay */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["FundGaslessResponse"];
-        };
-      };
-      /** @description Bad request - swap not found or in wrong state */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-      /** @description Internal server error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-    };
-  };
-  get_dex_calldata: {
-    parameters: {
-      query: {
-        /** @description EVM destination address for output tokens */
-        destination: string;
-        /** @description Slippage tolerance percentage (default: 1.0) */
-        slippage?: number;
-      };
-      header?: never;
-      path: {
-        /** @description Swap ID */
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Fresh DEX calldata with gasless fee estimate */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["RedeemAndSwapResponse"];
-        };
-      };
-      /** @description Bad request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-      /** @description Internal server error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-    };
-  };
-  get_refund_calldata: {
-    parameters: {
-      query?: {
-        /** @description Refund mode: "swap-back" (default) or "direct" */
-        mode?: string;
-      };
-      header?: never;
-      path: {
-        /** @description Swap ID */
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Refund calldata */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["RefundCalldataResponse"];
-        };
-      };
-      /** @description Bad request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-      /** @description Internal server error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-    };
-  };
-  get_coordinator_funding_calldata_permit2: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Swap ID */
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Permit2 funding data */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "text/plain": string;
-        };
-      };
-      /** @description Bad request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-      /** @description Internal server error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-    };
-  };
-  get_tokens: {
-    parameters: {
-      query?: {
-        /** @description If set together with `source_token`, return only valid target tokens. */
-        source_chain?: null | components["schemas"]["Chain"];
-        /** @description If set together with `target_token`, return only valid source tokens. */
-        target_chain?: null | components["schemas"]["Chain"];
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Return list of available tokens for swaps */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["TokenInfos"];
-        };
-      };
-    };
-  };
-  get_version: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Return the deployed version and commit hash */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["Version"];
-        };
-      };
-    };
-  };
-  collab_refund_evm: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @description Swap ID */
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["CollabRefundEvmRequest"];
-      };
-    };
-    responses: {
-      /** @description EVM HTLC refunded successfully */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["CollabRefundEvmResponse"];
-        };
-      };
-      /** @description Bad request */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-      /** @description Refund not allowed in current swap state */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-      /** @description Swap not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-      /** @description Internal error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-    };
-  };
-  collab_refund_evm_params: {
-    parameters: {
-      query?: {
-        /** @description Settlement mode: direct (default) or swap-back */
-        mode?: string;
-      };
-      header?: never;
-      path: {
-        /** @description Swap ID */
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description EIP-712 CollabRefund parameters */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["CollabRefundEvmParams"];
-        };
-      };
-      /** @description Swap not found */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-      /** @description Internal error */
-      500: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ErrorResponse"];
-        };
-      };
-    };
-  };
 }

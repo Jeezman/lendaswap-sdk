@@ -253,6 +253,149 @@
         }
       }
     },
+    "/api/swap/{id}/collab-refund-evm": {
+      "post": {
+        "tags": ["collab-refund-evm"],
+        "summary": "Collaboratively refund an EVM HTLC before timelock expiry.",
+        "description": "The client signs a coordinator-level `CollabRefund` EIP-712 message authorizing\nthe refund parameters. The server cosigns with an HTLC-level `Refund` signature\n(as claimAddress, waiving the timelock) and submits the transaction on-chain.\n\nSupports EVM-to-Arkade, EVM-to-Bitcoin, and EVM-to-Lightning swaps.",
+        "operationId": "collab_refund_evm",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Swap ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollabRefundEvmRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "EVM HTLC refunded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollabRefundEvmResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Refund not allowed in current swap state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Swap not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/swap/{id}/collab-refund-evm/params": {
+      "get": {
+        "tags": ["collab-refund-evm"],
+        "summary": "Get EIP-712 parameters for collaborative EVM HTLC refund.",
+        "description": "Returns the addresses, amounts, and struct fields the client needs to\nconstruct and sign the `CollabRefund` EIP-712 typed data. The client signs\nthis, then POSTs the signature to the collab-refund-evm endpoint.\n\nTwo settlement modes:\n- `mode=direct` (default): `sweepToken` = WBTC, `minAmountOut` = 0\n- `mode=swap-back`: `sweepToken` = original source token, includes DEX calldata from 1inch",
+        "operationId": "collab_refund_evm_params",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Swap ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "description": "Settlement mode: \"direct\" (default) or \"swap-back\"",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "EIP-712 CollabRefund parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollabRefundEvmParams"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Swap not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/vtxo-swap": {
       "post": {
         "tags": ["vtxo-swap"],
@@ -1489,148 +1632,6 @@
           }
         }
       }
-    },
-    "/api/swap/{id}/collab-refund-evm": {
-      "post": {
-        "tags": ["collab-refund-evm"],
-        "summary": "Collaboratively refund an EVM HTLC before timelock expiry.",
-        "description": "The client signs a coordinator-level CollabRefund EIP-712 message authorizing the refund parameters. The server cosigns with an HTLC-level Refund signature (as claimAddress, waiving the timelock) and submits the transaction on-chain. Supports EVM-to-Arkade, EVM-to-Bitcoin, and EVM-to-Lightning swaps.",
-        "operationId": "collab_refund_evm",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Swap ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CollabRefundEvmRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "EVM HTLC refunded successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CollabRefundEvmResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Refund not allowed in current swap state",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Swap not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/swap/{id}/collab-refund-evm/params": {
-      "get": {
-        "tags": ["collab-refund-evm"],
-        "summary": "Get EIP-712 parameters for collaborative EVM HTLC refund.",
-        "description": "Returns the addresses, amounts, and struct fields the client needs to construct and sign the CollabRefund EIP-712 typed data.",
-        "operationId": "collab_refund_evm_params",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Swap ID"
-          },
-          {
-            "name": "mode",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Settlement mode: direct (default) or swap-back"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "EIP-712 CollabRefund parameters",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CollabRefundEvmParams"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Swap not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
     }
   },
   "components": {
@@ -2428,6 +2429,168 @@
           }
         }
       },
+      "CollabRefundDexCalldata": {
+        "type": "object",
+        "description": "DEX calldata returned by the params endpoint for swap-back mode.",
+        "required": ["to", "data", "value"],
+        "properties": {
+          "data": {
+            "type": "string",
+            "description": "Encoded swap calldata (0x-prefixed hex string)"
+          },
+          "to": {
+            "type": "string",
+            "description": "DEX router address"
+          },
+          "value": {
+            "type": "string",
+            "description": "Native token value (usually \"0\")"
+          }
+        }
+      },
+      "CollabRefundEvmParams": {
+        "type": "object",
+        "description": "EIP-712 parameters the client needs to sign for collaborative refund.",
+        "required": [
+          "coordinator_address",
+          "server_signer_address",
+          "preimage_hash",
+          "amount",
+          "token",
+          "claim_address",
+          "timelock",
+          "chain_id",
+          "mode",
+          "sweep_token",
+          "min_amount_out",
+          "calls_hash"
+        ],
+        "properties": {
+          "amount": {
+            "type": "string",
+            "description": "WBTC amount locked in the HTLC (decimal string)"
+          },
+          "calls_hash": {
+            "type": "string",
+            "description": "keccak256(abi.encode(calls)) for the exact calls array the depositor signs over."
+          },
+          "chain_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "EVM chain ID",
+            "minimum": 0
+          },
+          "claim_address": {
+            "type": "string",
+            "description": "Claim address (server's EVM address)"
+          },
+          "coordinator_address": {
+            "type": "string",
+            "description": "HTLCCoordinator contract address (EIP-712 verifyingContract)"
+          },
+          "dex_calldata": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CollabRefundDexCalldata",
+                "description": "DEX calldata for the swap-back. Only present when mode=swap-back."
+              }
+            ]
+          },
+          "min_amount_out": {
+            "type": "string",
+            "description": "Minimum output amount for the sweep (0 for direct, DEX-quoted for swap-back).\nThis is the `minAmountOut` field in the EIP-712 struct."
+          },
+          "mode": {
+            "$ref": "#/components/schemas/RefundMode",
+            "description": "Settlement mode used to compute sweep fields."
+          },
+          "preimage_hash": {
+            "type": "string",
+            "description": "Preimage hash (0x-prefixed, 32-byte hex)"
+          },
+          "server_signer_address": {
+            "type": "string",
+            "description": "Server's signer EOA address (the `caller` field in the EIP-712 struct)"
+          },
+          "source_token_address": {
+            "type": ["string", "null"],
+            "description": "Source token address (the token the user originally deposited).\nOnly relevant for swap-back mode."
+          },
+          "sweep_token": {
+            "type": "string",
+            "description": "Token the depositor receives after refund (WBTC for direct, source token for swap-back).\nThis is the `sweepToken` field in the EIP-712 struct."
+          },
+          "timelock": {
+            "type": "integer",
+            "format": "int64",
+            "description": "HTLC timelock (unix timestamp)",
+            "minimum": 0
+          },
+          "token": {
+            "type": "string",
+            "description": "WBTC token address"
+          }
+        }
+      },
+      "CollabRefundEvmRequest": {
+        "type": "object",
+        "description": "Request for collaborative refund of an EVM HTLC.",
+        "required": ["v", "r", "s", "depositor_address"],
+        "properties": {
+          "depositor_address": {
+            "type": "string",
+            "description": "On-chain depositor address (the address that funded the HTLC via the coordinator).\nIn the Permit2 flow this is a derived key, not the user's wallet address.\nRequired so the server can sign the correct HTLC refund digest."
+          },
+          "min_amount_out": {
+            "type": "string",
+            "description": "Minimum amount out for the sweep (0 = no minimum). Defaults to 0."
+          },
+          "mode": {
+            "$ref": "#/components/schemas/RefundMode",
+            "description": "Refund mode: \"direct\" (WBTC back to depositor) or \"swap\"/\"swap-back\" (DEX swap-back to\noriginal token)"
+          },
+          "r": {
+            "type": "string",
+            "description": "EIP-712 signature r (32-byte hex string, with or without 0x prefix)"
+          },
+          "s": {
+            "type": "string",
+            "description": "EIP-712 signature s (32-byte hex string, with or without 0x prefix)"
+          },
+          "sweep_token": {
+            "type": ["string", "null"],
+            "description": "Token to sweep to depositor after refund. Required for \"swap\" mode.\nFor \"direct\" mode, defaults to WBTC."
+          },
+          "v": {
+            "type": "integer",
+            "format": "int32",
+            "description": "EIP-712 signature v (depositor's coordinator-level signature)",
+            "minimum": 0
+          }
+        }
+      },
+      "CollabRefundEvmResponse": {
+        "type": "object",
+        "description": "Response for collaborative refund of an EVM HTLC.",
+        "required": ["id", "tx_hash", "message"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Swap ID"
+          },
+          "message": {
+            "type": "string",
+            "description": "Success message"
+          },
+          "tx_hash": {
+            "type": "string",
+            "description": "Transaction hash of the on-chain refund"
+          }
+        }
+      },
       "CollabRefundRequest": {
         "type": "object",
         "description": "Request for collaborative refund of spendable VTXOs (offchain send flow).",
@@ -3159,15 +3322,20 @@
       },
       "EvmToLightningSwapRequest": {
         "type": "object",
-        "description": "Request to create an EVM-to-Lightning swap.\n\nUser sends any ERC-20 token on EVM, receives BTC via Lightning.\nThe hash_lock is derived from the Lightning invoice's payment hash.",
+        "description": "Request to create an EVM-to-Lightning swap.\n\nUser sends any ERC-20 token on EVM, receives BTC via Lightning.\nThe hash_lock is derived from the Lightning invoice's payment hash.\n\nProvide **either** `lightning_invoice` (a BOLT11 invoice) **or**\n`lightning_address` + `amount_sats` (a Lightning address that will be\nresolved server-side via LNURL-pay).",
         "required": [
-          "lightning_invoice",
           "evm_chain_id",
           "token_address",
           "user_address",
           "user_id"
         ],
         "properties": {
+          "amount_sats": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Amount in satoshis the recipient should receive on Lightning.\nRequired when `lightning_address` is provided; ignored when\n`lightning_invoice` is provided (amount is read from the invoice).",
+            "minimum": 0
+          },
           "evm_chain_id": {
             "type": "integer",
             "format": "int64",
@@ -3178,9 +3346,13 @@
             "type": "boolean",
             "description": "Whether to use gasless relay for funding (server submits tx on behalf of user)."
           },
+          "lightning_address": {
+            "type": ["string", "null"],
+            "description": "Lightning address (e.g. `user@speed.app`) to resolve via LNURL-pay.\nMutually exclusive with `lightning_invoice`. Requires `amount_sats`."
+          },
           "lightning_invoice": {
-            "type": "string",
-            "description": "User's Lightning BOLT11 invoice to receive payment.\nThe payment hash from this invoice becomes the HTLC hash_lock."
+            "type": ["string", "null"],
+            "description": "User's Lightning BOLT11 invoice to receive payment.\nMutually exclusive with `lightning_address`."
           },
           "referral_code": {
             "type": ["string", "null"],
@@ -4174,6 +4346,11 @@
           }
         }
       },
+      "RefundMode": {
+        "type": "string",
+        "description": "Settlement mode for collaborative refund.",
+        "enum": ["direct", "swap-back"]
+      },
       "SettleDelegateRequest": {
         "type": "object",
         "required": [
@@ -4574,183 +4751,6 @@
           "clientfundedserverrefunded",
           "expired"
         ]
-      },
-      "CollabRefundEvmRequest": {
-        "type": "object",
-        "description": "Request for collaborative refund of an EVM HTLC.",
-        "required": ["v", "r", "s", "depositor_address"],
-        "properties": {
-          "v": {
-            "type": "integer",
-            "format": "uint8",
-            "minimum": 0,
-            "description": "EIP-712 signature v (depositor's coordinator-level signature)"
-          },
-          "r": {
-            "type": "string",
-            "description": "EIP-712 signature r (32-byte hex string, with or without 0x prefix)"
-          },
-          "s": {
-            "type": "string",
-            "description": "EIP-712 signature s (32-byte hex string, with or without 0x prefix)"
-          },
-          "depositor_address": {
-            "type": "string",
-            "description": "On-chain depositor address (the address that funded the HTLC via the coordinator). In the Permit2 flow this is a derived key, not the user's wallet address."
-          },
-          "mode": {
-            "description": "Refund mode: \"direct\" (WBTC back to depositor) or \"swap\"/\"swap-back\" (DEX swap-back to original token)",
-            "default": "direct",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/RefundMode"
-              }
-            ]
-          },
-          "sweep_token": {
-            "type": "string",
-            "nullable": true,
-            "description": "Token to sweep to depositor after refund. Required for \"swap\" mode. For \"direct\" mode, defaults to WBTC."
-          },
-          "min_amount_out": {
-            "type": "string",
-            "description": "Minimum amount out for the sweep (0 = no minimum). Defaults to 0.",
-            "default": "0"
-          }
-        }
-      },
-      "CollabRefundEvmResponse": {
-        "type": "object",
-        "description": "Response for collaborative refund of an EVM HTLC.",
-        "required": ["id", "tx_hash", "message"],
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Swap ID"
-          },
-          "tx_hash": {
-            "type": "string",
-            "description": "Transaction hash of the on-chain refund"
-          },
-          "message": {
-            "type": "string",
-            "description": "Success message"
-          }
-        }
-      },
-      "CollabRefundEvmParams": {
-        "type": "object",
-        "description": "EIP-712 parameters the client needs to sign for collaborative refund.",
-        "required": [
-          "coordinator_address",
-          "server_signer_address",
-          "preimage_hash",
-          "amount",
-          "token",
-          "claim_address",
-          "timelock",
-          "chain_id",
-          "mode",
-          "sweep_token",
-          "min_amount_out",
-          "calls_hash"
-        ],
-        "properties": {
-          "coordinator_address": {
-            "type": "string",
-            "description": "HTLCCoordinator contract address (EIP-712 verifyingContract)"
-          },
-          "server_signer_address": {
-            "type": "string",
-            "description": "Server signer EOA address (the caller field in the EIP-712 struct)"
-          },
-          "preimage_hash": {
-            "type": "string",
-            "description": "Preimage hash (0x-prefixed, 32-byte hex)"
-          },
-          "amount": {
-            "type": "string",
-            "description": "WBTC amount locked in the HTLC (decimal string)"
-          },
-          "token": {
-            "type": "string",
-            "description": "WBTC token address"
-          },
-          "claim_address": {
-            "type": "string",
-            "description": "Claim address (server EVM address)"
-          },
-          "timelock": {
-            "type": "integer",
-            "format": "int64",
-            "description": "HTLC timelock (unix timestamp)"
-          },
-          "chain_id": {
-            "type": "integer",
-            "format": "int64",
-            "description": "EVM chain ID"
-          },
-          "mode": {
-            "description": "Settlement mode used to compute sweep fields.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/RefundMode"
-              }
-            ]
-          },
-          "sweep_token": {
-            "type": "string",
-            "description": "Token the depositor receives after refund (EIP-712 sweepToken field)"
-          },
-          "min_amount_out": {
-            "type": "string",
-            "description": "Minimum output amount for the sweep (EIP-712 minAmountOut field)"
-          },
-          "calls_hash": {
-            "type": "string",
-            "description": "keccak256(abi.encode(calls)) for the exact calls array signed in CollabRefund"
-          },
-          "source_token_address": {
-            "type": "string",
-            "nullable": true,
-            "description": "Source token address (only present for swap-back)"
-          },
-          "dex_calldata": {
-            "nullable": true,
-            "description": "DEX calldata for swap-back mode",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/CollabRefundDexCalldata"
-              }
-            ]
-          }
-        }
-      },
-      "CollabRefundDexCalldata": {
-        "type": "object",
-        "description": "DEX calldata returned by the params endpoint for swap-back mode.",
-        "required": ["to", "data", "value"],
-        "properties": {
-          "to": {
-            "type": "string",
-            "description": "DEX router address"
-          },
-          "data": {
-            "type": "string",
-            "description": "Encoded swap calldata (0x-prefixed hex string)"
-          },
-          "value": {
-            "type": "string",
-            "description": "Native token value (usually 0)"
-          }
-        }
-      },
-      "RefundMode": {
-        "type": "string",
-        "description": "Settlement mode for collaborative refund.",
-        "enum": ["direct", "swap-back"],
-        "default": "direct"
       }
     }
   },

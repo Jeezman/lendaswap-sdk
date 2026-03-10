@@ -8,6 +8,7 @@ import {
   type EvmToBitcoinSwapResponse,
   type EvmToLightningSwapResponse,
   type GetSwapResponse,
+  type LightningToArkadeSwapResponse,
   type LightningToEvmSwapResponse,
   type QuoteResponse,
   type TokenInfos,
@@ -998,7 +999,8 @@ export class Client {
     if (
       swap.direction !== "btc_to_arkade" &&
       swap.direction !== "arkade_to_evm" &&
-      swap.direction !== "evm_to_arkade"
+      swap.direction !== "evm_to_arkade" &&
+      swap.direction !== "lightning_to_arkade"
     ) {
       throw new Error(
         `amountsForSwap only applies to VHTLC-based swaps, got ${swap.direction}`,
@@ -1009,6 +1011,9 @@ export class Client {
     let vhtlcAddress: string | undefined;
     if (swap.direction === "btc_to_arkade") {
       vhtlcAddress = (swap as BtcToArkadeSwapResponse).arkade_vhtlc_address;
+    } else if (swap.direction === "lightning_to_arkade") {
+      vhtlcAddress = (swap as LightningToArkadeSwapResponse)
+        .arkade_vhtlc_address;
     } else if (
       swap.direction === "arkade_to_evm" ||
       swap.direction === "evm_to_arkade"
@@ -1133,7 +1138,10 @@ export class Client {
           direction: "btc_to_arkade";
         };
         destinationAddress = btcToArkadeSwap.target_arkade_address;
-      } else if (swap.direction === "evm_to_arkade") {
+      } else if (
+        swap.direction === "evm_to_arkade" ||
+        swap.direction === "lightning_to_arkade"
+      ) {
         // For evm_to_arkade swaps, check if we have target_arkade_address in stored response
         // Check if we have target_arkade_address in the stored response.
         const storedResponse = swap as { target_arkade_address?: string };
@@ -1344,11 +1352,12 @@ export class Client {
     // Ensure we have an Arkade-target swap
     if (
       swap.direction !== "btc_to_arkade" &&
-      swap.direction !== "evm_to_arkade"
+      swap.direction !== "evm_to_arkade" &&
+      swap.direction !== "lightning_to_arkade"
     ) {
       return {
         success: false,
-        message: `Expected btc_to_arkade or evm_to_arkade swap, got ${swap.direction}. claimArkade is for swaps targeting Arkade.`,
+        message: `Expected btc_to_arkade, lightning_to_arkade or evm_to_arkade swap, got ${swap.direction}. claimArkade is for swaps targeting Arkade.`,
       };
     }
 
@@ -1364,7 +1373,7 @@ export class Client {
         success: false,
         message:
           vtxoStatus === "not_funded"
-            ? "No VTXOs found at the VHTLC address. The swap may not have been funded yet."
+            ? `No VTXOs found at the VHTLC address ${claimParams.vhtlcAddress}. The swap may not have been funded yet.`
             : "All VTXOs have already been spent.",
       };
     }
@@ -1435,6 +1444,16 @@ export class Client {
       unilateralRefundWithoutReceiverDelay =
         s.unilateral_refund_without_receiver_delay;
       network = s.network;
+    } else if (swap.direction === "lightning_to_arkade") {
+      lendaswapPubKey = swap.sender_pk;
+      arkadeServerPubKey = swap.arkade_server_pk;
+      vhtlcAddress = swap.arkade_vhtlc_address;
+      refundLocktime = swap.vhtlc_refund_locktime;
+      unilateralClaimDelay = swap.unilateral_claim_delay;
+      unilateralRefundDelay = swap.unilateral_refund_delay;
+      unilateralRefundWithoutReceiverDelay =
+        swap.unilateral_refund_without_receiver_delay;
+      network = swap.network;
     } else {
       throw Error(`Unsupported direction for Arkade claim: ${swap.direction}`);
     }
