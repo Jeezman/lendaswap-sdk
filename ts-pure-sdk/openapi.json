@@ -4365,9 +4365,13 @@
             "description": "On-chain depositor address (the address that funded the HTLC via the coordinator). In the Permit2 flow this is a derived key, not the user's wallet address."
           },
           "mode": {
-            "type": "string",
-            "description": "Refund mode: \"direct\" (WBTC back to depositor) or \"swap\" (DEX swap-back to original token)",
-            "default": "direct"
+            "description": "Refund mode: \"direct\" (WBTC back to depositor) or \"swap\"/\"swap-back\" (DEX swap-back to original token)",
+            "default": "direct",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RefundMode"
+              }
+            ]
           },
           "sweep_token": {
             "type": "string",
@@ -4378,15 +4382,6 @@
             "type": "string",
             "description": "Minimum amount out for the sweep (0 = no minimum). Defaults to 0.",
             "default": "0"
-          },
-          "dex_calldata": {
-            "nullable": true,
-            "description": "Optional DEX calldata for swap-back mode.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/DexCalldata"
-              }
-            ]
           }
         }
       },
@@ -4463,8 +4458,12 @@
             "description": "EVM chain ID"
           },
           "mode": {
-            "type": "string",
-            "description": "Settlement mode: direct or swap-back"
+            "description": "Settlement mode used to compute sweep fields.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RefundMode"
+              }
+            ]
           },
           "sweep_token": {
             "type": "string",
@@ -4512,6 +4511,12 @@
             "description": "Native token value (usually 0)"
           }
         }
+      },
+      "RefundMode": {
+        "type": "string",
+        "description": "Settlement mode for collaborative refund.",
+        "enum": ["direct", "swap-back"],
+        "default": "direct"
       }
     }
   },

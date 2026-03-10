@@ -2759,10 +2759,9 @@ export class Client {
           r: sig.r,
           s: sig.s,
           depositor_address: depositorAddress,
-          mode: settlement === "swap-back" ? "swap" : "direct",
+          mode: settlement,
           sweep_token: params.sweepToken,
           min_amount_out: params.minAmountOut,
-          dex_calldata: params.dexCalldata ?? undefined,
         },
       },
     );
@@ -2799,10 +2798,9 @@ export class Client {
       r: string;
       s: string;
       depositor_address: string;
-      mode: string;
+      mode: "direct" | "swap-back";
       sweep_token?: string;
       min_amount_out: string;
-      dex_calldata?: { to: string; data: string; value: string };
     },
   ): Promise<CollabRefundEvmResult> {
     const response = await this.#apiClient.POST(
