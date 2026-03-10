@@ -60,8 +60,7 @@ export async function createLightningToArkadeSwap(
   const { data, error } = await ctx.apiClient.POST("/swap/lightning/arkade", {
     body,
   });
-  if (error)
-    throw new Error(`Failed to create swap: ${JSON.stringify(error)}`);
+  if (error) throw new Error(`Failed to create swap: ${JSON.stringify(error)}`);
   if (!data) throw new Error("No swap data returned");
 
   // Store the swap if storage is configured

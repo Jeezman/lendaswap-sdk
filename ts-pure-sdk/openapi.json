@@ -1483,7 +1483,7 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Version"
-               }
+                }
               }
             }
           }
