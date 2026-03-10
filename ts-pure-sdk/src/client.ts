@@ -3063,6 +3063,18 @@ export class Client {
         });
       }
 
+      if (isArkade(targetAsset) && isLightning(sourceAsset)) {
+        if (!options.targetAmount) {
+          throw new Error("Target amount must be set");
+        }
+
+        return this.createLightningToArkadeSwap({
+          targetAddress: options.targetAddress,
+          referralCode: options.referralCode,
+          satsReceive: options.targetAmount,
+        });
+      }
+
       return this.createEvmToLightningSwapGeneric({
         lightningInvoice: options.targetAddress,
         evmChainId: Number(sourceChain),
