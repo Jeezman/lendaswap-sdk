@@ -1,4 +1,4 @@
-import type { Chain, TokenId, TokenInfo } from "./api/client.js";
+import type {Chain, TokenId, TokenInfo} from "./api/client.js";
 
 /** A token identifier: either a plain string TokenId or a TokenInfo object. */
 export type TokenInput = TokenId;
@@ -13,7 +13,7 @@ export const BTC_LIGHTNING_INFO: TokenInfo = {
   token_id: BTC_LIGHTNING,
   symbol: "BTC",
   name: "Bitcoin (Lightning)",
-  decimals: 0,
+  decimals: 8,
   chain: "Lightning",
 };
 
@@ -21,7 +21,7 @@ export const BTC_ARKADE_INFO: TokenInfo = {
   token_id: BTC_ARKADE,
   symbol: "BTC",
   name: "Bitcoin (Arkade)",
-  decimals: 0,
+  decimals: 8,
   chain: "Arkade",
 };
 
@@ -29,7 +29,7 @@ export const BTC_ONCHAIN_INFO: TokenInfo = {
   token_id: BTC_ONCHAIN,
   symbol: "BTC",
   name: "Bitcoin (On-chain)",
-  decimals: 0,
+  decimals: 8,
   chain: "Bitcoin",
 };
 
