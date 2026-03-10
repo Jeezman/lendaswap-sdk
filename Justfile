@@ -54,7 +54,10 @@ test-sqlite:
 # Pure TypeScript SDK
 # =============================================================================
 
-build-sdk:
+generate:
+    cd ts-pure-sdk && npm run generate:api
+
+build:
     cd ts-pure-sdk && npm run build
 
 # Bump version for the SDK

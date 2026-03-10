@@ -35,7 +35,7 @@ This project uses [Just](https://github.com/casey/just) as a command runner.
 
 ```bash
 # Build the TypeScript SDK
-just build-sdk
+just build
 ```
 
 ## License
