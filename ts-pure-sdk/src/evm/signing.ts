@@ -56,19 +56,17 @@ export function signEvmDigest(
 
   const digestBytes = hexToBytes(digest.replace(/^0x/, ""));
 
-  // secp256k1.sign() returns a RecoveredSignature at runtime (with r, s, recovery)
-  // but @noble/curves types it as Uint8Array — cast to access the properties.
+  // @noble/curves v2 returns raw Uint8Array from sign().
+  // Use format: 'recovered' to get 65 bytes: [recovery_byte, r(32), s(32)].
   const sig = secp256k1.sign(digestBytes, keyBytes, {
     prehash: false,
-  }) as unknown as {
-    r: bigint;
-    s: bigint;
-    recovery: number;
-  };
+    format: "recovered",
+  });
 
-  const r = sig.r.toString(16).padStart(64, "0");
-  const s = sig.s.toString(16).padStart(64, "0");
-  const v = (sig.recovery ?? 0) + 27;
+  const recovery = sig[0];
+  const r = bytesToHex(sig.slice(1, 33));
+  const s = bytesToHex(sig.slice(33, 65));
+  const v = (recovery ?? 0) + 27;
 
   return { v, r: `0x${r}`, s: `0x${s}` };
 }
