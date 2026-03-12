@@ -1658,8 +1658,6 @@ export interface components {
             hash_lock: string;
             /** @description Optional referral code for fee exemption */
             referral_code?: string | null;
-            /** @description User's refund public key used to generate the Boltz VHTLC */
-            refund_pk: string;
             /**
              * Format: int64
              * @description Amount the user wants to receive on Arkade in satoshis

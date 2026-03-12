@@ -3755,7 +3755,6 @@
           "target_arkade_address",
           "sats_receive",
           "claim_pk",
-          "refund_pk",
           "hash_lock",
           "user_id"
         ],
@@ -3771,10 +3770,6 @@
           "referral_code": {
             "type": ["string", "null"],
             "description": "Optional referral code for fee exemption"
-          },
-          "refund_pk": {
-            "type": "string",
-            "description": "User's refund public key used to generate the Boltz VHTLC"
           },
           "sats_receive": {
             "type": "integer",
