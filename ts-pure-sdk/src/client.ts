@@ -1,6 +1,7 @@
 import {
   type ApiClient,
   type ArkadeToEvmSwapResponse,
+  type ArkadeToLightningSwapResponse,
   type BtcToArkadeSwapResponse,
   type Chain,
   createApiClient,
@@ -17,6 +18,8 @@ import { getVhtlcAmounts, type VhtlcAmounts } from "./arkade.js";
 import {
   type ArkadeToEvmSwapOptions,
   type ArkadeToEvmSwapResult,
+  type ArkadeToLightningSwapOptions,
+  type ArkadeToLightningSwapResult,
   type BitcoinToArkadeSwapOptions,
   type BitcoinToArkadeSwapResult,
   type BitcoinToEvmSwapOptions,
@@ -25,6 +28,7 @@ import {
   type CreateSwapOptions,
   type CreateSwapResult,
   createArkadeToEvmSwapGeneric,
+  createArkadeToLightningSwap,
   createBitcoinToArkadeSwap,
   createBitcoinToEvmSwap,
   createEvmToArkadeSwapGeneric,
@@ -999,6 +1003,7 @@ export class Client {
     if (
       swap.direction !== "btc_to_arkade" &&
       swap.direction !== "arkade_to_evm" &&
+      swap.direction !== "arkade_to_lightning" &&
       swap.direction !== "evm_to_arkade" &&
       swap.direction !== "lightning_to_arkade"
     ) {
@@ -1013,6 +1018,9 @@ export class Client {
       vhtlcAddress = (swap as BtcToArkadeSwapResponse).arkade_vhtlc_address;
     } else if (swap.direction === "lightning_to_arkade") {
       vhtlcAddress = (swap as LightningToArkadeSwapResponse)
+        .arkade_vhtlc_address;
+    } else if (swap.direction === "arkade_to_lightning") {
+      vhtlcAddress = (swap as ArkadeToLightningSwapResponse)
         .arkade_vhtlc_address;
     } else if (
       swap.direction === "arkade_to_evm" ||
@@ -2965,6 +2973,37 @@ export class Client {
       });
     }
 
+    // Arkade → Lightning
+    if (isArkade(sourceAsset) && isLightning(targetAsset)) {
+      // Detect whether targetAddress is a Lightning address (user@domain)
+      // or a BOLT11 invoice (starts with ln...).
+      const isAddress = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(
+        options.targetAddress,
+      );
+
+      if (isAddress) {
+        if (
+          options.targetAmount == null ||
+          !Number.isFinite(options.targetAmount) ||
+          options.targetAmount <= 0
+        ) {
+          throw new Error(
+            "targetAmount (in sats) is required when using a Lightning address",
+          );
+        }
+        return this.createArkadeToLightningSwap({
+          lightningAddress: options.targetAddress,
+          amountSats: options.targetAmount,
+          referralCode: options.referralCode,
+        });
+      }
+
+      return this.createArkadeToLightningSwap({
+        lightningInvoice: options.targetAddress,
+        referralCode: options.referralCode,
+      });
+    }
+
     // Lightning → Arkade
     if (isLightning(sourceAsset) && isArkade(targetAsset)) {
       if (options.targetAmount == null) {
@@ -3235,6 +3274,35 @@ export class Client {
     options: LightningToArkadeSwapOptions,
   ): Promise<LightningToArkadeSwapResult> {
     return createLightningToArkadeSwap(options, this.#getCreateContext());
+  }
+
+  // =========================================================================
+  // Swap Creation - Arkade to Lightning
+  // =========================================================================
+
+  /**
+   * Creates a new Arkade to Lightning swap.
+   *
+   * The user sends Arkade VTXOs and a Lightning invoice gets paid
+   * via a Boltz submarine swap.
+   *
+   * @param options - The swap options.
+   * @returns The swap response and parameters for storage.
+   * @throws Error if the swap creation fails.
+   *
+   * @example
+   * ```ts
+   * const result = await client.createArkadeToLightningSwap({
+   *   lightningInvoice: "lnbc100u1p...",
+   * });
+   * console.log("Fund:", result.response.arkade_vhtlc_address);
+   * console.log("Amount:", result.response.source_amount, "sats");
+   * ```
+   */
+  async createArkadeToLightningSwap(
+    options: ArkadeToLightningSwapOptions,
+  ): Promise<ArkadeToLightningSwapResult> {
+    return createArkadeToLightningSwap(options, this.#getCreateContext());
   }
 
   // =========================================================================

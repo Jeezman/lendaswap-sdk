@@ -805,6 +805,56 @@
         }
       }
     },
+    "/swap/arkade/lightning": {
+      "post": {
+        "tags": ["swap-arkade-lightning"],
+        "summary": "Create a new Arkade-to-Lightning swap.",
+        "description": "Flow:\n1. User provides a Lightning invoice they want paid\n2. Server creates a Boltz submarine swap\n3. User funds the Arkade VHTLC (returned in response)\n4. Server claims the Arkade VHTLC and funds the Boltz VHTLC\n5. Boltz pays the Lightning invoice",
+        "operationId": "create_arkade_to_lightning_swap",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArkadeToLightningSwapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Swap created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArkadeToLightningSwapResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/swap/bitcoin/arkade": {
       "post": {
         "tags": ["swap-bitcoin-arkade"],
@@ -1841,6 +1891,165 @@
           "wbtc_address": {
             "type": "string",
             "description": "WBTC token contract address on the target EVM chain (the token locked in the HTLC)."
+          }
+        }
+      },
+      "ArkadeToLightningSwapRequest": {
+        "type": "object",
+        "description": "Request for creating an Arkade-to-Lightning swap.\n\nThe user sends Arkade VTXOs and a Lightning invoice gets paid.",
+        "required": ["refund_pk", "user_id"],
+        "properties": {
+          "amount_sats": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Amount in satoshis the recipient should receive on Lightning.\nRequired when `lightning_address` is provided; ignored when\n`lightning_invoice` is provided (amount is read from the invoice).",
+            "minimum": 0
+          },
+          "lightning_address": {
+            "type": ["string", "null"],
+            "description": "Lightning address (e.g. `user@speed.app`) to resolve via LNURL-pay.\nMutually exclusive with `lightning_invoice`. Requires `amount_sats`."
+          },
+          "lightning_invoice": {
+            "type": ["string", "null"],
+            "description": "Lightning BOLT11 invoice the user wants paid."
+          },
+          "referral_code": {
+            "type": ["string", "null"],
+            "description": "Optional referral code for fee tracking."
+          },
+          "refund_pk": {
+            "type": "string",
+            "description": "User's refund public key for the Arkade VHTLC (if swap fails/expires)."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User ID derived from wallet for recovery purposes."
+          }
+        }
+      },
+      "ArkadeToLightningSwapResponse": {
+        "type": "object",
+        "description": "Arkade → Lightning swap response.",
+        "required": [
+          "id",
+          "status",
+          "fee_sats",
+          "hash_lock",
+          "source_token",
+          "target_token",
+          "created_at",
+          "source_amount",
+          "target_amount",
+          "client_lightning_invoice",
+          "boltz_swap_id",
+          "boltz_vhtlc_address",
+          "boltz_amount_sats",
+          "arkade_vhtlc_address",
+          "sender_pk",
+          "receiver_pk",
+          "arkade_server_pk",
+          "vhtlc_refund_locktime",
+          "unilateral_claim_delay",
+          "unilateral_refund_delay",
+          "unilateral_refund_without_receiver_delay",
+          "network"
+        ],
+        "properties": {
+          "arkade_claim_txid": {
+            "type": ["string", "null"],
+            "description": "Arkade VHTLC claim transaction ID (server claim)"
+          },
+          "arkade_fund_txid": {
+            "type": ["string", "null"],
+            "description": "Arkade VHTLC fund transaction ID"
+          },
+          "arkade_server_pk": {
+            "type": "string",
+            "description": "Arkade server's public key"
+          },
+          "arkade_vhtlc_address": {
+            "type": "string",
+            "description": "Arkade VHTLC address (user funds)"
+          },
+          "boltz_amount_sats": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Amount server must fund on Boltz VHTLC"
+          },
+          "boltz_swap_id": {
+            "type": "string",
+            "description": "Boltz submarine swap ID"
+          },
+          "boltz_vhtlc_address": {
+            "type": "string",
+            "description": "Boltz VHTLC address (server funds for Boltz to claim)"
+          },
+          "client_lightning_invoice": {
+            "type": "string",
+            "description": "User's Lightning invoice"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fee_sats": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "hash_lock": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "network": {
+            "type": "string",
+            "description": "Bitcoin network"
+          },
+          "receiver_pk": {
+            "type": "string",
+            "description": "Server's claim public key (receiver in the VHTLC)"
+          },
+          "sender_pk": {
+            "type": "string",
+            "description": "User's refund public key (sender in the VHTLC)"
+          },
+          "source_amount": {
+            "type": "string",
+            "description": "Amount user sends on Arkade in sats"
+          },
+          "source_token": {
+            "$ref": "#/components/schemas/TokenInfo"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SwapStatus"
+          },
+          "target_amount": {
+            "type": "string",
+            "description": "Amount user receives via Lightning in sats"
+          },
+          "target_token": {
+            "$ref": "#/components/schemas/TokenInfo"
+          },
+          "unilateral_claim_delay": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Unilateral claim delay in seconds"
+          },
+          "unilateral_refund_delay": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Unilateral refund delay in seconds"
+          },
+          "unilateral_refund_without_receiver_delay": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Unilateral refund without receiver delay in seconds"
+          },
+          "vhtlc_refund_locktime": {
+            "type": "integer",
+            "format": "int64",
+            "description": "VHTLC refund locktime"
           }
         }
       },
@@ -3745,6 +3954,23 @@
                 }
               }
             ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ArkadeToLightningSwapResponse"
+              },
+              {
+                "type": "object",
+                "required": ["direction"],
+                "properties": {
+                  "direction": {
+                    "type": "string",
+                    "enum": ["arkade_to_lightning"]
+                  }
+                }
+              }
+            ]
           }
         ]
       },
@@ -4841,6 +5067,10 @@
     {
       "name": "swap-lightning-arkade",
       "description": "Create Lightning to Arkade swaps."
+    },
+    {
+      "name": "swap-arkade-lightning",
+      "description": "Create Arkade to Lightning swaps."
     },
     {
       "name": "swap-evm-lightning",

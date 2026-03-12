@@ -320,6 +320,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/swap/arkade/lightning": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a new Arkade-to-Lightning swap.
+         * @description Flow:
+         *     1. User provides a Lightning invoice they want paid
+         *     2. Server creates a Boltz submarine swap
+         *     3. User funds the Arkade VHTLC (returned in response)
+         *     4. Server claims the Arkade VHTLC and funds the Boltz VHTLC
+         *     5. Boltz pays the Lightning invoice
+         */
+        post: operations["create_arkade_to_lightning_swap"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/swap/bitcoin/arkade": {
         parameters: {
             query?: never;
@@ -754,6 +779,94 @@ export interface components {
             vhtlc_refund_locktime: number;
             /** @description WBTC token contract address on the target EVM chain (the token locked in the HTLC). */
             wbtc_address: string;
+        };
+        /**
+         * @description Request for creating an Arkade-to-Lightning swap.
+         *
+         *     The user sends Arkade VTXOs and a Lightning invoice gets paid.
+         */
+        ArkadeToLightningSwapRequest: {
+            /**
+             * Format: int64
+             * @description Amount in satoshis the recipient should receive on Lightning.
+             *     Required when `lightning_address` is provided; ignored when
+             *     `lightning_invoice` is provided (amount is read from the invoice).
+             */
+            amount_sats?: number | null;
+            /**
+             * @description Lightning address (e.g. `user@speed.app`) to resolve via LNURL-pay.
+             *     Mutually exclusive with `lightning_invoice`. Requires `amount_sats`.
+             */
+            lightning_address?: string | null;
+            /** @description Lightning BOLT11 invoice the user wants paid. */
+            lightning_invoice?: string | null;
+            /** @description Optional referral code for fee tracking. */
+            referral_code?: string | null;
+            /** @description User's refund public key for the Arkade VHTLC (if swap fails/expires). */
+            refund_pk: string;
+            /** @description User ID derived from wallet for recovery purposes. */
+            user_id: string;
+        };
+        /** @description Arkade → Lightning swap response. */
+        ArkadeToLightningSwapResponse: {
+            /** @description Arkade VHTLC claim transaction ID (server claim) */
+            arkade_claim_txid?: string | null;
+            /** @description Arkade VHTLC fund transaction ID */
+            arkade_fund_txid?: string | null;
+            /** @description Arkade server's public key */
+            arkade_server_pk: string;
+            /** @description Arkade VHTLC address (user funds) */
+            arkade_vhtlc_address: string;
+            /**
+             * Format: int64
+             * @description Amount server must fund on Boltz VHTLC
+             */
+            boltz_amount_sats: number;
+            /** @description Boltz submarine swap ID */
+            boltz_swap_id: string;
+            /** @description Boltz VHTLC address (server funds for Boltz to claim) */
+            boltz_vhtlc_address: string;
+            /** @description User's Lightning invoice */
+            client_lightning_invoice: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: int64 */
+            fee_sats: number;
+            hash_lock: string;
+            id: string;
+            /** @description Bitcoin network */
+            network: string;
+            /** @description Server's claim public key (receiver in the VHTLC) */
+            receiver_pk: string;
+            /** @description User's refund public key (sender in the VHTLC) */
+            sender_pk: string;
+            /** @description Amount user sends on Arkade in sats */
+            source_amount: string;
+            source_token: components["schemas"]["TokenInfo"];
+            status: components["schemas"]["SwapStatus"];
+            /** @description Amount user receives via Lightning in sats */
+            target_amount: string;
+            target_token: components["schemas"]["TokenInfo"];
+            /**
+             * Format: int64
+             * @description Unilateral claim delay in seconds
+             */
+            unilateral_claim_delay: number;
+            /**
+             * Format: int64
+             * @description Unilateral refund delay in seconds
+             */
+            unilateral_refund_delay: number;
+            /**
+             * Format: int64
+             * @description Unilateral refund without receiver delay in seconds
+             */
+            unilateral_refund_without_receiver_delay: number;
+            /**
+             * Format: int64
+             * @description VHTLC refund locktime
+             */
+            vhtlc_refund_locktime: number;
         };
         BitcoinToArkadeSwapRequest: {
             /** @description User's claim public key for the Arkade VHTLC */
@@ -1642,6 +1755,9 @@ export interface components {
         }) | (components["schemas"]["LightningToArkadeSwapResponse"] & {
             /** @enum {string} */
             direction: "lightning_to_arkade";
+        }) | (components["schemas"]["ArkadeToLightningSwapResponse"] & {
+            /** @enum {string} */
+            direction: "arkade_to_lightning";
         });
         /**
          * @description Request for creating a Lightning-to-Arkade swap.
@@ -2815,6 +2931,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ArkadeToEvmSwapResponse"];
+                };
+            };
+            /** @description Bad request - invalid parameters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_arkade_to_lightning_swap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArkadeToLightningSwapRequest"];
+            };
+        };
+        responses: {
+            /** @description Swap created successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArkadeToLightningSwapResponse"];
                 };
             };
             /** @description Bad request - invalid parameters */

@@ -7,6 +7,7 @@ import type {
   ApiClient,
   EvmToBitcoinSwapResponse as ApiEvmToBitcoinSwapResponse,
   ArkadeToEvmSwapResponse,
+  ArkadeToLightningSwapResponse,
   BtcToArkadeSwapResponse,
   EvmToArkadeSwapResponse,
   EvmToLightningSwapResponse,
@@ -299,9 +300,33 @@ export interface LightningToArkadeSwapResult {
   swapParams: SwapParams;
 }
 
+/** Options for creating an Arkade-to-Lightning swap.
+ *
+ * Provide **either** `lightningInvoice` **or** `lightningAddress` + `amountSats`.
+ */
+export interface ArkadeToLightningSwapOptions {
+  /** User's BOLT11 Lightning invoice. Mutually exclusive with `lightningAddress`. */
+  lightningInvoice?: string;
+  /** Lightning address (e.g. `user@speed.app`). Mutually exclusive with `lightningInvoice`. Requires `amountSats`. */
+  lightningAddress?: string;
+  /** Amount in satoshis the recipient should receive. Required when `lightningAddress` is provided. */
+  amountSats?: number;
+  /** Optional referral code for fee tracking */
+  referralCode?: string;
+}
+
+/** Result of creating an Arkade-to-Lightning swap */
+export interface ArkadeToLightningSwapResult {
+  /** The swap response from the API */
+  response: ArkadeToLightningSwapResponse;
+  /** The swap parameters used (for storage/recovery) */
+  swapParams: SwapParams;
+}
+
 /** Union of all swap creation results returned by `createSwap`. */
 export type CreateSwapResult =
   | ArkadeToEvmSwapResult
+  | ArkadeToLightningSwapResult
   | BitcoinToEvmSwapResult
   | BitcoinToArkadeSwapResult
   | LightningToEvmSwapGenericResult

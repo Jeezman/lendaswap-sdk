@@ -6,6 +6,7 @@ export type {
   ApiClientOptions,
   ArkadeToEvmSwapRequest,
   ArkadeToEvmSwapResponse,
+  ArkadeToLightningSwapResponse,
   BitcoinToEvmSwapRequest,
   BtcToArkadeSwapResponse,
   Chain,
