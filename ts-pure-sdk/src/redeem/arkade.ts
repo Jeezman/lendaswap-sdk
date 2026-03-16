@@ -348,7 +348,15 @@ export async function buildArkadeClaim(
   console.log(`Checkpoint transactions signed`);
 
   // Finalize the transaction
-  await arkProvider.finalizeTx(arkTxid, finalCheckpoints);
+  try {
+    await arkProvider.finalizeTx(arkTxid, finalCheckpoints);
+  } catch (error) {
+    console.error(
+      `Failed claiming funds. Please scream loudly, cry, and ask for help.`,
+      error,
+    );
+    throw error;
+  }
   console.log(`Arkade claim finalized: ${arkTxid}`);
 
   return {
@@ -566,7 +574,17 @@ export async function continueArkadeClaim(
     );
 
     // Finalize the transaction
-    await arkProvider.finalizeTx(arkTxid, finalCheckpoints);
+
+    try {
+      await arkProvider.finalizeTx(arkTxid, finalCheckpoints);
+    } catch (error) {
+      console.error(
+        `Failed continuing claiming funds. Please scream loudly, cry, and ask for help.`,
+        error,
+      );
+      throw error;
+    }
+
     console.log(`Arkade claim finalized: ${arkTxid}`);
 
     lastResult = {
