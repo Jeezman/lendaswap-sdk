@@ -69,6 +69,7 @@ import {
   buildArkadeClaim,
   type ClaimGaslessResult,
   type ClaimResult,
+  continueArkadeClaim,
   claimViaGasless as gaslessClaim,
   claim as redeemClaim,
 } from "./redeem/index.js";
@@ -1395,6 +1396,72 @@ export class Client {
 
     // recoverable or mixed → delegate
     return this.#claimArkadeDelegate(id, claimParams, options);
+  }
+
+  /**
+   * Continue (finalize) a pending Arkade claim.
+   *
+   * For Arkade-destination swaps (EVM/Bitcoin/Lightning → Arkade), this
+   * fetches pending transactions from the Arkade server and finalizes them.
+   * Use this when `claimArkade` submitted a claim but it wasn't finalized
+   * (e.g. due to a page reload or network interruption).
+   *
+   * @param id - The UUID of the swap
+   * @returns Result with txId and claimAmount on success
+   */
+  async continueArkadeClaimSwap(id: string): Promise<{
+    success: boolean;
+    message: string;
+    txId?: string;
+    claimAmount?: bigint;
+  }> {
+    if (!this.#swapStorage) {
+      return {
+        success: false,
+        message: "Swap storage is not configured.",
+      };
+    }
+
+    const storedSwap = await this.#swapStorage.get(id);
+    if (!storedSwap) {
+      return {
+        success: false,
+        message: `Swap ${id} not found in local storage.`,
+      };
+    }
+
+    const swap = storedSwap.response;
+    if (
+      swap.direction !== "btc_to_arkade" &&
+      swap.direction !== "evm_to_arkade" &&
+      swap.direction !== "lightning_to_arkade"
+    ) {
+      return {
+        success: false,
+        message: `Expected an Arkade-destination swap, got ${swap.direction}.`,
+      };
+    }
+
+    const claimParams = this.#extractArkadeClaimParams(id, storedSwap);
+
+    try {
+      const result = await continueArkadeClaim({
+        ...claimParams,
+        destinationAddress: "", // not needed for continue
+        arkadeServerUrl: this.#config.arkadeServerUrl,
+      });
+      return {
+        success: true,
+        message: `Arkade claim finalized: ${result.txId}`,
+        txId: result.txId,
+        claimAmount: result.claimAmount,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        message: err instanceof Error ? err.message : String(err),
+      };
+    }
   }
 
   /**
@@ -3927,10 +3994,10 @@ export class Client {
     const { ArkAddress, RestIndexerProvider } = await import("@arkade-os/sdk");
     const { hex } = await import("@scure/base");
 
-    const serverUrl =
-      network === "bitcoin"
-        ? "https://arkade.computer"
-        : "https://signet.arkade.computer";
+    const serverUrl = this.#config.arkadeServerUrl;
+    if (!serverUrl) {
+      throw new Error(`No Arkade server URL for network: ${network}`);
+    }
 
     const decoded = ArkAddress.decode(targetArkadeAddress);
     const pkScript = hex.encode(decoded.pkScript);

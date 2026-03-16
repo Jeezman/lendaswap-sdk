@@ -24,6 +24,7 @@ export {
   type ArkadeClaimParams,
   type ArkadeClaimResult,
   buildArkadeClaim,
+  continueArkadeClaim,
 } from "./arkade.js";
 // Re-export utilities from ethereum module
 export { encodeClaimSwapCallData, uuidToBytes32 } from "./ethereum.js";

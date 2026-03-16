@@ -16,18 +16,22 @@ import {
   ConditionWitness,
   CSVMultisigTapscript,
   type IndexerProvider,
+  Intent,
   type NetworkName,
   networks,
   RestArkProvider,
   RestIndexerProvider,
+  type SignedIntent,
   SingleKey,
   setArkPsbtField,
   Transaction,
   VHTLC,
+  VtxoTaprootTree,
 } from "@arkade-os/sdk";
 import { ripemd160 } from "@noble/hashes/ripemd160";
 import { sha256 } from "@noble/hashes/sha256";
 import { base64, hex } from "@scure/base";
+import { SigHash } from "@scure/btc-signer";
 
 /** Default Arkade server URL by network */
 const DEFAULT_ARKADE_URLS: Record<string, string> = {
@@ -351,4 +355,229 @@ export async function buildArkadeClaim(
     txId: arkTxid,
     claimAmount: totalAmount,
   };
+}
+
+export async function continueArkadeClaim(
+  params: ArkadeClaimParams,
+): Promise<ArkadeClaimResult> {
+  const {
+    userSecretKey,
+    userPubKey,
+    lendaswapPubKey,
+    arkadeServerPubKey,
+    preimage,
+    preimageHash,
+    vhtlcAddress,
+    refundLocktime,
+    unilateralClaimDelay,
+    unilateralRefundDelay,
+    unilateralRefundWithoutReceiverDelay,
+    // destinationAddress not needed — we continue an existing pending tx
+    network,
+    arkadeServerUrl,
+  } = params;
+
+  console.log(
+    `Continuing Arkade claim with params: ${JSON.stringify(params, null, 2)}`,
+  );
+
+  // Parse keys
+  // For claim: user is RECEIVER, lendaswap is SENDER
+  const userPkBytes = parseXOnlyPubKey(userPubKey);
+  const lendaswapPkBytes = parseXOnlyPubKey(lendaswapPubKey);
+  const serverPkBytes = parseXOnlyPubKey(arkadeServerPubKey);
+
+  // Parse preimage and compute hash
+  const preimageBytes = hex.decode(preimage);
+  if (preimageBytes.length !== 32) {
+    throw new Error(
+      `Invalid preimage length: expected 32, got ${preimageBytes.length}`,
+    );
+  }
+
+  // Compute preimage hash: SHA256 -> RIPEMD160 (HASH160)
+  const sha256Hash = sha256(preimageBytes);
+  const preimageHashBytes = ripemd160(sha256Hash);
+
+  const preimageHashBytesString = hex.encode(preimageHashBytes);
+  if (
+    preimageHashBytesString !== hex.encode(ripemd160(hex.decode(preimageHash)))
+  ) {
+    throw new Error(
+      `Preimage hash are not equal. '${hex.encode(ripemd160(hex.decode(preimageHash)))}' vs ${preimageHashBytesString}'`,
+    );
+  }
+
+  // Determine Arkade server URL
+  const networkName = getNetworkName(network);
+  const serverUrl = arkadeServerUrl ?? DEFAULT_ARKADE_URLS[networkName];
+  if (!serverUrl) {
+    throw new Error(
+      `No Arkade server URL configured for network: ${networkName}`,
+    );
+  }
+
+  // Create Arkade providers
+  const arkProvider: ArkProvider = new RestArkProvider(serverUrl);
+  const indexerProvider: IndexerProvider = new RestIndexerProvider(serverUrl);
+
+  // Construct VHTLC with the same parameters as the original swap
+  // For claim: lendaswap is the SENDER, user is the RECEIVER
+  const vhtlc = new VHTLC.Script({
+    sender: lendaswapPkBytes,
+    receiver: userPkBytes,
+    server: serverPkBytes,
+    preimageHash: preimageHashBytes,
+    refundLocktime: BigInt(refundLocktime),
+    unilateralClaimDelay: secondsToTimelock(unilateralClaimDelay),
+    unilateralRefundDelay: secondsToTimelock(unilateralRefundDelay),
+    unilateralRefundWithoutReceiverDelay: secondsToTimelock(
+      unilateralRefundWithoutReceiverDelay,
+    ),
+  });
+
+  // Get network HRP and verify computed VHTLC address
+  const hrp = getNetworkHrp(networkName);
+  const computedAddress = vhtlc.address(hrp, serverPkBytes);
+  const computedAddressStr = computedAddress.encode();
+
+  // Verify address matches expected
+  if (computedAddressStr !== vhtlcAddress) {
+    throw new Error(
+      `Computed VHTLC address (${computedAddressStr}) does not match expected (${vhtlcAddress})`,
+    );
+  }
+
+  // Fetch VTXOs at the VHTLC address
+  const vhtlcPkScript = hex.encode(vhtlc.pkScript);
+
+  const { vtxos } = await indexerProvider.getVtxos({
+    scripts: [vhtlcPkScript],
+  });
+
+  if (vtxos.length === 0) {
+    const { vtxos: allVtxos } = await indexerProvider.getVtxos({
+      scripts: [vhtlcPkScript],
+    });
+    console.log(`All VTXOs at address: ${JSON.stringify(allVtxos, null, 2)}`);
+    throw new Error("No spendable VTXOs found at the VHTLC address");
+  }
+
+  // Calculate total amount
+  const totalAmount = vtxos.reduce((acc, v) => acc + BigInt(v.value), 0n);
+  if (totalAmount === 0n) {
+    throw new Error("Total VTXO amount is zero");
+  }
+
+  // Get the claim TapLeafScript (needed for the GetPendingTx intent)
+  const claimLeafScript = vhtlc.claim();
+  const claimScriptByte = claimLeafScript[1];
+
+  // Encode the VHTLC tap tree
+  const tapTree = vhtlc.encode();
+
+  console.log(`Continuing claim of ${totalAmount} sats from ${vhtlcAddress}`);
+
+  // Build a GetPendingTx intent to ask Arkade for pending transactions
+  const now = Math.floor(Date.now() / 1000);
+  const intentMessage: Intent.GetPendingTxMessage = {
+    type: "get-pending-tx",
+    expire_at: now + 120,
+  };
+
+  // Build intent inputs from VTXOs
+  const pkScriptBytes = hex.decode(vhtlcPkScript);
+  const intentInputs = vtxos.map((v) => ({
+    txid: hex.decode(v.txid),
+    index: v.vout,
+    witnessUtxo: {
+      script: pkScriptBytes,
+      amount: BigInt(v.value),
+    },
+    tapLeafScript: [claimLeafScript],
+    sighashType: SigHash.ALL,
+  }));
+
+  // Create the intent proof PSBT
+  const intentProof = Intent.create(intentMessage, intentInputs);
+
+  // Set VtxoTaprootTree on each real input (skip input 0 which is the toSpend ref)
+  for (let i = 0; i < vtxos.length; i++) {
+    setArkPsbtField(intentProof, i + 1, VtxoTaprootTree, tapTree);
+  }
+
+  // Set condition witness (preimage) on each real input
+  for (let i = 0; i < vtxos.length; i++) {
+    setArkPsbtField(intentProof, i + 1, ConditionWitness, [preimageBytes]);
+  }
+
+  // Create signer from user's secret key
+  const signer = SingleKey.fromHex(userSecretKey);
+  const computedPk = await signer.xOnlyPublicKey();
+  if (hex.encode(userPkBytes) !== hex.encode(computedPk)) {
+    throw new Error(
+      `Signing with wrong key? ${hex.encode(userPkBytes)} vs ${hex.encode(computedPk)}`,
+    );
+  }
+
+  // Sign the intent proof
+  const signedIntentProof = await signer.sign(intentProof);
+  const signedIntent: SignedIntent<Intent.GetPendingTxMessage> = {
+    proof: base64.encode(signedIntentProof.toPSBT()),
+    message: intentMessage,
+  };
+
+  // Fetch pending transactions from Arkade
+  const pendingTxs = await arkProvider.getPendingTxs(signedIntent);
+
+  if (pendingTxs.length === 0) {
+    throw new Error(
+      "No pending transactions found at the VHTLC address. The claim may have already been finalized or was never submitted.",
+    );
+  }
+
+  console.log(`Found ${pendingTxs.length} pending transaction(s)`);
+
+  // Finalize each pending transaction
+  let lastResult: ArkadeClaimResult | undefined;
+
+  for (const pendingTx of pendingTxs) {
+    const { arkTxid, signedCheckpointTxs } = pendingTx;
+
+    // Sign and finalize checkpoint transactions
+    const finalCheckpoints = await Promise.all(
+      signedCheckpointTxs.map(async (c) => {
+        const checkpointTx = Transaction.fromPSBT(base64.decode(c));
+
+        // Restore missing witness scripts from the ark tx
+        checkpointTx.updateInput(0, {
+          witnessScript: claimScriptByte,
+        });
+
+        // Inject preimage into all checkpoint inputs
+        for (let i = 0; i < checkpointTx.inputsLength; i++) {
+          setArkPsbtField(checkpointTx, i, ConditionWitness, [preimageBytes]);
+        }
+
+        // Sign input 0 (the checkpoint input)
+        const signedCheckpoint = await signer.sign(checkpointTx, [0]);
+        return base64.encode(signedCheckpoint.toPSBT());
+      }),
+    );
+
+    // Finalize the transaction
+    await arkProvider.finalizeTx(arkTxid, finalCheckpoints);
+    console.log(`Arkade claim finalized: ${arkTxid}`);
+
+    lastResult = {
+      txId: arkTxid,
+      claimAmount: totalAmount,
+    };
+  }
+
+  if (!lastResult) {
+    throw Error("Failed continuing claim");
+  }
+  // We know lastResult is defined because we checked pendingTxs.length > 0
+  return lastResult;
 }
