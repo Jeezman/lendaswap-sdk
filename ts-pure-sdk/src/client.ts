@@ -14,7 +14,7 @@ import {
   type QuoteResponse,
   type TokenInfos,
 } from "./api/client.js";
-import {getVhtlcAmounts, type VhtlcAmounts} from "./arkade.js";
+import { getVhtlcAmounts, type VhtlcAmounts } from "./arkade.js";
 import {
   type ArkadeToEvmSwapOptions,
   type ArkadeToEvmSwapResult,
@@ -47,8 +47,8 @@ import {
   type LightningToEvmSwapGenericOptions,
   type LightningToEvmSwapGenericResult,
 } from "./create";
-import {delegateClaim, delegateRefund} from "./delegate.js";
-import {broadcastTransaction, findOutputByAddress} from "./esplora.js";
+import { delegateClaim, delegateRefund } from "./delegate.js";
+import { broadcastTransaction, findOutputByAddress } from "./esplora.js";
 import {
   buildCollabRefundEvmDigest,
   buildCollabRefundEvmTypedData,
@@ -94,7 +94,7 @@ import {
   type SwapStorage,
   type WalletStorage,
 } from "./storage";
-import {isArkade, isBtcOnchain, isEvmToken, isLightning} from "./tokens.js";
+import { isArkade, isBtcOnchain, isEvmToken, isLightning } from "./tokens.js";
 
 // Re-export types from create module for backwards compatibility
 export type {
@@ -118,7 +118,7 @@ export type {
   EvmToLightningSwapOptions,
 } from "./create/index.js";
 
-import type {BitcoinToEvmSwapResponse} from "./create";
+import type { BitcoinToEvmSwapResponse } from "./create";
 
 // Re-export coordinator utilities for Arkade-to-EVM redeemAndExecute flow
 export {
@@ -729,7 +729,7 @@ export class Client {
    * @throws Error if the health check fails.
    */
   async healthCheck(): Promise<string> {
-    const {data, error} = await this.#apiClient.GET("/health");
+    const { data, error } = await this.#apiClient.GET("/health");
     if (error) {
       throw new Error(`Health check failed: ${JSON.stringify(error)}`);
     }
@@ -742,7 +742,7 @@ export class Client {
    * @throws Error if the request fails.
    */
   async getVersion(): Promise<{ tag: string; commit_hash: string }> {
-    const {data, error} = await this.#apiClient.GET("/version");
+    const { data, error } = await this.#apiClient.GET("/version");
     if (error) {
       throw new Error(`Failed to get version: ${JSON.stringify(error)}`);
     }
@@ -773,7 +773,7 @@ export class Client {
    * @throws Error if the request fails or MTP is not yet available.
    */
   async getMtp(): Promise<{ mtp: number; tip_height: number }> {
-    const {data, error} = await this.#apiClient.GET("/mtp");
+    const { data, error } = await this.#apiClient.GET("/mtp");
     if (error) {
       throw new Error(`Failed to get MTP: ${JSON.stringify(error)}`);
     }
@@ -793,7 +793,7 @@ export class Client {
    * @throws Error if the request fails.
    */
   async getTokens(): Promise<TokenInfos> {
-    const {data, error} = await this.#apiClient.GET("/tokens");
+    const { data, error } = await this.#apiClient.GET("/tokens");
     if (error || !data) {
       throw new Error(`Failed to get tokens: ${JSON.stringify(error)}`);
     }
@@ -824,7 +824,7 @@ export class Client {
     sourceAmount?: number;
     targetAmount?: number;
   }): Promise<QuoteResponse> {
-    const {data, error} = await this.#apiClient.GET("/quote", {
+    const { data, error } = await this.#apiClient.GET("/quote", {
       params: {
         query: {
           source_chain: params.sourceChain,
@@ -861,8 +861,8 @@ export class Client {
     id: string,
     options?: { updateStorage?: boolean },
   ): Promise<GetSwapResponse> {
-    const {data, error} = await this.#apiClient.GET("/swap/{id}", {
-      params: {path: {id}},
+    const { data, error } = await this.#apiClient.GET("/swap/{id}", {
+      params: { path: { id } },
     });
     if (error) {
       throw new Error(`Failed to get swap: ${JSON.stringify(error)}`);
@@ -947,8 +947,8 @@ export class Client {
     const xpub = this.getUserIdXpub();
     console.log(`Recovering ${xpub}`);
 
-    const {data, error} = await this.#apiClient.POST("/swap/recover", {
-      body: {xpub},
+    const { data, error } = await this.#apiClient.POST("/swap/recover", {
+      body: { xpub },
     });
     if (error) {
       throw new Error(`Failed to recover swaps: ${JSON.stringify(error)}`);
@@ -961,7 +961,7 @@ export class Client {
     console.log(`Recovered data ${JSON.stringify(data)}`);
 
     for (const recoveredSwap of data.swaps) {
-      const {index, ...response} = recoveredSwap;
+      const { index, ...response } = recoveredSwap;
       const swapParams = this.deriveSwapParamsAtIndex(index);
 
       await this.#storeSwap(response.id, swapParams, response);
@@ -1107,7 +1107,7 @@ export class Client {
         | ArkadeToEvmSwapResponse
         | LightningToEvmSwapResponse
         | BitcoinToEvmSwapResponse
-        ) & {
+      ) & {
         direction: string;
       };
       // Use the stored target address - this was set when the swap was created
@@ -1174,7 +1174,7 @@ export class Client {
         };
       }
 
-      const arkadeResult = await this.claimArkade(id, {destinationAddress});
+      const arkadeResult = await this.claimArkade(id, { destinationAddress });
 
       // Convert to ClaimResult format
       return {
@@ -1213,7 +1213,7 @@ export class Client {
   async claimViaGasless(
     id: string,
     destination: string,
-    {slippage = 1.0}: { slippage?: number } = {},
+    { slippage = 1.0 }: { slippage?: number } = {},
   ): Promise<ClaimGaslessResult> {
     if (!this.#swapStorage) {
       throw new Error(
@@ -1249,8 +1249,8 @@ export class Client {
       "/swap/{id}/redeem-and-swap-calldata",
       {
         params: {
-          path: {id},
-          query: {destination, slippage},
+          path: { id },
+          query: { destination, slippage },
         },
       },
     );
@@ -2294,7 +2294,7 @@ export class Client {
       unilateralClaimDelay: s.unilateral_claim_delay,
       unilateralRefundDelay: s.unilateral_refund_delay,
       unilateralRefundWithoutReceiverDelay:
-      s.unilateral_refund_without_receiver_delay,
+        s.unilateral_refund_without_receiver_delay,
       destinationAddress: options.destinationAddress,
       network: s.network,
     };
@@ -2510,8 +2510,8 @@ export class Client {
       "/swap/{id}/refund-and-swap-calldata",
       {
         params: {
-          path: {id},
-          query: {mode},
+          path: { id },
+          query: { mode },
         },
       },
     );
@@ -2523,7 +2523,7 @@ export class Client {
       };
     }
 
-    const {coordinator_address, calldata} = response.data;
+    const { coordinator_address, calldata } = response.data;
 
     return {
       success: true,
@@ -2595,8 +2595,8 @@ export class Client {
       "/swap/{id}/refund-and-swap-calldata",
       {
         params: {
-          path: {id},
-          query: {mode},
+          path: { id },
+          query: { mode },
         },
       },
     );
@@ -2608,7 +2608,7 @@ export class Client {
       };
     }
 
-    const {coordinator_address, calldata} = response.data;
+    const { coordinator_address, calldata } = response.data;
 
     return {
       success: true,
@@ -2685,8 +2685,8 @@ export class Client {
       "/swap/{id}/refund-and-swap-calldata",
       {
         params: {
-          path: {id},
-          query: {mode},
+          path: { id },
+          query: { mode },
         },
       },
     );
@@ -2698,7 +2698,7 @@ export class Client {
       };
     }
 
-    const {coordinator_address, calldata} = response.data;
+    const { coordinator_address, calldata } = response.data;
 
     return {
       success: true,
@@ -2735,8 +2735,8 @@ export class Client {
       "/api/swap/{id}/collab-refund-evm/params",
       {
         params: {
-          path: {id: swapId},
-          query: {mode: settlement},
+          path: { id: swapId },
+          query: { mode: settlement },
         },
       },
     );
@@ -2764,10 +2764,10 @@ export class Client {
       sourceTokenAddress: d.source_token_address ?? undefined,
       dexCalldata: d.dex_calldata
         ? {
-          to: d.dex_calldata.to,
-          data: d.dex_calldata.data,
-          value: d.dex_calldata.value,
-        }
+            to: d.dex_calldata.to,
+            data: d.dex_calldata.data,
+            value: d.dex_calldata.value,
+          }
         : undefined,
     };
   }
@@ -2810,7 +2810,7 @@ export class Client {
     const typedData = buildCollabRefundEvmTypedData(digestParams);
     const digest = buildCollabRefundEvmDigest(digestParams);
 
-    return {typedData, digest, params};
+    return { typedData, digest, params };
   }
 
   /**
@@ -2828,7 +2828,7 @@ export class Client {
     swapId: string,
     settlement: "swap-back" | "direct" = "direct",
   ): Promise<CollabRefundEvmResult> {
-    const {params, digest} = await this.buildCollabRefundEvmTypedData(
+    const { params, digest } = await this.buildCollabRefundEvmTypedData(
       swapId,
       settlement,
     );
@@ -2843,14 +2843,14 @@ export class Client {
     const sig = signEvmDigest(storedSwap.secretKey, digest);
 
     // Derive the on-chain depositor address (the key that funded the HTLC)
-    const {deriveEvmAddress} = await import("./evm/signing.js");
+    const { deriveEvmAddress } = await import("./evm/signing.js");
     const depositorAddress = deriveEvmAddress(storedSwap.secretKey);
 
     // POST to the server
     const response = await this.#apiClient.POST(
       "/api/swap/{id}/collab-refund-evm",
       {
-        params: {path: {id: swapId}},
+        params: { path: { id: swapId } },
         body: {
           v: sig.v,
           r: sig.r,
@@ -2903,7 +2903,7 @@ export class Client {
     const response = await this.#apiClient.POST(
       "/api/swap/{id}/collab-refund-evm",
       {
-        params: {path: {id: swapId}},
+        params: { path: { id: swapId } },
         body,
       },
     );
@@ -3008,7 +3008,7 @@ export class Client {
    * @throws Error if the swap direction is unsupported or required fields are missing.
    */
   async createSwap(options: CreateSwapOptions): Promise<CreateSwapResult> {
-    const {sourceAsset, targetAsset} = options;
+    const { sourceAsset, targetAsset } = options;
     const sourceChain = sourceAsset.chain;
     const targetChain = targetAsset.chain;
 
@@ -3522,7 +3522,7 @@ export class Client {
       headers["X-API-Key"] = this.#config.apiKey;
     }
 
-    const resp = await fetch(url, {headers});
+    const resp = await fetch(url, { headers });
     if (!resp.ok) {
       const body = await resp.text();
       throw new Error(
@@ -3588,7 +3588,7 @@ export class Client {
     }));
 
     // Derive depositor address from secret key
-    const {deriveEvmAddress} = await import("./evm/signing.js");
+    const { deriveEvmAddress } = await import("./evm/signing.js");
     const depositorAddress = deriveEvmAddress(storedSwap.secretKey);
 
     // 7. Encode executeAndCreateWithPermit2 calldata
@@ -3696,7 +3696,7 @@ export class Client {
       headers["X-API-Key"] = this.#config.apiKey;
     }
 
-    const resp = await fetch(url, {headers});
+    const resp = await fetch(url, { headers });
     if (!resp.ok) {
       const body = await resp.text();
       throw new Error(
@@ -3816,7 +3816,7 @@ export class Client {
       headers["X-API-Key"] = this.#config.apiKey;
     }
 
-    const resp = await fetch(url, {headers});
+    const resp = await fetch(url, { headers });
     if (!resp.ok) {
       const body = await resp.text();
       throw new Error(
@@ -3878,19 +3878,19 @@ export class Client {
     const compactSignature = `0x${rClean}${sClean}${vHex}`;
 
     // 5. Derive depositor address
-    const {deriveEvmAddress} = await import("./evm/signing.js");
+    const { deriveEvmAddress } = await import("./evm/signing.js");
     const depositorAddress = deriveEvmAddress(storedSwap.secretKey);
 
     // 6. If EIP-2612 needed (token supports it and not yet approved to Permit2)
     let eip2612Permit:
       | {
-      v: number;
-      r: string;
-      s: string;
-      value: string;
-      deadline: number;
-      nonce: number;
-    }
+          v: number;
+          r: string;
+          s: string;
+          value: string;
+          deadline: number;
+          nonce: number;
+        }
       | undefined;
 
     if (serverData.eip2612?.supported && !serverData.eip2612.already_approved) {
@@ -3945,7 +3945,7 @@ export class Client {
       message: string;
     };
 
-    return {txHash: result.tx_hash};
+    return { txHash: result.tx_hash };
   }
 
   /**
@@ -3991,8 +3991,8 @@ export class Client {
       return false;
     }
 
-    const {ArkAddress, RestIndexerProvider} = await import("@arkade-os/sdk");
-    const {hex} = await import("@scure/base");
+    const { ArkAddress, RestIndexerProvider } = await import("@arkade-os/sdk");
+    const { hex } = await import("@scure/base");
 
     const serverUrl = this.#config.arkadeServerUrl;
     if (!serverUrl) {
@@ -4003,7 +4003,7 @@ export class Client {
     const pkScript = hex.encode(decoded.pkScript);
     const indexer = new RestIndexerProvider(serverUrl);
 
-    const {vtxos} = await indexer.getVtxos({
+    const { vtxos } = await indexer.getVtxos({
       scripts: [pkScript],
     });
 
