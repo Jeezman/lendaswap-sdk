@@ -55,6 +55,16 @@ export function isBtc(token: TokenInfo): boolean {
   return isLightning(token) || isArkade(token) || isBtcOnchain(token);
 }
 
+/**
+ * Returns true if the token is a BTC-pegged EVM token (WBTC or tBTC).
+ * These tokens should be displayed like BTC (sats/BTC, 8 decimal precision)
+ * even though tBTC has 18 on-chain decimals.
+ */
+export function isBtcPegged(token: TokenInfo): boolean {
+  const sym = token.symbol.toLowerCase();
+  return (sym === "wbtc" || sym === "tbtc") && isEvmToken(token.chain);
+}
+
 /** Returns true if the chain is an EVM chain (Ethereum, Polygon, or Arbitrum). */
 export function isEvmToken(chain: string): boolean {
   return EVM_CHAINS.includes(

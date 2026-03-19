@@ -146,6 +146,7 @@ export {
   isArkade,
   isBtc,
   isBtcOnchain,
+  isBtcPegged,
   isEthereumToken,
   isEvmToken,
   isLightning,
