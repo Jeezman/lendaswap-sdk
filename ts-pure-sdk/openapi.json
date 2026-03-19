@@ -608,6 +608,15 @@
               "format": "int64",
               "minimum": 0
             }
+          },
+          {
+            "name": "bridge_target_chain",
+            "in": "query",
+            "description": "Optional: CCTP bridge destination chain (e.g., \"Base\", \"Optimism\").\nWhen set, the CCTP forwarding fee is deducted from the target amount.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
+            }
           }
         ],
         "responses": {
@@ -1485,6 +1494,14 @@
             "description": "How much target token the user wants to receive (mutually exclusive with `amount_in`).\nValue is in the target token's smallest unit (e.g. for USDC with 6 decimals, 1000000 = 1\nUSDC).",
             "minimum": 0
           },
+          "bridge_target_chain": {
+            "type": ["string", "null"],
+            "description": "Optional: CCTP bridge destination chain (e.g., \"Ethereum\", \"Arbitrum\"). When set,\nUSDC will be bridged to this chain after the DEX swap."
+          },
+          "bridge_target_token_address": {
+            "type": ["string", "null"],
+            "description": "Optional: USDC address on the bridge destination chain."
+          },
           "claiming_address": {
             "type": "string",
             "description": "EVM address that will sign the HTLC claim (SDK-derived for gasless claims)."
@@ -1559,6 +1576,14 @@
         ],
         "properties": {
           "arkade_server_pk": { "type": "string" },
+          "bridge_target_chain": {
+            "type": ["string", "null"],
+            "description": "CCTP bridge destination chain. When set, USDC is bridged cross-chain after the swap."
+          },
+          "bridge_target_token_address": {
+            "type": ["string", "null"],
+            "description": "USDC address on the bridge destination chain."
+          },
           "btc_claim_txid": { "type": ["string", "null"] },
           "btc_fund_txid": { "type": ["string", "null"] },
           "btc_vhtlc_address": { "type": "string" },
@@ -1811,6 +1836,14 @@
             "description": "How much target token the user wants to receive (mutually exclusive with `amount_in`).\nValue is in the target token's smallest unit (e.g. for USDC with 6 decimals, 1000000 = 1\nUSDC).",
             "minimum": 0
           },
+          "bridge_target_chain": {
+            "type": ["string", "null"],
+            "description": "Optional: CCTP bridge destination chain (e.g., \"Ethereum\", \"Arbitrum\"). When set,\nUSDC will be bridged to this chain after the DEX swap."
+          },
+          "bridge_target_token_address": {
+            "type": ["string", "null"],
+            "description": "Optional: USDC address on the bridge destination chain."
+          },
           "claiming_address": {
             "type": "string",
             "description": "EVM address that will sign the HTLC claim (SDK-derived for gasless claims)."
@@ -1880,6 +1913,14 @@
           "source_amount"
         ],
         "properties": {
+          "bridge_target_chain": {
+            "type": ["string", "null"],
+            "description": "CCTP bridge destination chain. When set, USDC is bridged cross-chain after the swap."
+          },
+          "bridge_target_token_address": {
+            "type": ["string", "null"],
+            "description": "USDC address on the bridge destination chain."
+          },
           "btc_claim_txid": {
             "type": ["string", "null"],
             "description": "On-chain claim transaction ID (server claim)"
@@ -3363,6 +3404,14 @@
             "description": "How much target token the user wants to receive (mutually exclusive with `amount_in`).\nValue is in the target token's smallest unit (e.g. for USDC with 6 decimals, 1000000 = 1\nUSDC).",
             "minimum": 0
           },
+          "bridge_target_chain": {
+            "type": ["string", "null"],
+            "description": "Optional: CCTP bridge destination chain (e.g., \"Ethereum\", \"Arbitrum\"). When set,\nUSDC will be bridged to this chain after the DEX swap."
+          },
+          "bridge_target_token_address": {
+            "type": ["string", "null"],
+            "description": "Optional: USDC address on the bridge destination chain."
+          },
           "claiming_address": {
             "type": "string",
             "description": "EVM address that will sign the HTLC claim (SDK-derived for gasless claims)."
@@ -3448,6 +3497,14 @@
             "description": "Lightning invoice to pay\nDEPRECATED: use [`bolt11_invoice`] instead"
           },
           "boltz_swap_id": { "type": "string", "description": "Boltz swap ID" },
+          "bridge_target_chain": {
+            "type": ["string", "null"],
+            "description": "CCTP bridge destination chain. When set, USDC is bridged cross-chain after the swap."
+          },
+          "bridge_target_token_address": {
+            "type": ["string", "null"],
+            "description": "USDC address on the bridge destination chain."
+          },
           "btc_claim_txid": {
             "type": ["string", "null"],
             "description": "Server's claim transaction ID on Arkade (Boltz VHTLC claim)"
@@ -3526,6 +3583,12 @@
           "target_amount"
         ],
         "properties": {
+          "bridge_fee": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "CCTP bridge forwarding fee in USDC smallest units (6 decimals).\nOnly present when bridge_target_chain was specified in the quote request.",
+            "minimum": 0
+          },
           "exchange_rate": {
             "type": "string",
             "description": "Exchange rate: how much of the EVM token you get/pay per BTC"
@@ -3725,7 +3788,9 @@
         "properties": {
           "agents": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/SupportAgentInfo" }
+            "items": {
+              "$ref": "#/components/schemas/SupportAgentInfo"
+            }
           }
         }
       },
@@ -3775,7 +3840,9 @@
           },
           "evm_tokens": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/TokenInfo" }
+            "items": {
+              "$ref": "#/components/schemas/TokenInfo"
+            }
           }
         }
       },
@@ -3890,9 +3957,18 @@
     }
   },
   "tags": [
-    { "name": "version", "description": "Check API version information." },
-    { "name": "tokens", "description": "Get available tokens for swaps." },
-    { "name": "quote", "description": "Get quotes for token swaps." },
+    {
+      "name": "version",
+      "description": "Check API version information."
+    },
+    {
+      "name": "tokens",
+      "description": "Get available tokens for swaps."
+    },
+    {
+      "name": "quote",
+      "description": "Get quotes for token swaps."
+    },
     {
       "name": "swap-btc-evm",
       "description": "Create chain-agnostic BTC to EVM swaps."
@@ -3900,6 +3976,10 @@
     {
       "name": "swap-evm-btc",
       "description": "Create chain-agnostic EVM to BTC swaps."
+    },
+    {
+      "name": "swap-btc-arkade",
+      "description": "Create Arkade to BTC swaps."
     },
     { "name": "swap-btc-arkade", "description": "Create Arkade to BTC swaps." },
     { "name": "swaps", "description": "Get swap details and status." },
@@ -3916,6 +3996,9 @@
       "name": "mtp",
       "description": "Bitcoin Median Time Past (MTP) information."
     },
-    { "name": "support", "description": "Support agent configuration." }
+    {
+      "name": "support",
+      "description": "Support agent configuration."
+    }
   ]
 }

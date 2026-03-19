@@ -1,4 +1,5 @@
 import type { Chain, TokenId, TokenInfo } from "./api/client.js";
+import { CCTP_DOMAINS, USDC_ADDRESSES } from "./cctp/constants.js";
 
 /** A token identifier: either a plain string TokenId or a TokenInfo object. */
 export type TokenInput = TokenId;
@@ -116,7 +117,39 @@ export const BTC_ONCHAIN_INFO: TokenInfo = {
   chain: "Bitcoin",
 };
 
-const EVM_CHAINS = ["1", "137", "42161"] as const;
+// ============================================================================
+// EVM Chain IDs
+// ============================================================================
+
+/** Source chains where HTLCs and DEX swaps run. */
+const SOURCE_EVM_CHAINS = ["1", "137", "42161"] as const;
+
+/** All EVM chain IDs including CCTP bridge-only destinations. */
+const ALL_EVM_CHAIN_IDS: Record<string, string> = {
+  Ethereum: "1",
+  Polygon: "137",
+  Arbitrum: "42161",
+  Base: "8453",
+  Optimism: "10",
+  Avalanche: "43114",
+  Linea: "59144",
+  Unichain: "130",
+  Sonic: "146",
+  "World Chain": "480",
+  Ink: "57073",
+  Sei: "1329",
+  HyperEVM: "999",
+  Monad: "10143",
+};
+
+/** Reverse lookup: chain ID → chain name. */
+const CHAIN_ID_TO_NAME: Record<string, string> = Object.fromEntries(
+  Object.entries(ALL_EVM_CHAIN_IDS).map(([name, id]) => [id, name]),
+);
+
+// ============================================================================
+// Chain detection helpers
+// ============================================================================
 
 /** Returns true if the token is Bitcoin on Lightning. */
 export function isLightning(token: { chain: string }): boolean {
@@ -148,11 +181,24 @@ export function isBtcPegged(token: { chain: string; symbol: string }): boolean {
   return (sym === "wbtc" || sym === "tbtc") && isEvmToken(token.chain);
 }
 
-/** Returns true if the chain is an EVM chain (Ethereum, Polygon, or Arbitrum). */
+/** Returns true if the chain is any EVM chain (source or bridge destination). */
 export function isEvmToken(chain: string): boolean {
-  return EVM_CHAINS.includes(
-    chain.toLowerCase() as (typeof EVM_CHAINS)[number],
+  return (
+    SOURCE_EVM_CHAINS.includes(chain as (typeof SOURCE_EVM_CHAINS)[number]) ||
+    Object.values(ALL_EVM_CHAIN_IDS).includes(chain)
   );
+}
+
+/** Returns true if the chain is a source EVM chain (has HTLC contracts). */
+export function isSourceEvmChain(chain: string): boolean {
+  return SOURCE_EVM_CHAINS.includes(
+    chain as (typeof SOURCE_EVM_CHAINS)[number],
+  );
+}
+
+/** Returns true if the chain is a bridge-only destination (no HTLC contracts). */
+export function isBridgeOnlyChain(chain: string): boolean {
+  return isEvmToken(chain) && !isSourceEvmChain(chain);
 }
 
 /** Returns true if the chain is Ethereum. */
@@ -170,7 +216,23 @@ export function isArbitrumToken(chain: string): boolean {
   return chain === "arbitrum" || chain === "42161";
 }
 
-/** Normalizes any chain string to its canonical PascalCase Chain value. */
+export function isBaseToken(chain: string): boolean {
+  return chain === "base" || chain === "8453";
+}
+
+export function isOptimismToken(chain: string): boolean {
+  return chain === "optimism" || chain === "10";
+}
+
+export function isAvalancheToken(chain: string): boolean {
+  return chain === "avalanche" || chain === "43114";
+}
+
+export function isLineaToken(chain: string): boolean {
+  return chain === "linea" || chain === "59144";
+}
+
+/** Normalizes any chain string to its canonical Chain value. */
 export function toChain(str: string): Chain {
   const c = str.toLowerCase();
   if (c === "ethereum" || c === "1") return "1";
@@ -179,10 +241,15 @@ export function toChain(str: string): Chain {
   if (c === "lightning") return "Lightning";
   if (c === "arkade") return "Arkade";
   if (c === "bitcoin") return "Bitcoin";
+  // Check new chains by name
+  for (const [name, id] of Object.entries(ALL_EVM_CHAIN_IDS)) {
+    if (c === name.toLowerCase() || c === id) return id as Chain;
+  }
   return "Bitcoin";
 }
 
 export function toChainName(chain: Chain): string {
+  // Known source chains
   switch (chain) {
     case "1":
       return "Ethereum";
@@ -190,7 +257,59 @@ export function toChainName(chain: Chain): string {
       return "Polygon";
     case "42161":
       return "Arbitrum";
-    default:
-      return chain.toString();
   }
+  // Look up by chain ID
+  if (CHAIN_ID_TO_NAME[chain]) {
+    return CHAIN_ID_TO_NAME[chain];
+  }
+  return chain.toString();
+}
+
+/**
+ * Get the CCTP bridge target chain name for a token, if bridging is needed.
+ * Returns undefined if the token is on a source chain (no bridge needed)
+ * or is not an EVM token.
+ */
+export function getBridgeTargetChain(token: TokenInfo): string | undefined {
+  if (isBridgeOnlyChain(token.chain)) {
+    return CHAIN_ID_TO_NAME[token.chain] ?? toChainName(token.chain as Chain);
+  }
+  return undefined;
+}
+
+// ============================================================================
+// CCTP USDC bridge tokens (target-only)
+// ============================================================================
+
+/**
+ * Generate TokenInfo objects for USDC on all CCTP-supported chains.
+ * These are "bridge-only" target tokens — the swap runs on a source chain
+ * (Polygon/Ethereum/Arbitrum) and USDC is bridged to the destination via CCTP.
+ *
+ * Excludes source chains (those already have USDC tokens from the backend).
+ */
+export function getCctpBridgeTokens(): TokenInfo[] {
+  const sourceChainNames = new Set(["Ethereum", "Polygon", "Arbitrum"]);
+  const tokens: TokenInfo[] = [];
+
+  for (const chainName of Object.keys(CCTP_DOMAINS)) {
+    // Skip source chains (backend already provides their USDC tokens)
+    if (sourceChainNames.has(chainName)) continue;
+    // Skip non-EVM chains
+    if (chainName === "Solana") continue;
+
+    const usdcAddress = USDC_ADDRESSES[chainName];
+    const chainId = ALL_EVM_CHAIN_IDS[chainName];
+    if (!usdcAddress || !chainId) continue;
+
+    tokens.push({
+      token_id: usdcAddress as TokenId,
+      symbol: "USDC",
+      name: `USD Coin (${chainName})`,
+      decimals: 6,
+      chain: chainId as Chain,
+    });
+  }
+
+  return tokens;
 }

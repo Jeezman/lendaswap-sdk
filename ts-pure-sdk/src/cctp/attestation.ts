@@ -1,0 +1,119 @@
+/**
+ * CCTP attestation client.
+ *
+ * Polls Circle's IRIS API for attestations after a USDC burn.
+ * Used on the destination chain to call MessageTransmitter.receiveMessage().
+ */
+
+import {
+  CCTP_DOMAINS,
+  type CctpChainName,
+  IRIS_API_MAINNET,
+} from "./constants.js";
+import type { AttestationResponse } from "./types.js";
+
+export interface FetchAttestationOptions {
+  /** Source chain name (e.g. "Polygon"). */
+  sourceChain: CctpChainName;
+  /** Transaction hash of the burn on the source chain. */
+  txHash: string;
+  /** IRIS API base URL. Defaults to mainnet. */
+  irisApiUrl?: string;
+  /** Polling interval in ms. Defaults to 10000 (10s). */
+  pollIntervalMs?: number;
+  /** Maximum time to wait in ms. Defaults to 900000 (15min). */
+  timeoutMs?: number;
+  /** Optional abort signal. */
+  signal?: AbortSignal;
+}
+
+export interface AttestationResult {
+  /** Raw CCTP message bytes (hex with 0x prefix). */
+  message: string;
+  /** Attestation signature bytes (hex with 0x prefix). */
+  attestation: string;
+}
+
+/**
+ * Poll the IRIS V2 API until the attestation is ready for a given burn tx.
+ *
+ * @returns The message and attestation bytes needed to call receiveMessage().
+ * @throws If the attestation is not ready within the timeout, or the request fails.
+ */
+export async function fetchAttestation(
+  options: FetchAttestationOptions,
+): Promise<AttestationResult> {
+  const {
+    sourceChain,
+    txHash,
+    irisApiUrl = IRIS_API_MAINNET,
+    pollIntervalMs = 10_000,
+    timeoutMs = 900_000,
+    signal,
+  } = options;
+
+  const sourceDomain = CCTP_DOMAINS[sourceChain];
+  if (sourceDomain === undefined) {
+    throw new Error(`Unknown CCTP source chain: ${sourceChain}`);
+  }
+
+  const url = `${irisApiUrl}/v2/messages/${sourceDomain}?transactionHash=${txHash}`;
+
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < timeoutMs) {
+    signal?.throwIfAborted();
+
+    try {
+      const response = await fetch(url);
+
+      if (response.status === 404) {
+        // Message not yet indexed, keep polling
+        await sleep(pollIntervalMs, signal);
+        continue;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          `IRIS API error: ${response.status} ${response.statusText}`,
+        );
+      }
+
+      const data: AttestationResponse = await response.json();
+
+      if (data.messages.length > 0 && data.messages[0].status === "complete") {
+        return {
+          message: data.messages[0].message,
+          attestation: data.messages[0].attestation,
+        };
+      }
+
+      // Attestation pending, keep polling
+      await sleep(pollIntervalMs, signal);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        throw err;
+      }
+      // Network errors — retry after delay
+      await sleep(pollIntervalMs, signal);
+    }
+  }
+
+  throw new Error(
+    `Attestation not ready after ${timeoutMs / 1000}s for tx ${txHash} on ${sourceChain}`,
+  );
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(new DOMException("Aborted", "AbortError"));
+      },
+      { once: true },
+    );
+  });
+}

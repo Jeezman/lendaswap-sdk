@@ -57,6 +57,10 @@ export interface BitcoinToEvmSwapOptions {
   referralCode?: string;
   /** Whether the server should execute the DEX swap on behalf of the user (gasless claim). Defaults to true. */
   gasless?: boolean;
+  /** Optional: CCTP bridge destination chain (e.g., "Ethereum"). When set, USDC is bridged cross-chain after the DEX swap. */
+  bridgeTargetChain?: string;
+  /** Optional: USDC address on the bridge destination chain. */
+  bridgeTargetTokenAddress?: string;
 }
 
 /** Response from the generic `/swap/bitcoin/evm` endpoint. */
@@ -142,6 +146,10 @@ export interface LightningToEvmSwapGenericOptions {
   referralCode?: string;
   /** Whether the server should execute the DEX swap on behalf of the user (gasless claim). Defaults to true. */
   gasless?: boolean;
+  /** Optional: CCTP bridge destination chain (e.g., "Ethereum"). When set, USDC is bridged cross-chain after the DEX swap. */
+  bridgeTargetChain?: string;
+  /** Optional: USDC address on the bridge destination chain. */
+  bridgeTargetTokenAddress?: string;
 }
 
 /** Result of creating a Lightning-to-EVM swap via the generic endpoint */
@@ -258,6 +266,10 @@ export interface ArkadeToEvmSwapOptions {
   referralCode?: string;
   /** Whether the server should execute the DEX swap on behalf of the user (gasless claim). Defaults to true. */
   gasless?: boolean;
+  /** Optional: CCTP bridge destination chain (e.g., "Ethereum"). When set, USDC is bridged cross-chain after the DEX swap. */
+  bridgeTargetChain?: string;
+  /** Optional: USDC address on the bridge destination chain. */
+  bridgeTargetTokenAddress?: string;
 }
 
 /** Result of creating an Arkade-to-EVM swap via the generic endpoint */
@@ -311,6 +323,10 @@ export interface CreateSwapOptions {
   referralCode?: string;
   /** Whether to use gasless relay for EVM funding (no wallet needed). When true, the SDK-derived EVM address is used as the depositor. */
   gasless?: boolean;
+  /** Optional: CCTP bridge destination chain (e.g., "Ethereum"). When set, USDC is bridged cross-chain after the DEX swap. */
+  bridgeTargetChain?: string;
+  /** Optional: USDC address on the bridge destination chain. */
+  bridgeTargetTokenAddress?: string;
 }
 
 /** Options for creating a Lightning-to-Arkade swap */

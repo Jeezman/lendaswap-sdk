@@ -820,6 +820,13 @@ export interface components {
              *     USDC).
              */
             amount_out?: number | null;
+            /**
+             * @description Optional: CCTP bridge destination chain (e.g., "Ethereum", "Arbitrum"). When set,
+             *     USDC will be bridged to this chain after the DEX swap.
+             */
+            bridge_target_chain?: string | null;
+            /** @description Optional: USDC address on the bridge destination chain. */
+            bridge_target_token_address?: string | null;
             /** @description EVM address that will sign the HTLC claim (SDK-derived for gasless claims). */
             claiming_address: string;
             /**
@@ -849,6 +856,10 @@ export interface components {
         /** @description Arkade → EVM swap response */
         ArkadeToEvmSwapResponse: {
             arkade_server_pk: string;
+            /** @description CCTP bridge destination chain. When set, USDC is bridged cross-chain after the swap. */
+            bridge_target_chain?: string | null;
+            /** @description USDC address on the bridge destination chain. */
+            bridge_target_token_address?: string | null;
             btc_claim_txid?: string | null;
             btc_fund_txid?: string | null;
             btc_vhtlc_address: string;
@@ -1026,6 +1037,13 @@ export interface components {
              *     USDC).
              */
             amount_out?: number | null;
+            /**
+             * @description Optional: CCTP bridge destination chain (e.g., "Ethereum", "Arbitrum"). When set,
+             *     USDC will be bridged to this chain after the DEX swap.
+             */
+            bridge_target_chain?: string | null;
+            /** @description Optional: USDC address on the bridge destination chain. */
+            bridge_target_token_address?: string | null;
             /** @description EVM address that will sign the HTLC claim (SDK-derived for gasless claims). */
             claiming_address: string;
             /**
@@ -1054,6 +1072,10 @@ export interface components {
         };
         /** @description Response for Arkade-to-EVM swaps. */
         BitcoinToEvmSwapResponse: {
+            /** @description CCTP bridge destination chain. When set, USDC is bridged cross-chain after the swap. */
+            bridge_target_chain?: string | null;
+            /** @description USDC address on the bridge destination chain. */
+            bridge_target_token_address?: string | null;
             /** @description On-chain claim transaction ID (server claim) */
             btc_claim_txid?: string | null;
             /** @description On-chain funding transaction ID */
@@ -1941,6 +1963,13 @@ export interface components {
              *     USDC).
              */
             amount_out?: number | null;
+            /**
+             * @description Optional: CCTP bridge destination chain (e.g., "Ethereum", "Arbitrum"). When set,
+             *     USDC will be bridged to this chain after the DEX swap.
+             */
+            bridge_target_chain?: string | null;
+            /** @description Optional: USDC address on the bridge destination chain. */
+            bridge_target_token_address?: string | null;
             /** @description EVM address that will sign the HTLC claim (SDK-derived for gasless claims). */
             claiming_address: string;
             /**
@@ -1979,6 +2008,10 @@ export interface components {
             boltz_invoice: string;
             /** @description Boltz swap ID */
             boltz_swap_id: string;
+            /** @description CCTP bridge destination chain. When set, USDC is bridged cross-chain after the swap. */
+            bridge_target_chain?: string | null;
+            /** @description USDC address on the bridge destination chain. */
+            bridge_target_token_address?: string | null;
             /** @description Server's claim transaction ID on Arkade (Boltz VHTLC claim) */
             btc_claim_txid?: string | null;
             chain: string;
@@ -2035,6 +2068,12 @@ export interface components {
             tip_height: number;
         };
         QuoteResponse: {
+            /**
+             * Format: int64
+             * @description CCTP bridge forwarding fee in USDC smallest units (6 decimals).
+             *     Only present when bridge_target_chain was specified in the quote request.
+             */
+            bridge_fee?: number | null;
             /** @description Exchange rate: how much of the EVM token you get/pay per BTC */
             exchange_rate: string;
             /**
@@ -2842,6 +2881,11 @@ export interface operations {
                 source_amount?: number | null;
                 /** @description Amount in smallest unit of target token (mutually exclusive with source_amount) */
                 target_amount?: number | null;
+                /**
+                 * @description Optional: CCTP bridge destination chain (e.g., "Base", "Optimism").
+                 *     When set, the CCTP forwarding fee is deducted from the target amount.
+                 */
+                bridge_target_chain?: string | null;
             };
             header?: never;
             path?: never;

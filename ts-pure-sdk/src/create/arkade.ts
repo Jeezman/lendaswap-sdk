@@ -71,6 +71,8 @@ export async function createArkadeToEvmSwapGeneric(
         : undefined,
       referral_code: options.referralCode,
       gasless: options.gasless ?? true,
+      bridge_target_chain: options.bridgeTargetChain,
+      bridge_target_token_address: options.bridgeTargetTokenAddress,
     },
   });
 

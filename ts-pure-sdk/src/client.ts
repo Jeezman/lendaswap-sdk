@@ -15,6 +15,7 @@ import {
   type TokenInfos,
 } from "./api/client.js";
 import { getVhtlcAmounts, type VhtlcAmounts } from "./arkade.js";
+import { USDC_ADDRESSES } from "./cctp/constants.js";
 import {
   type ArkadeToEvmSwapOptions,
   type ArkadeToEvmSwapResult,
@@ -106,10 +107,12 @@ import {
 } from "./storage";
 import {
   isArkade,
+  isBridgeOnlyChain,
   isBtcOnchain,
   isBtcPegged,
   isEvmToken,
   isLightning,
+  toChainName,
 } from "./tokens.js";
 
 // Re-export types from create module for backwards compatibility
@@ -840,15 +843,31 @@ export class Client {
     sourceAmount?: number;
     targetAmount?: number;
   }): Promise<QuoteResponse> {
+    // If the target is a bridge-only chain (e.g. USDC on Base), remap the
+    // quote request to USDC on a source chain the backend knows about.
+    // Pass bridge_target_chain so the backend fetches the live CCTP
+    // forwarding fee and deducts it from the quoted target amount.
+    let targetChain = params.targetChain;
+    let targetToken = params.targetToken;
+    let bridgeTargetChain: string | undefined;
+    if (isBridgeOnlyChain(targetChain)) {
+      bridgeTargetChain = toChainName(targetChain);
+      // Remap to Arbitrum USDC for the DEX quote (cheapest gas, good liquidity).
+      // The backend expects the raw contract address, not a token_id.
+      targetChain = "42161" as Chain;
+      targetToken = USDC_ADDRESSES.Arbitrum;
+    }
+
     const { data, error } = await this.#apiClient.GET("/quote", {
       params: {
         query: {
           source_chain: params.sourceChain,
           source_token: params.sourceToken,
-          target_chain: params.targetChain,
-          target_token: params.targetToken,
+          target_chain: targetChain,
+          target_token: targetToken,
           source_amount: params.sourceAmount,
           target_amount: params.targetAmount,
+          bridge_target_chain: bridgeTargetChain,
         },
       },
     });
@@ -3062,6 +3081,8 @@ export class Client {
           ? BigInt(options.targetAmount)
           : undefined,
         referralCode: options.referralCode,
+        bridgeTargetChain: options.bridgeTargetChain,
+        bridgeTargetTokenAddress: options.bridgeTargetTokenAddress,
       });
     }
 
@@ -3074,6 +3095,8 @@ export class Client {
         amountIn: options.sourceAmount,
         amountOut: options.targetAmount,
         referralCode: options.referralCode,
+        bridgeTargetChain: options.bridgeTargetChain,
+        bridgeTargetTokenAddress: options.bridgeTargetTokenAddress,
       });
     }
 
@@ -3131,6 +3154,8 @@ export class Client {
         sourceAmount: options.sourceAmount,
         targetAmount: options.targetAmount,
         referralCode: options.referralCode,
+        bridgeTargetChain: options.bridgeTargetChain,
+        bridgeTargetTokenAddress: options.bridgeTargetTokenAddress,
       });
     }
 
