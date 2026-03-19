@@ -94,7 +94,7 @@ import {
   type SwapStorage,
   type WalletStorage,
 } from "./storage";
-import { isArkade, isBtcOnchain, isEvmToken, isLightning } from "./tokens.js";
+import { isArkade, isBtcOnchain, isBtcPegged, isEvmToken, isLightning } from "./tokens.js";
 
 // Re-export types from create module for backwards compatibility
 export type {
@@ -2472,9 +2472,8 @@ export class Client {
     const now = Math.floor(Date.now() / 1000);
     const timelockExpired = now >= timelock;
 
-    // Check if source token is WBTC - if so, use direct HTLCErc20 refund
-    const sourceSymbol = evmSwap.source_token?.symbol?.toLowerCase();
-    const isWbtcSource = sourceSymbol === "wbtc";
+    // Check if source token is BTC-pegged (WBTC/tBTC) - if so, use direct HTLCErc20 refund
+    const isWbtcSource = evmSwap.source_token ? isBtcPegged(evmSwap.source_token) : false;
 
     if (isWbtcSource) {
       // Direct HTLCErc20 refund - no DEX swap needed
@@ -2557,9 +2556,8 @@ export class Client {
     const now = Math.floor(Date.now() / 1000);
     const timelockExpired = now >= timelock;
 
-    // Check if source token is WBTC - if so, use direct HTLCErc20 refund
-    const sourceSymbol = evmSwap.source_token?.symbol?.toLowerCase();
-    const isWbtcSource = sourceSymbol === "wbtc";
+    // Check if source token is BTC-pegged (WBTC/tBTC) - if so, use direct HTLCErc20 refund
+    const isWbtcSource = evmSwap.source_token ? isBtcPegged(evmSwap.source_token) : false;
 
     if (isWbtcSource) {
       // Direct HTLCErc20 refund - no DEX swap needed
@@ -2647,9 +2645,8 @@ export class Client {
     const now = Math.floor(Date.now() / 1000);
     const timelockExpired = now >= timelock;
 
-    // Check if source token is WBTC - if so, use direct HTLCErc20 refund
-    const sourceSymbol = evmSwap.source_token?.symbol?.toLowerCase();
-    const isWbtcSource = sourceSymbol === "wbtc";
+    // Check if source token is BTC-pegged (WBTC/tBTC) - if so, use direct HTLCErc20 refund
+    const isWbtcSource = evmSwap.source_token ? isBtcPegged(evmSwap.source_token) : false;
 
     if (isWbtcSource) {
       // Direct HTLCErc20 refund - no DEX swap needed
