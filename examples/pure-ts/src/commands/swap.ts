@@ -399,7 +399,7 @@ export async function createSwap(
         amountIn: Math.floor(amountNum),
       });
 
-      console.log("Pay invoice:", result.response.boltz_invoice);
+      console.log("Pay invoice:", result.response.bolt11_invoice);
       // ... "lnbc1m1p..."
       console.log("You will receive:", result.response.target_amount, to.split("_")[0].toUpperCase());
       // ... 48.25 "USDC"
@@ -414,7 +414,7 @@ export async function createSwap(
       targetAmount = result.response.target_amount;
       targetDecimals = 8; // Response is in smallest units
       targetSymbol = to.replace(/_.*$/, "").toUpperCase();
-      paymentInfo = `Pay this Lightning Invoice:\n  ${result.response.boltz_invoice}`;
+      paymentInfo = `Pay this Lightning Invoice:\n  ${result.response.bolt11_invoice}`;
 
     } else if (swapType === "arkade") {
       const tokenInfo = EVM_TOKEN_MAP[to];
@@ -550,7 +550,7 @@ async function _exampleLightningToEvm(client: Client) {
     amountIn: 100000, // 100k sats to send
   });
 
-  console.log("Pay invoice:", result.response.boltz_invoice);
+  console.log("Pay invoice:", result.response.bolt11_invoice);
   // ... "lnbc1m1p..."
   console.log("Swap ID:", result.response.id);
   // ... "550e8400-e29b-41d4-a716-446655440000"
@@ -566,7 +566,7 @@ async function _exampleLightningToEvmByTarget(client: Client) {
     amountOut: 50_000_000, // Receive exactly 50 USDC (6 decimals)
   });
 
-  console.log("Pay invoice:", result.response.boltz_invoice);
+  console.log("Pay invoice:", result.response.bolt11_invoice);
   // ... "lnbc500u1p..."
   console.log("Swap ID:", result.response.id);
   // ... "550e8400-e29b-41d4-a716-446655440000"
@@ -583,7 +583,7 @@ async function _exampleLightningToEvmCompleteFlow(client: Client) {
     amountIn: 100000, // 100k sats
   });
 
-  console.log("Pay invoice:", result.response.boltz_invoice);
+  console.log("Pay invoice:", result.response.bolt11_invoice);
   // ... "lnbc1m1p..."
 
   // 2. Poll for status

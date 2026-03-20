@@ -17,7 +17,7 @@ async function main() {
       amountIn: 10000,
     });
     console.log("Swap created:", result.response.id);
-    console.log("Invoice:", result.response.boltz_invoice);
+    console.log("Invoice:", result.response.bolt11_invoice);
   } catch (e) {
     console.error("Error:", e);
   }

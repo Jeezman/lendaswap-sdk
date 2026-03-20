@@ -35,7 +35,7 @@ import type {
  *   },
  *   { apiClient, deriveSwapParams, storeSwap }
  * );
- * console.log("Pay this invoice:", result.response.boltz_invoice);
+ * console.log("Pay this invoice:", result.response.bolt11_invoice);
  * ```
  */
 export async function createLightningToArkadeSwap(

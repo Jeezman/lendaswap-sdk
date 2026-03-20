@@ -155,9 +155,9 @@ function printPendingDetails(swap: GetSwapResponse): void {
   console.log("");
 
   if (swap.direction === "lightning_to_evm") {
-    if ("boltz_invoice" in swap && swap.boltz_invoice) {
+    if ("bolt11_invoice" in swap && swap.bolt11_invoice) {
       console.log("Pay this Lightning Invoice:");
-      console.log(`  ${swap.boltz_invoice}`);
+      console.log(`  ${swap.bolt11_invoice}`);
     }
   } else if (swap.direction === "btc_to_arkade" || swap.direction === "arkade_to_evm") {
     if ("btc_vhtlc_address" in swap && swap.btc_vhtlc_address) {

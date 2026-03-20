@@ -2,8 +2,13 @@
  * Lightning → USDC on Polygon: end-to-end example.
  */
 
-import { BTC_LIGHTNING, Client, type TokenInfo } from "../src";
-import { InMemorySwapStorage, InMemoryWalletStorage } from "../src";
+import {
+  BTC_LIGHTNING,
+  Client,
+  InMemorySwapStorage,
+  InMemoryWalletStorage,
+  type TokenInfo,
+} from "../src";
 
 const BTC_LIGHTNING_INFO: TokenInfo = {
   token_id: BTC_LIGHTNING,
@@ -41,13 +46,13 @@ const result = await client.createSwap({
 });
 
 const { response } = result;
-if (!("boltz_invoice" in response)) {
+if (!("bolt11_invoice" in response)) {
   throw new Error("Expected Lightning swap response");
 }
 // #endregion create-swap
 
 // #region pay-invoice
-console.log("Pay invoice:", response.boltz_invoice);
+console.log("Pay invoice:", response.bolt11_invoice);
 // #endregion pay-invoice
 
 // ... "lnbc1m1p..."

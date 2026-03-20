@@ -537,9 +537,122 @@ export interface paths {
         put?: never;
         /**
          * Claims an EVM-targeted swap gaslessly via the HTLCCoordinator contract.
-         * @description Supports both Arkade-to-EVM and Bitcoin-to-EVM swaps. The server submits
+         * @description Supports Arkade-to-EVM, Lightning and Bitcoin-to-EVM swaps. The server submits
          *     `coordinator.redeemAndExecute` on the client's behalf, using the client's
          *     EIP-712 signature and secret.
+         *
+         *     # Prerequisites — what the client must do before calling this endpoint
+         *
+         *     1. **Create a swap** via one of the swap endpoints (e.g. `POST /swap/arkade/evm`). Wait for the
+         *        swap status to reach `ServerFunded`.
+         *
+         *     2. **Fetch calldata** via [`GET
+         *        /swap/{id}/redeem-and-swap-calldata`](#/redeem-and-swap-calldata/get_dex_calldata). This
+         *        returns:
+         *        - `dex_calldata` — DEX swap calldata (only for non-WBTC targets)
+         *        - `gasless_fee_sats` — the fee deducted from the HTLC amount
+         *        - `calls_hash` — `keccak256(abi.encode(calls))`, must be included in the signature
+         *
+         *     3. **Construct the EIP-712 signature** over the `Redeem` struct:
+         *
+         *        **Domain:**
+         *        ```text
+         *        EIP712Domain(string name, string version, uint256 chainId, address verifyingContract)
+         *        name            = "HTLCErc20"
+         *        version         = "3"
+         *        chainId         = <target EVM chain ID>
+         *        verifyingContract = <HTLCErc20 contract address (swap.evm_htlc_address)>
+         *        ```
+         *
+         *        **Struct:**
+         *        ```text
+         *        Redeem(
+         *            bytes32 preimage,       // the swap secret
+         *            uint256 amount,         // WBTC amount in the HTLC (in sats)
+         *            address token,          // WBTC token address
+         *            address sender,         // server's EVM address
+         *            uint256 timelock,       // HTLC refund locktime
+         *            address caller,         // HTLCCoordinator contract address
+         *            address destination,    // where output tokens go
+         *            address sweepToken,     // target token (or WBTC if direct)
+         *            uint256 minAmountOut,   // slippage protection (0 for now)
+         *            bytes32 callsHash       // from step 2
+         *        )
+         *        ```
+         *
+         *        The final digest is: `keccak256(\x19\x01 || domainSeparator || structHash)`
+         *
+         *        Sign this digest with the client's EVM private key (secp256k1) to obtain
+         *        `v`, `r`, `s`.
+         *
+         *        **JavaScript example (using ethers v6):**
+         *
+         *        ```javascript
+         *        import { ethers } from "ethers";
+         *
+         *        // 1. Fetch calldata (returns calls_hash + optional dex_calldata)
+         *        const { calls_hash, dex_calldata, gasless_fee_sats } = await fetch(
+         *          `${baseUrl}/swap/${swapId}/redeem-and-swap-calldata?destination=${destination}`
+         *        ).then(r => r.json());
+         *
+         *        // 2. Determine sweepToken
+         *        const needsDexSwap = targetTokenAddress.toLowerCase() !== wbtcAddress.toLowerCase();
+         *        const sweepToken = needsDexSwap ? targetTokenAddress : wbtcAddress;
+         *
+         *        // 3. Build EIP-712 typed data and sign
+         *        const wallet = new ethers.Wallet(privateKey);
+         *
+         *        const domain = {
+         *          name: "HTLCErc20",
+         *          version: "3",
+         *          chainId: swap.evm_chain_id,               // e.g. 42161 for Arbitrum
+         *          verifyingContract: swap.evm_htlc_address,  // HTLCErc20 contract
+         *        };
+         *
+         *        const types = {
+         *          Redeem: [
+         *            { name: "preimage",     type: "bytes32" },
+         *            { name: "amount",       type: "uint256" },
+         *            { name: "token",        type: "address" },
+         *            { name: "sender",       type: "address" },
+         *            { name: "timelock",     type: "uint256" },
+         *            { name: "caller",       type: "address" },
+         *            { name: "destination",  type: "address" },
+         *            { name: "sweepToken",   type: "address" },
+         *            { name: "minAmountOut", type: "uint256" },
+         *            { name: "callsHash",   type: "bytes32" },
+         *          ],
+         *        };
+         *
+         *        const message = {
+         *          preimage:     secret,                        // 0x-prefixed 32-byte hex
+         *          amount:       swap.evm_expected_sats,        // WBTC sats locked in HTLC
+         *          token:        wbtcAddress,                   // WBTC on the target chain
+         *          sender:       swap.server_evm_address,       // server (HTLC creator)
+         *          timelock:     swap.evm_refund_locktime,      // HTLC expiry timestamp
+         *          caller:       swap.evm_coordinator_address,  // HTLCCoordinator contract
+         *          destination:  destination,                   // where output tokens go
+         *          sweepToken:   sweepToken,
+         *          minAmountOut: 0,                             // no slippage check for now
+         *          callsHash:    calls_hash,                    // from step 1
+         *        };
+         *
+         *        const sig = await wallet.signTypedData(domain, types, message);
+         *        const { v, r, s } = ethers.Signature.from(sig);
+         *
+         *        // 4. POST to claim-gasless
+         *        await fetch(`${baseUrl}/swap/${swapId}/claim-gasless`, {
+         *          method: "POST",
+         *          headers: { "Content-Type": "application/json" },
+         *          body: JSON.stringify({
+         *            secret, destination, v, r, s,
+         *            dex_calldata: needsDexSwap ? dex_calldata : undefined,
+         *          }),
+         *        });
+         *        ```
+         *
+         *     4. **POST** the request to this endpoint with the secret, destination, signature, and optionally
+         *        the `dex_calldata` from step 2.
          */
         post: operations["claim_via_gasless"];
         delete?: never;
@@ -1106,38 +1219,6 @@ export interface components {
              */
             vhtlc_refund_locktime: number;
         };
-        /** @description BTC → EVM swap response */
-        BtcToEvmSwapResponse: components["schemas"]["SwapCommonFields"] & {
-            /** @description Bitcoin HTLC claim transaction ID */
-            bitcoin_htlc_claim_txid?: string | null;
-            /** @description Bitcoin HTLC fund transaction ID */
-            bitcoin_htlc_fund_txid?: string | null;
-            /** @description EVM HTLC claim transaction ID */
-            evm_htlc_claim_txid?: string | null;
-            /** @description EVM HTLC fund transaction ID */
-            evm_htlc_fund_txid?: string | null;
-            /** @description Arkade VHTLC address */
-            htlc_address_arkade: string;
-            /** @description EVM HTLC contract address */
-            htlc_address_evm: string;
-            /** @description Lightning invoice for payment */
-            ln_invoice: string;
-            /**
-             * Format: int64
-             * @description The amount of satoshis we expect to receive
-             *     Deprecated: please use [`source_amount`]
-             */
-            sats_receive: number;
-            /** @description Amount user must send in satoshis */
-            source_amount: string;
-            /**
-             * Format: double
-             * @description Amount the user will receive of the target asset
-             */
-            target_amount: number;
-            /** @description User's EVM address to receive tokens */
-            user_address_evm: string;
-        };
         /** @description A single call in the coordinator's Call[] array. */
         CallJson: {
             call_data: string;
@@ -1150,6 +1231,44 @@ export interface components {
          * @enum {string}
          */
         Chain: "Arkade" | "Lightning" | "Bitcoin" | "137" | "1" | "42161";
+        /**
+         * @description Request body for `POST /swap/{id}/claim-gasless`.
+         *
+         *     The client provides the HTLC preimage (secret) and an EIP-712 signature
+         *     authorising the server to call `redeemAndExecute` on the coordinator
+         *     contract on the client's behalf.
+         *
+         *     # Examples
+         *
+         *     Minimal request (WBTC-direct target, no DEX swap):
+         *
+         *     ```
+         *     let request = serde_json::json!({
+         *         "secret": "0x0101010101010101010101010101010101010101010101010101010101010101",
+         *         "destination": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+         *         "v": 27,
+         *         "r": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+         *         "s": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+         *     });
+         *     ```
+         *
+         *     Request with DEX calldata (non-WBTC target, e.g. USDC):
+         *
+         *     ```
+         *     let request = serde_json::json!({
+         *         "secret": "0x0101010101010101010101010101010101010101010101010101010101010101",
+         *         "destination": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+         *         "v": 28,
+         *         "r": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+         *         "s": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+         *         "dex_calldata": {
+         *             "to": "0x1111111254EEB25477B68fb85Ed929f73A960582",
+         *             "data": "0xabcdef0123456789",
+         *             "value": "0"
+         *         }
+         *     });
+         *     ```
+         */
         ClaimGaslessRequest: {
             /** @description EVM address where tokens should be sent */
             destination: string;
@@ -1564,52 +1683,6 @@ export interface components {
             /** @description WBTC token contract address on the EVM chain */
             wbtc_address: string;
         };
-        /** @description EVM → BTC swap response */
-        EvmToBtcSwapResponse: components["schemas"]["SwapCommonFields"] & {
-            /** @description Token approval transaction hash */
-            approve_tx?: string | null;
-            /** @description Bitcoin HTLC claim transaction ID */
-            bitcoin_htlc_claim_txid?: string | null;
-            /** @description Bitcoin HTLC fund transaction ID */
-            bitcoin_htlc_fund_txid?: string | null;
-            /** @description Create swap transaction hash */
-            create_swap_tx?: string | null;
-            /** @description EVM HTLC claim transaction ID */
-            evm_htlc_claim_txid?: string | null;
-            /** @description EVM HTLC fund transaction ID */
-            evm_htlc_fund_txid?: string | null;
-            /** @description Gelato forwarder contract address */
-            gelato_forwarder_address?: string | null;
-            /** @description Gelato user deadline timestamp */
-            gelato_user_deadline?: string | null;
-            /** @description Gelato user nonce for replay protection */
-            gelato_user_nonce?: string | null;
-            /** @description Arkade VHTLC address */
-            htlc_address_arkade: string;
-            /** @description EVM HTLC contract address */
-            htlc_address_evm: string;
-            /** @description Lightning invoice for payment */
-            ln_invoice: string;
-            /**
-             * Format: int64
-             * @description Net satoshis user will receive
-             *     Deprecated: please use [`target_amount`]
-             */
-            sats_receive: number;
-            /**
-             * Format: double
-             * @description Amount user must send of the source asset
-             */
-            source_amount: number;
-            /** @description ERC20 token address for approve target */
-            source_token_address: string;
-            /** @description Amount the user will receive in sats */
-            target_amount: string;
-            /** @description User's Arkade address to receive BTC (optional) */
-            user_address_arkade?: string | null;
-            /** @description User's EVM address sending tokens */
-            user_address_evm: string;
-        };
         /**
          * @description Request to create an EVM-to-Lightning swap.
          *
@@ -1795,6 +1868,11 @@ export interface components {
             /** @description Arkade VHTLC address (server creates, user claims) */
             arkade_vhtlc_address: string;
             /** @description Lightning invoice to pay */
+            bolt11_invoice: string;
+            /**
+             * @description Lightning invoice to pay
+             *     DEPRECATED use [`boltz_invoice`] instead
+             */
             boltz_invoice: string;
             /** @description Boltz swap ID */
             boltz_swap_id: string;
@@ -1893,6 +1971,11 @@ export interface components {
         LightningToEvmSwapResponse: {
             arkade_server_pk: string;
             /** @description Lightning invoice to pay */
+            bolt11_invoice: string;
+            /**
+             * @description Lightning invoice to pay
+             *     DEPRECATED: use [`bolt11_invoice`] instead
+             */
             boltz_invoice: string;
             /** @description Boltz swap ID */
             boltz_swap_id: string;
@@ -1950,38 +2033,6 @@ export interface components {
              * @description The tip block height when MTP was last calculated.
              */
             tip_height: number;
-        };
-        PriceTiers: {
-            /**
-             * Format: double
-             * @description Price per BTC when swapping 1 unit of the quote asset
-             */
-            tier_1: number;
-            /**
-             * Format: double
-             * @description Price per BTC when swapping 100 units of the quote asset
-             */
-            tier_100: number;
-            /**
-             * Format: double
-             * @description Price per BTC when swapping 1,000 units of the quote asset
-             */
-            tier_1000: number;
-            /**
-             * Format: double
-             * @description Price per BTC when swapping 5,000 units of the quote asset
-             */
-            tier_5000: number;
-        };
-        /** @description WebSocket message containing tiered prices for all trading pairs */
-        PriceUpdateMessage: {
-            /** @description List of trading pairs with their tiered prices */
-            pairs: components["schemas"]["TradingPairPrices"][];
-            /**
-             * Format: int64
-             * @description Unix timestamp in seconds
-             */
-            timestamp: number;
         };
         QuoteResponse: {
             /** @description Exchange rate: how much of the EVM token you get/pay per BTC */
@@ -2104,68 +2155,6 @@ export interface components {
         SupportAgentsResponse: {
             agents: components["schemas"]["SupportAgentInfo"][];
         };
-        /** @description Common fields shared across all swap directions */
-        SwapCommonFields: {
-            /**
-             * Format: double
-             * @description For evm-btc swaps, this is the source asset amount, for btc-evm swaps, this is the target
-             *     asset amount Deprecated
-             */
-            asset_amount: number;
-            /**
-             * Format: date-time
-             * @description Timestamp of when the swap was created
-             */
-            created_at: string;
-            /**
-             * Format: int32
-             * @description Timestamp past which refund is permitted on the EVM chain
-             */
-            evm_refund_locktime: number;
-            /**
-             * Format: int64
-             * @description Protocol fee amount in satoshis
-             */
-            fee_sats: number;
-            /** @description Hash lock for the HTLC (32-byte hex string with 0x prefix) */
-            hash_lock: string;
-            /** @description Unique swap identifier */
-            id: string;
-            /** @description Bitcoin network (e.g., "signet", "mainnet") */
-            network: string;
-            /** @description Lendaswap's public key */
-            receiver_pk: string;
-            /** @description Client's public key (refund_pk or claim_pk) */
-            sender_pk: string;
-            /** @description Arkade server's public key */
-            server_pk: string;
-            /** @description Token being sent (source) */
-            source_token: components["schemas"]["TokenId"];
-            /** @description Current status of the swap */
-            status: components["schemas"]["SwapStatus"];
-            /** @description Token being received (target) */
-            target_token: components["schemas"]["TokenId"];
-            /**
-             * Format: int64
-             * @description Relative timelock for claim in seconds
-             */
-            unilateral_claim_delay: number;
-            /**
-             * Format: int64
-             * @description Relative timelock for refund in seconds
-             */
-            unilateral_refund_delay: number;
-            /**
-             * Format: int64
-             * @description Relative timelock for refund without receiver in seconds
-             */
-            unilateral_refund_without_receiver_delay: number;
-            /**
-             * Format: int32
-             * @description Timestamp past which refund is permitted on Arkade
-             */
-            vhtlc_refund_locktime: number;
-        };
         /**
          * @description Atomic swap state machine for BTC --> Target Asset swaps using HTLCs.
          *
@@ -2220,17 +2209,6 @@ export interface components {
         TokenInfos: {
             btc_tokens: components["schemas"]["TokenInfo"][];
             evm_tokens: components["schemas"]["TokenInfo"][];
-        };
-        TradingPairPrices: {
-            /**
-             * @description Trading pair identifier (e.g., "USDC_POL-BTC" or "USDT0_POL-BTC")
-             *     kept for backwards compatibility, equals [`source`]-[`target`]
-             */
-            pair: string;
-            source: components["schemas"]["TokenId"];
-            target: components["schemas"]["TokenId"];
-            /** @description Price tiers for different swap amounts */
-            tiers: components["schemas"]["PriceTiers"];
         };
         Version: {
             commit_hash: string;

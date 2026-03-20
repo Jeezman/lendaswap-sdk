@@ -94,7 +94,7 @@ const result = await client.createLightningToEvmSwapGeneric({
 });
 
 // Pay the Lightning invoice to complete the swap
-console.log(`Pay this invoice: ${result.response.boltz_invoice}`);
+console.log(`Pay this invoice: ${result.response.bolt11_invoice}`);
 console.log(`Swap ID: ${result.response.id}`);
 ```
 
