@@ -34,8 +34,9 @@ const tokens = await client.getTokens();
 const usdcPolygon = tokens.evm_tokens.find(
   (t) => t.symbol === "USDC" && t.chain === "137",
 );
-if (!usdcPolygon) throw new Error("USDC on Polygon not found");
 // #endregion find-target-token
+
+if (!usdcPolygon) throw new Error("USDC on Polygon not found");
 
 // #region create-swap
 const result = await client.createSwap({
@@ -46,10 +47,11 @@ const result = await client.createSwap({
 });
 
 const { response } = result;
+// #endregion create-swap
+
 if (!("bolt11_invoice" in response)) {
   throw new Error("Expected Lightning swap response");
 }
-// #endregion create-swap
 
 // #region pay-invoice
 console.log("Pay invoice:", response.bolt11_invoice);
