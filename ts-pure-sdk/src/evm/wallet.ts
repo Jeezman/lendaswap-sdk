@@ -34,9 +34,9 @@ export interface EIP712TypedData {
  *   chainId: walletClient.chain.id,
  *   signTypedData: (td) => walletClient.signTypedData({ ...td, account: walletClient.account }),
  *   sendTransaction: (tx) => walletClient.sendTransaction({ to: tx.to, data: tx.data, chain, gas: tx.gas }),
- *   call: (tx) => publicClient.call({ to: tx.to, data: tx.data, account: tx.from, blockNumber: tx.blockNumber }),
- *   getTransactionReceipt: (hash) => publicClient.getTransactionReceipt({ hash }),
+ *   waitForReceipt: (hash) => publicClient.waitForTransactionReceipt({ hash }),
  *   getTransaction: (hash) => publicClient.getTransaction({ hash }),
+ *   call: (tx) => publicClient.call({ to: tx.to, data: tx.data, account: tx.from, blockNumber: tx.blockNumber }),
  * };
  * ```
  */
@@ -62,10 +62,13 @@ export interface EvmSigner {
   }): Promise<string>;
 
   /**
-   * Get the receipt for a mined transaction.
-   * Must throw or return null if the transaction hasn't been mined yet.
+   * Wait for a transaction to be mined and return the receipt.
+   *
+   * The implementation should handle transaction replacements (speed-up /
+   * cancel) — e.g. viem's `waitForTransactionReceipt` and ethers'
+   * `provider.waitForTransaction` both do this automatically.
    */
-  getTransactionReceipt(hash: string): Promise<TxReceipt | null>;
+  waitForReceipt(hash: string): Promise<TxReceipt>;
 
   /**
    * Get a transaction by hash (used to replay reverted txs for error extraction).
@@ -189,29 +192,6 @@ export async function simulateTransaction(
     const reason = match?.[1]?.trim() ?? msg;
     throw new Error(`${label} would revert: ${reason}`);
   }
-}
-
-// ── Poll for receipt ─────────────────────────────────────────────────────────
-
-/**
- * Poll for a transaction receipt until it is mined or a timeout is reached.
- */
-export async function pollForReceipt(
-  signer: EvmSigner,
-  hash: string,
-  timeoutMs = 60_000,
-): Promise<TxReceipt> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    try {
-      const receipt = await signer.getTransactionReceipt(hash);
-      if (receipt?.status != null) return receipt;
-    } catch {
-      // not mined yet — retry
-    }
-    await new Promise((r) => setTimeout(r, 1_000));
-  }
-  throw new Error("Timed out waiting for transaction receipt");
 }
 
 // ── Revert reason extraction ─────────────────────────────────────────────────

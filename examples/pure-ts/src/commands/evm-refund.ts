@@ -150,8 +150,8 @@ export async function evmRefundSwap(
         account: evmWallet.account,
         gas: tx.gas,
       }),
-    getTransactionReceipt: async (hash) => {
-      const r = await evmWallet.publicClient.getTransactionReceipt({ hash: hash as `0x${string}` });
+    waitForReceipt: async (hash) => {
+      const r = await evmWallet.publicClient.waitForTransactionReceipt({ hash: hash as `0x${string}` });
       return { status: r.status, blockNumber: r.blockNumber, transactionHash: r.transactionHash };
     },
     getTransaction: async (hash) => {

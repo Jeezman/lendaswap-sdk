@@ -73,7 +73,6 @@ import {
   encodeMaxApproveData,
   getRevertReason,
   parseSignature,
-  pollForReceipt,
   simulateTransaction,
 } from "./evm/wallet.js";
 import {
@@ -3865,7 +3864,7 @@ export class Client {
         gas: 100_000n,
       });
 
-      const approveReceipt = await pollForReceipt(signer, approveTxHash);
+      const approveReceipt = await signer.waitForReceipt(approveTxHash);
       if (approveReceipt.status !== "success") {
         const reason = await getRevertReason(
           signer,
@@ -3914,7 +3913,7 @@ export class Client {
     });
 
     // 9. Wait for receipt
-    const receipt = await pollForReceipt(signer, txHash);
+    const receipt = await signer.waitForReceipt(txHash);
     if (receipt.status !== "success") {
       const reason = await getRevertReason(signer, txHash, receipt.blockNumber);
       throw new Error(`Funding transaction failed: ${reason}`);
@@ -3972,7 +3971,7 @@ export class Client {
       gas: 500_000n,
     });
 
-    const receipt = await pollForReceipt(signer, txHash);
+    const receipt = await signer.waitForReceipt(txHash);
     if (receipt.status !== "success") {
       const reason = await getRevertReason(signer, txHash, receipt.blockNumber);
       throw new Error(`Refund transaction reverted: ${reason}`);

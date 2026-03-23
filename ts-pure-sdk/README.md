@@ -142,8 +142,8 @@ const signer: EvmSigner = {
     walletClient.signTypedData({...td, account: walletClient.account}),
   sendTransaction: (tx) =>
     walletClient.sendTransaction({to: tx.to, data: tx.data, chain, gas: tx.gas}),
-  getTransactionReceipt: (hash) =>
-    publicClient.getTransactionReceipt({hash}).then((r) => ({
+  waitForReceipt: (hash) =>
+    publicClient.waitForTransactionReceipt({hash}).then((r) => ({
       status: r.status,
       blockNumber: r.blockNumber,
       transactionHash: r.transactionHash,
@@ -169,13 +169,12 @@ const signer: EvmSigner = {
   sendTransaction: (tx) =>
     wallet.sendTransaction({to: tx.to, data: tx.data, gasLimit: tx.gas})
       .then((r) => r.hash),
-  getTransactionReceipt: (hash) =>
-    wallet.provider.getTransactionReceipt(hash).then((r) =>
-      r ? {
-        status: r.status === 1 ? "success" : "reverted",
-        blockNumber: BigInt(r.blockNumber),
-        transactionHash: r.hash
-      } : null
+  waitForReceipt: (hash) =>
+    wallet.provider.waitForTransaction(hash).then((r) => ({
+      status: r.status === 1 ? "success" : "reverted",
+      blockNumber: BigInt(r.blockNumber),
+      transactionHash: r.hash,
+    })
     ),
   getTransaction: (hash) =>
     wallet.provider.getTransaction(hash).then((tx) => ({

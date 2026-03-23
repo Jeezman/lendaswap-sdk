@@ -107,8 +107,8 @@ export async function evmFundSwap(
         account: evmWallet.account,
         gas: tx.gas,
       }),
-    getTransactionReceipt: async (hash) => {
-      const receipt = await evmWallet.publicClient.getTransactionReceipt({
+    waitForReceipt: async (hash) => {
+      const receipt = await evmWallet.publicClient.waitForTransactionReceipt({
         hash: hash as `0x${string}`,
       });
       return {
