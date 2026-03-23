@@ -1,26 +1,16 @@
 /**
  * USDT on Polygon → Lightning: end-to-end example (non-gasless).
  *
- * The user signs a Permit2 message with their browser wallet and
- * submits the funding transaction themselves via `fundSwap`.
+ * The user submits the funding transaction via `fundSwap`.
  */
 
 import {
-  BTC_LIGHTNING,
+  Asset,
   Client,
   type EvmSigner,
   InMemorySwapStorage,
   InMemoryWalletStorage,
-  type TokenInfo,
 } from "../src";
-
-const BTC_LIGHTNING_INFO: TokenInfo = {
-  token_id: BTC_LIGHTNING,
-  symbol: "BTC",
-  name: "Bitcoin (Lightning)",
-  decimals: 8,
-  chain: "Lightning",
-};
 
 // #region evm-to-lightning-setup
 const client = await Client.builder()
@@ -32,19 +22,10 @@ const client = await Client.builder()
 
 const lightningInvoice = "lnbc1m1p..."; // Your BOLT11 invoice
 
-// #region find-source-token
-const tokens = await client.getTokens();
-const usdtPolygon = tokens.evm_tokens.find(
-  (t) => t.symbol === "USDT" && t.chain === "137",
-);
-// #endregion find-source-token
-
-if (!usdtPolygon) throw new Error("USDT on Polygon not found");
-
 // #region create-swap
 const result = await client.createSwap({
-  sourceAsset: usdtPolygon,
-  targetAsset: BTC_LIGHTNING_INFO,
+  source: Asset.USDT_POLYGON,
+  target: Asset.BTC_LIGHTNING,
   targetAddress: lightningInvoice,
 });
 
@@ -57,7 +38,7 @@ if (!("evm_htlc_address" in response)) {
 
 console.log("Swap ID:", response.id);
 // ... "550e8400-e29b-41d4-a716-446655440000"
-console.log("Source amount:", response.source_amount, usdtPolygon.symbol);
+console.log("Source amount:", response.source_amount);
 
 // #region fund-swap
 // Build an EvmSigner from your wallet (wagmi/viem example):
@@ -69,7 +50,7 @@ console.log("Source amount:", response.source_amount, usdtPolygon.symbol);
 //   chainId: chain.id,
 //   signTypedData: (td) => walletClient.signTypedData({ ...td, account: walletClient.account }),
 //   sendTransaction: (tx) => walletClient.sendTransaction({ to: tx.to, data: tx.data, chain, gas: tx.gas }),
-//   getTransactionReceipt: (h) => publicClient.getTransactionReceipt({ hash: h }).then((r) => ({ status: r.status, blockNumber: r.blockNumber, transactionHash: r.transactionHash })),
+//   waitForReceipt: (h) => publicClient.waitForTransactionReceipt({ hash: h }).then((r) => ({ status: r.status, blockNumber: r.blockNumber, transactionHash: r.transactionHash })),
 //   getTransaction: (h) => publicClient.getTransaction({ hash: h }).then((tx) => ({ to: tx.to ?? null, input: tx.input, from: tx.from })),
 //   call: (tx) => publicClient.call({ to: tx.to, data: tx.data, account: tx.from, blockNumber: tx.blockNumber }).then((r) => r.data ?? "0x"),
 // };
@@ -100,7 +81,7 @@ if (swap.status === "expired") {
 const finalSwap = await client.getSwap(response.id);
 console.log("Final status:", finalSwap.status);
 // ... "clientredeemed"
-console.log("Source:", finalSwap.source_amount, usdtPolygon.symbol);
+console.log("Source:", finalSwap.source_amount, "USDT");
 console.log("Target:", finalSwap.target_amount, "sats");
 // ... "Target: 100000 sats"
 // #endregion verify-complete

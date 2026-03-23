@@ -6,8 +6,7 @@
  */
 
 import {
-  BTC_ARKADE_INFO,
-  BTC_ONCHAIN_INFO,
+  Asset,
   Client,
   InMemorySwapStorage,
   InMemoryWalletStorage,
@@ -26,8 +25,8 @@ const amountSats = 100_000; // 100,000 sats (0.001 BTC)
 
 // #region create-swap
 const result = await client.createSwap({
-  sourceAsset: BTC_ONCHAIN_INFO,
-  targetAsset: BTC_ARKADE_INFO,
+  source: Asset.BTC_ONCHAIN,
+  target: Asset.BTC_ARKADE,
   targetAddress: arkadeAddress,
   targetAmount: amountSats,
 });

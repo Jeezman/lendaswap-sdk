@@ -3,20 +3,11 @@
  */
 
 import {
-  BTC_LIGHTNING,
+  Asset,
   Client,
   InMemorySwapStorage,
   InMemoryWalletStorage,
-  type TokenInfo,
 } from "../src";
-
-const BTC_LIGHTNING_INFO: TokenInfo = {
-  token_id: BTC_LIGHTNING,
-  symbol: "BTC",
-  name: "Bitcoin (Lightning)",
-  decimals: 8,
-  chain: "Lightning",
-};
 
 // #region lightning-to-evm-setup
 const client = await Client.builder()
@@ -29,19 +20,10 @@ const client = await Client.builder()
 const destinationAddress = "0xYourPolygonAddress";
 const amountSats = 100_000;
 
-// #region find-target-token
-const tokens = await client.getTokens();
-const usdcPolygon = tokens.evm_tokens.find(
-  (t) => t.symbol === "USDC" && t.chain === "137",
-);
-// #endregion find-target-token
-
-if (!usdcPolygon) throw new Error("USDC on Polygon not found");
-
 // #region create-swap
 const result = await client.createSwap({
-  sourceAsset: BTC_LIGHTNING_INFO,
-  targetAsset: usdcPolygon,
+  source: Asset.BTC_LIGHTNING,
+  target: Asset.USDC_POLYGON,
   targetAddress: destinationAddress,
   sourceAmount: amountSats,
 });

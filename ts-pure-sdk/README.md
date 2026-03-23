@@ -16,18 +16,18 @@ This SDK supports the following swap directions:
 ### BTC to EVM
 
 | Source    | Target                      | Status    |
-| --------- | --------------------------- | --------- |
+|-----------|-----------------------------|-----------|
 | Lightning | Ethereum, Polygon, Arbitrum | Supported |
 | Arkade    | Ethereum, Polygon, Arbitrum | Supported |
 | On-chain  | Ethereum, Polygon, Arbitrum | Supported |
 
 ### EVM to BTC
 
-| Source                     | Target    | Status    |
-| -------------------------- | --------- | --------- |
-| Polygon, Arbitru, Ethereum | Arkade    | Supported |
-| Polygon, Arbitru, Ethereum | Lightning | Supported |
-| Polygon, Arbitru, Ethereum | On-chain  | Supported |
+| Source                      | Target    | Status    |
+|-----------------------------|-----------|-----------|
+| Polygon, Arbitrus, Ethereum | Arkade    | Supported |
+| Polygon, Arbitrus, Ethereum | Lightning | Supported |
+| Polygon, Arbitrus, Ethereum | On-chain  | Supported |
 
 **Refund support:**
 
@@ -60,22 +60,17 @@ const client = await Client.builder()
 const mnemonic = client.getMnemonic();
 ```
 
-### Tokens and Quotes
+### Quotes
 
 ```typescript
-// Fetch available tokens
-const tokens = await client.getTokens();
-// tokens.btc_tokens  — Lightning, Arkade, on-chain BTC
-// tokens.evm_tokens  — USDC, USDT, WBTC on Polygon/Arbitrum/Ethereum
+import { Asset } from "@lendasat/lendaswap-sdk-pure";
 
-// Get a quote (use token_id from the TokenInfo objects)
-const usdc = tokens.evm_tokens.find((t) => t.symbol === "USDC" && t.chain === "137")!;
 const quote = await client.getQuote({
-  sourceChain: "btc_arkade",
-  sourceToken: "btc",
-  targetChain: "137",                    // Polygon
-  targetToken: usdc.token_id,            // contract address, e.g. "0x3c499c..."
-  sourceAmount: 100_000,                 // sats
+  sourceChain: Asset.BTC_ARKADE.chain,      // "Arkade"
+  sourceToken: Asset.BTC_ARKADE.tokenId,    // "btc"
+  targetChain: Asset.USDC_POLYGON.chain,    // "137"
+  targetToken: Asset.USDC_POLYGON.tokenId,  // "0x3c499c..."
+  sourceAmount: 100_000,                    // sats
 });
 console.log(`You'll receive: ${quote.target_amount} USDC`);
 ```
@@ -86,21 +81,27 @@ Use `createSwap` for all swap directions. The SDK routes automatically based on 
 
 ```typescript
 // BTC → EVM: Arkade to USDC on Polygon
-const arkade = tokens.btc_tokens.find((t) => t.chain === "btc_arkade")!;
 const result = await client.createSwap({
-  sourceAsset: arkade,
-  targetAsset: usdc,             // from getTokens() above
+  source: Asset.BTC_ARKADE,
+  target: Asset.USDC_POLYGON,
   sourceAmount: 100_000,         // sats
   targetAddress: "0x...",        // your EVM address
 });
 
 // EVM → BTC: USDC on Polygon to Arkade
 const result = await client.createSwap({
-  sourceAsset: usdc,
-  targetAsset: arkade,
+  source: Asset.USDC_POLYGON,
+  target: Asset.BTC_ARKADE,
   sourceAmount: 10_000_000,      // 10 USDC (6 decimals)
   targetAddress: "ark1...",      // your Arkade address
   userAddress: "0x...",          // your EVM wallet address (required for EVM-sourced swaps)
+});
+
+// Or use any token by chain + contract address
+const result = await client.createSwap({
+  source: { chain: "42161", tokenId: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" }, // USDC on Arbitrum
+  target: Asset.BTC_LIGHTNING,
+  targetAddress: "lnbc...",      // BOLT11 invoice
 });
 
 const swapId = result.response.id;
@@ -171,10 +172,10 @@ const signer: EvmSigner = {
       .then((r) => r.hash),
   waitForReceipt: (hash) =>
     wallet.provider.waitForTransaction(hash).then((r) => ({
-      status: r.status === 1 ? "success" : "reverted",
-      blockNumber: BigInt(r.blockNumber),
-      transactionHash: r.hash,
-    })
+        status: r.status === 1 ? "success" : "reverted",
+        blockNumber: BigInt(r.blockNumber),
+        transactionHash: r.hash,
+      })
     ),
   getTransaction: (hash) =>
     wallet.provider.getTransaction(hash).then((tx) => ({
@@ -265,7 +266,7 @@ This will regenerate `src/generated/api.ts` with the updated types.
 ### Scripts
 
 | Command                | Description                            |
-| ---------------------- | -------------------------------------- |
+|------------------------|----------------------------------------|
 | `npm run build`        | Compile TypeScript to JavaScript       |
 | `npm run test`         | Run tests with Vitest                  |
 | `npm run lint`         | Run Biome linter                       |
