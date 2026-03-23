@@ -5,26 +5,8 @@
  * wants to recover their tokens from the HTLC contract.
  */
 
-import * as readline from "node:readline";
-import type { Client } from "@lendasat/lendaswap-sdk-pure";
+import type { Client, EvmSigner } from "@lendasat/lendaswap-sdk-pure";
 import { createEvmWallet, getChainFromToken } from "../evm/wallet.js";
-
-/**
- * Prompts the user for confirmation.
- */
-async function confirm(message: string): Promise<boolean> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
-  return new Promise((resolve) => {
-    rl.question(`${message} (y/N): `, (answer) => {
-      rl.close();
-      resolve(answer.toLowerCase() === "y");
-    });
-  });
-}
 
 export async function evmRefundSwap(
   client: Client,
@@ -146,38 +128,51 @@ export async function evmRefundSwap(
     console.log("⚠ Force mode: skipping client-side timelock check");
   }
 
-  // Create EVM wallet
+  // Create EVM wallet and build an EvmSigner
   const evmWallet = createEvmWallet(evmMnemonic, chainName);
   console.log(`EVM Wallet Address: ${evmWallet.address}`);
   console.log("");
 
-  // Confirm before sending
-  const confirmRefund = await confirm("Send refund transaction?");
-  if (!confirmRefund) {
-    console.log("Cancelled.");
-    return;
-  }
+  const signer: EvmSigner = {
+    address: evmWallet.address,
+    chainId: evmWallet.chain.id,
+    signTypedData: (td) =>
+      evmWallet.walletClient.signTypedData({
+        ...td,
+        domain: { ...td.domain, verifyingContract: td.domain.verifyingContract as `0x${string}` },
+        account: evmWallet.account,
+      }),
+    sendTransaction: (tx) =>
+      evmWallet.walletClient.sendTransaction({
+        to: tx.to as `0x${string}`,
+        data: tx.data as `0x${string}`,
+        chain: evmWallet.chain,
+        account: evmWallet.account,
+        gas: tx.gas,
+      }),
+    getTransactionReceipt: async (hash) => {
+      const r = await evmWallet.publicClient.getTransactionReceipt({ hash: hash as `0x${string}` });
+      return { status: r.status, blockNumber: r.blockNumber, transactionHash: r.transactionHash };
+    },
+    getTransaction: async (hash) => {
+      const tx = await evmWallet.publicClient.getTransaction({ hash: hash as `0x${string}` });
+      return { to: tx.to ?? null, input: tx.input, from: tx.from };
+    },
+    call: async (tx) => {
+      const r = await evmWallet.publicClient.call({
+        to: tx.to as `0x${string}`,
+        data: tx.data as `0x${string}`,
+        account: tx.from as `0x${string}` | undefined,
+        blockNumber: tx.blockNumber,
+      });
+      return r.data ?? "0x";
+    },
+  };
 
   try {
     console.log("Submitting refund transaction...");
 
-    const refundTxHash = await evmWallet.walletClient.sendTransaction({
-      to: refund.to as `0x${string}`,
-      data: refund.data as `0x${string}`,
-      chain: evmWallet.chain,
-      account: evmWallet.account,
-    });
-
-    console.log(`  Refund TX: ${refundTxHash}`);
-    console.log("  Waiting for confirmation...");
-
-    const receipt = await evmWallet.publicClient.waitForTransactionReceipt({
-      hash: refundTxHash,
-    });
-
-    if (receipt.status !== "success") {
-      throw new Error("Refund transaction failed");
-    }
+    const { txHash } = await client.refundEvmWithSigner(swapId, signer, mode);
     // #endregion refund-evm-htlc
 
     console.log("");
@@ -185,8 +180,7 @@ export async function evmRefundSwap(
     console.log("REFUND SUCCESSFUL!");
     console.log("=".repeat(60));
     console.log("");
-    console.log(`  Transaction: ${refundTxHash}`);
-    console.log(`  Block: ${receipt.blockNumber}`);
+    console.log(`  Transaction: ${txHash}`);
     console.log("");
     console.log("Your tokens have been returned to your wallet.");
 
