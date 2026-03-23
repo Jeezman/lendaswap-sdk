@@ -3067,13 +3067,31 @@ export class Client {
         : { chain: tgt.chain, token_id: tgt.tokenId };
 
     const sourceChain = sourceAsset.chain;
-    const targetChain = targetAsset.chain;
+    let targetChain = targetAsset.chain;
+    let tokenAddress = targetAsset.token_id;
+
+    // If the target is a bridge-only chain (e.g. USDC on Base), automatically
+    // remap to Arbitrum USDC for the DEX swap and populate bridgeParams so
+    // the backend knows to CCTP-bridge after. This keeps the remapping logic
+    // in one place — SDK consumers just pass their desired target.
+    let bridgeParams = options.bridgeParams;
+    if (!bridgeParams && isBridgeOnlyChain(targetChain)) {
+      const chainName = toChainName(targetChain as Chain);
+      if (chainName) {
+        bridgeParams = {
+          targetChain: chainName,
+          targetTokenAddress: USDC_ADDRESSES[chainName],
+        };
+        targetChain = "42161"; // Arbitrum
+        tokenAddress = USDC_ADDRESSES.Arbitrum;
+      }
+    }
 
     // Arkade → EVM
     if (isArkade(sourceAsset) && isEvmToken(targetChain)) {
       return this.createArkadeToEvmSwapGeneric({
         targetAddress: options.targetAddress,
-        tokenAddress: targetAsset.token_id,
+        tokenAddress,
         evmChainId: Number(targetChain),
         sourceAmount: options.sourceAmount
           ? BigInt(options.sourceAmount)
@@ -3082,7 +3100,7 @@ export class Client {
           ? BigInt(options.targetAmount)
           : undefined,
         referralCode: options.referralCode,
-        bridgeParams: options.bridgeParams,
+        bridgeParams,
       });
     }
 
@@ -3090,12 +3108,12 @@ export class Client {
     if (isLightning(sourceAsset) && isEvmToken(targetChain)) {
       return this.createLightningToEvmSwapGeneric({
         targetAddress: options.targetAddress,
-        tokenAddress: targetAsset.token_id,
+        tokenAddress,
         evmChainId: Number(targetChain),
         amountIn: options.sourceAmount,
         amountOut: options.targetAmount,
         referralCode: options.referralCode,
-        bridgeParams: options.bridgeParams,
+        bridgeParams,
       });
     }
 
@@ -3148,12 +3166,12 @@ export class Client {
     if (isBtcOnchain(sourceAsset) && isEvmToken(targetChain)) {
       return this.createBitcoinToEvmSwap({
         targetAddress: options.targetAddress,
-        tokenAddress: targetAsset.token_id,
+        tokenAddress,
         evmChainId: Number(targetChain),
         sourceAmount: options.sourceAmount,
         targetAmount: options.targetAmount,
         referralCode: options.referralCode,
-        bridgeParams: options.bridgeParams,
+        bridgeParams,
       });
     }
 
