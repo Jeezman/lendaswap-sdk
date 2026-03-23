@@ -15,28 +15,19 @@ This SDK supports the following swap directions:
 
 ### BTC to EVM
 
-| Source       | Target                      | Status    |
-| ------------ | --------------------------- | --------- |
-| Lightning    | Polygon (USDC, USDT)        | Supported |
-| Lightning    | Arbitrum (USDC, USDT)       | Supported |
-| Lightning    | Ethereum (USDC, USDT, WBTC) | Supported |
-| Arkade       | Polygon (USDC, USDT)        | Supported |
-| Arkade       | Arbitrum (USDC, USDT)       | Supported |
-| Arkade       | Ethereum (USDC, USDT, WBTC) | Supported |
-| On-chain BTC | Polygon (USDC, USDT)        | Supported |
-| On-chain BTC | Arbitrum (USDC, USDT)       | Supported |
-| On-chain BTC | Ethereum (USDC, USDT, WBTC) | Supported |
+| Source    | Target                      | Status    |
+| --------- | --------------------------- | --------- |
+| Lightning | Ethereum, Polygon, Arbitrum | Supported |
+| Arkade    | Ethereum, Polygon, Arbitrum | Supported |
+| On-chain  | Ethereum, Polygon, Arbitrum | Supported |
 
 ### EVM to BTC
 
-| Source                      | Target    | Status    |
-| --------------------------- | --------- | --------- |
-| Polygon (USDC, USDT)        | Arkade    | Supported |
-| Polygon (USDC, USDT)        | Lightning | Supported |
-| Arbitrum (USDC, USDT)       | Arkade    | Supported |
-| Arbitrum (USDC, USDT)       | Lightning | Supported |
-| Ethereum (USDC, USDT, WBTC) | Arkade    | Supported |
-| Ethereum (USDC, USDT, WBTC) | Lightning | Supported |
+| Source                     | Target    | Status    |
+| -------------------------- | --------- | --------- |
+| Polygon, Arbitru, Ethereum | Arkade    | Supported |
+| Polygon, Arbitru, Ethereum | Lightning | Supported |
+| Polygon, Arbitru, Ethereum | On-chain  | Supported |
 
 **Refund support:**
 
@@ -50,13 +41,12 @@ This SDK supports the following swap directions:
 ### Setup
 
 ```typescript
-import { Client, IdbWalletStorage, IdbSwapStorage } from "@lendasat/lendaswap-sdk-pure";
+import {Client, IdbWalletStorage, IdbSwapStorage} from "@lendasat/lendaswap-sdk-pure";
 
 // Create a client with persistent storage (browser)
 const client = await Client.builder()
   .withSignerStorage(new IdbWalletStorage())
   .withSwapStorage(new IdbSwapStorage())
-  .withApiKey("your-api-key")
   .build();
 
 // Or import an existing wallet
@@ -70,290 +60,178 @@ const client = await Client.builder()
 const mnemonic = client.getMnemonic();
 ```
 
-### Get a Quote
+### Tokens and Quotes
 
 ```typescript
-// Get available asset pairs
-const pairs = await client.getAssetPairs();
+// Fetch available tokens
+const tokens = await client.getTokens();
+// tokens.btc_tokens  — Lightning, Arkade, on-chain BTC
+// tokens.evm_tokens  — USDC, USDT, WBTC on Polygon/Arbitrum/Ethereum
 
-// Get a quote for swapping 100k sats to USDC on Polygon
-const quote = await client.getQuote("btc_arkade", "usdc_pol", 100000);
+// Get a quote (use token_id from the TokenInfo objects)
+const usdc = tokens.evm_tokens.find((t) => t.symbol === "USDC" && t.chain === "137")!;
+const quote = await client.getQuote({
+  sourceChain: "btc_arkade",
+  sourceToken: "btc",
+  targetChain: "137",                    // Polygon
+  targetToken: usdc.token_id,            // contract address, e.g. "0x3c499c..."
+  sourceAmount: 100_000,                 // sats
+});
 console.log(`You'll receive: ${quote.target_amount} USDC`);
 ```
 
 ### Create a Swap
 
-#### Lightning to EVM
+Use `createSwap` for all swap directions. The SDK routes automatically based on the source/target asset:
 
 ```typescript
-const result = await client.createLightningToEvmSwapGeneric({
-  targetAddress: "0x1234567890abcdef1234567890abcdef12345678",
-  tokenAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // USDC on Polygon
-  evmChainId: 137,             // 1 (Ethereum), 137 (Polygon), 42161 (Arbitrum)
-  amountIn: 100000,            // Amount in sats (or use amountOut for target amount)
+// BTC → EVM: Arkade to USDC on Polygon
+const arkade = tokens.btc_tokens.find((t) => t.chain === "btc_arkade")!;
+const result = await client.createSwap({
+  sourceAsset: arkade,
+  targetAsset: usdc,             // from getTokens() above
+  sourceAmount: 100_000,         // sats
+  targetAddress: "0x...",        // your EVM address
 });
 
-// Pay the Lightning invoice to complete the swap
-console.log(`Pay this invoice: ${result.response.bolt11_invoice}`);
-console.log(`Swap ID: ${result.response.id}`);
+// EVM → BTC: USDC on Polygon to Arkade
+const result = await client.createSwap({
+  sourceAsset: usdc,
+  targetAsset: arkade,
+  sourceAmount: 10_000_000,      // 10 USDC (6 decimals)
+  targetAddress: "ark1...",      // your Arkade address
+  userAddress: "0x...",          // your EVM wallet address (required for EVM-sourced swaps)
+});
+
+const swapId = result.response.id;
 ```
 
-#### Arkade to EVM
+### Fund EVM-Sourced Swaps
+
+EVM-sourced swaps need to be funded after creation. The SDK handles the full Permit2 flow (allowance check, ERC-20
+approval, EIP-712 signing, transaction submission) in a single call:
 
 ```typescript
-// Create an Arkade-to-EVM swap (any ERC-20 token via 1inch)
-const result = await client.createArkadeToEvmSwapGeneric({
-  targetAddress: "0x1234567890abcdef1234567890abcdef12345678",
-  tokenAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // USDC on Polygon
-  evmChainId: 137,
-  sourceAmount: 100000, // sats
-});
+// Fund with an external wallet
+const {txHash} = await client.fundSwap(swapId, signer);
 
-// Send BTC to the Arkade VHTLC address
-console.log(`Send BTC to: ${result.response.btc_vhtlc_address}`);
-console.log(`Swap ID: ${result.response.id}`);
-
-// Once the server has funded the EVM HTLC (status: "serverfunded"),
-// claim gaslessly — the server submits the tx on your behalf:
-const claimResult = await client.claimViaGasless(
-  result.response.id,
-  async (digest) => {
-    // Sign the EIP-712 digest with your EVM wallet
-    // e.g. using ethers.js: wallet.signMessage(ethers.getBytes(digest))
-    return { v: 27, r: "0x...", s: "0x..." };
-  },
-  "0x1234567890abcdef1234567890abcdef12345678", // destination
-);
-console.log(`Claimed! TX: ${claimResult.txHash}`);
+// Or fund gaslessly (SDK signs internally, server submits via relay)
+const {txHash} = await client.fundSwapGasless(swapId);
 ```
 
-#### On-chain BTC to EVM
+### The EvmSigner Interface
+
+`EvmSigner` is a minimal wallet abstraction. Implement it once for your stack — the SDK stays free of EVM library
+dependencies:
 
 ```typescript
-const result = await client.createBitcoinToEvmSwap({
-  targetAddress: "0x1234567890abcdef1234567890abcdef12345678",
-  tokenAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // USDC on Polygon
-  evmChainId: 137,
-  sourceAmount: 100000, // sats
-});
-
-// Send BTC to the on-chain HTLC address
-console.log(`Send BTC to: ${result.response.btc_htlc_address}`);
-console.log(`Swap ID: ${result.response.id}`);
+import type {EvmSigner} from "@lendasat/lendaswap-sdk-pure";
 ```
 
-#### EVM to Arkade
+**wagmi / viem:**
 
 ```typescript
-const result = await client.createEvmToArkadeSwapGeneric({
-  targetAddress: "ark1...",      // Your Arkade address
-  tokenAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // USDC on Polygon
-  evmChainId: 137,
-  userAddress: "0x...",          // Your EVM wallet address
-  sourceAmount: 100000000n,      // Amount in token's smallest unit (e.g., 6 decimals for USDC)
-});
+import {createPublicClient, http} from "viem";
 
-// Fund the EVM HTLC via coordinator
-console.log(`Swap ID: ${result.response.id}`);
+const publicClient = createPublicClient({chain, transport: http()});
+
+const signer: EvmSigner = {
+  address: walletClient.account.address,
+  chainId: chain.id,
+  signTypedData: (td) =>
+    walletClient.signTypedData({...td, account: walletClient.account}),
+  sendTransaction: (tx) =>
+    walletClient.sendTransaction({to: tx.to, data: tx.data, chain, gas: tx.gas}),
+  getTransactionReceipt: (hash) =>
+    publicClient.getTransactionReceipt({hash}).then((r) => ({
+      status: r.status,
+      blockNumber: r.blockNumber,
+      transactionHash: r.transactionHash,
+    })),
+  getTransaction: (hash) =>
+    publicClient.getTransaction({hash}).then((tx) => ({
+      to: tx.to ?? null, input: tx.input, from: tx.from,
+    })),
+  call: (tx) =>
+    publicClient.call({to: tx.to, data: tx.data, account: tx.from, blockNumber: tx.blockNumber})
+      .then((r) => r.data ?? "0x"),
+};
 ```
 
-#### EVM to Lightning
+**ethers.js v6:**
 
 ```typescript
-const result = await client.createEvmToLightningSwapGeneric({
-  lightningInvoice: "lnbc...",   // BOLT11 invoice (amount derived from invoice)
-  tokenAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // USDC on Polygon
-  evmChainId: 137,
-  userAddress: "0x...",          // Your EVM wallet address
-});
-
-// Fund the EVM HTLC via coordinator
-console.log(`Swap ID: ${result.response.id}`);
-```
-
-#### EVM to Bitcoin (on-chain)
-
-```typescript
-const result = await client.createEvmToBitcoinSwap({
-  tokenAddress: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", // USDC on Polygon
-  evmChainId: 137,
-  userAddress: "0x...",          // Your EVM wallet address
-  targetAddress: "bc1p...",      // Your BTC address
-  sourceAmount: 100000000n,      // Amount in token's smallest unit
-});
-
-// Fund the EVM HTLC, then redeem BTC once server funds the BTC HTLC
-console.log(`Swap ID: ${result.response.id}`);
+const signer: EvmSigner = {
+  address: await wallet.getAddress(),
+  chainId: Number((await wallet.provider.getNetwork()).chainId),
+  signTypedData: (td) =>
+    wallet.signTypedData(td.domain, td.types, td.message),
+  sendTransaction: (tx) =>
+    wallet.sendTransaction({to: tx.to, data: tx.data, gasLimit: tx.gas})
+      .then((r) => r.hash),
+  getTransactionReceipt: (hash) =>
+    wallet.provider.getTransactionReceipt(hash).then((r) =>
+      r ? {
+        status: r.status === 1 ? "success" : "reverted",
+        blockNumber: BigInt(r.blockNumber),
+        transactionHash: r.hash
+      } : null
+    ),
+  getTransaction: (hash) =>
+    wallet.provider.getTransaction(hash).then((tx) => ({
+      to: tx.to, input: tx.data, from: tx.from,
+    })),
+  call: (tx) =>
+    wallet.provider.call({to: tx.to, data: tx.data, from: tx.from, blockTag: tx.blockNumber}),
+};
 ```
 
 ### Monitor Swap Status
 
 ```typescript
-// Get current swap status
-const swap = await client.getSwap("swap-uuid");
+const swap = await client.getSwap(swapId);
 console.log(`Status: ${swap.status}`);
 
-// Status flow: pending -> clientfunded -> serverfunded -> clientredeemed -> serverredeemed
+// Status flow: pending → clientfunded → serverfunded → clientredeemed → serverredeemed
 ```
 
-### Claim EVM Tokens
+### Claim
 
-Once the server has funded the EVM HTLC (`serverfunded` status), claim your tokens:
+For BTC-to-EVM swaps, once the server has funded the EVM HTLC (`serverfunded`), claim your tokens:
 
 ```typescript
-// Gasless claim for Arkade-to-EVM swaps — the server submits the tx
-const claimResult = await client.claimViaGasless(
-  "swap-uuid",
-  async (digest) => {
-    // Sign the EIP-712 digest with your EVM wallet
-    return { v: 27, r: "0x...", s: "0x..." };
-  },
-  "0xYourDestinationAddress",
-);
-console.log(`Claim tx: ${claimResult.txHash}`);
-
-// For other swap types (Lightning/On-chain to EVM), use the existing claim:
-const result = await client.claim("swap-uuid");
+const result = await client.claim(swapId);
 ```
 
-### Refund (if swap times out)
+### Refund
+
+If a swap times out, refund your funds:
 
 ```typescript
-// For on-chain BTC swaps
-const refundResult = await client.refundSwap("swap-uuid", {
-  destinationAddress: "bc1q...",  // Your Bitcoin address
-  feeRateSatPerVb: 5,
+// BTC swaps (on-chain or Arkade)
+const result = await client.refundSwap(swapId, {
+  destinationAddress: "bc1q...",   // or "ark1..."
 });
 
-// For Arkade swaps
-const refundResult = await client.refundSwap("swap-uuid", {
-  destinationAddress: "ark1...",  // Your Arkade address
-});
+// EVM swaps — manual refund (after timelock expires, user pays gas)
+const {txHash} = await client.refundEvmWithSigner(swapId, signer, "direct");
+
+// EVM swaps — collaborative refund (instant, gasless, server cosigns)
+const {txHash} = await client.collabRefundEvmWithSigner(swapId, signer, "swap-back");
+
+// EVM swaps — collaborative refund for gasless swaps (SDK signs internally)
+const {txHash} = await client.collabRefundEvmSwap(swapId, "swap-back");
 ```
+
+Refund mode controls what token you receive:
+
+- `"direct"` — refund as WBTC (the HTLC lock token)
+- `"swap-back"` — refund as the original source token (e.g., USDC) via DEX swap
 
 ### Storage
 
 The SDK provides pluggable storage interfaces for persisting wallet and swap data.
 Browser storage uses [Dexie](https://dexie.org/) for IndexedDB access with the database name `lendaswap-v3`.
-
-**Storage Types:**
-
-- `WalletStorage` - Stores mnemonic and key derivation index
-- `SwapStorage` - Stores `StoredSwap` records (API response + client-side params)
-
-**StoredSwap Structure:**
-
-Each swap is stored with both the API response and client-side parameters needed for claim/refund operations:
-
-```typescript
-interface StoredSwap {
-  version: number;        // Schema version for migrations
-  swapId: string;         // Primary key
-  keyIndex: number;       // Key derivation index
-  response: GetSwapResponse;  // Full API response
-  publicKey: string;      // Hex-encoded compressed public key
-  preimage: string;       // Hex-encoded preimage for claiming HTLCs
-  preimageHash: string;   // Hex-encoded hash lock
-  secretKey: string;      // Hex-encoded secret key for signing
-  storedAt: number;       // Timestamp when first stored
-  updatedAt: number;      // Timestamp when last updated
-}
-```
-
-**Usage:**
-
-```typescript
-import {
-  InMemoryWalletStorage,
-  InMemorySwapStorage,
-  IdbWalletStorage,     // Browser only (IndexedDB via Dexie)
-  IdbSwapStorage,       // Browser only (IndexedDB via Dexie)
-  idbStorageFactory,    // Factory for creating IDB storage
-  inMemoryStorageFactory,
-  SWAP_STORAGE_VERSION,
-  type StoredSwap,
-} from "@lendasat/lendaswap-sdk-pure";
-
-// In-memory storage (for testing or temporary sessions)
-const walletStorage = new InMemoryWalletStorage();
-const swapStorage = new InMemorySwapStorage();
-
-// IndexedDB storage (for browser persistence)
-// Uses shared "lendaswap-v3" database with "wallet" and "swaps" tables
-const walletStorage = new IdbWalletStorage();
-const swapStorage = new IdbSwapStorage();
-
-// Store a swap
-await swapStorage.store({
-  version: SWAP_STORAGE_VERSION,
-  swapId: "uuid",
-  keyIndex: 0,
-  response: apiResponse,
-  publicKey: "02...",
-  preimage: "...",
-  preimageHash: "...",
-  secretKey: "...",
-  storedAt: Date.now(),
-  updatedAt: Date.now(),
-});
-
-// Update swap response (e.g., after polling for status)
-await swapStorage.update("uuid", newApiResponse);
-
-// Custom storage (implement the WalletStorage/SwapStorage interfaces)
-// For React Native, you might use AsyncStorage or SQLite
-```
-
-## Development
-
-### Project Structure
-
-```
-src/
-├── api/
-│   └── client.ts              # Low-level API client wrapper
-├── generated/
-│   └── api.ts                 # Auto-generated types from OpenAPI spec
-├── create/
-│   ├── index.ts               # Swap creation exports
-│   ├── types.ts               # Type definitions for swap creation
-│   ├── arkade.ts              # Arkade-to-EVM swap creation
-│   ├── bitcoin.ts             # Bitcoin-to-EVM swap creation
-│   ├── bitcoin-to-arkade.ts   # Bitcoin-to-Arkade swap creation
-│   ├── evm-to-arkade.ts       # EVM-to-Arkade swap creation
-│   ├── evm-to-bitcoin.ts      # EVM-to-Bitcoin swap creation
-│   ├── evm-to-lightning.ts    # EVM-to-Lightning swap creation
-│   └── lightning.ts           # Lightning-to-EVM swap creation
-├── redeem/
-│   ├── index.ts               # Claim/redeem operation exports
-│   ├── arkade.ts              # Arkade claim logic
-│   ├── ethereum.ts            # Ethereum claim logic
-│   └── gasless.ts             # Gasless claim logic
-├── refund/
-│   ├── index.ts               # Refund operation exports
-│   ├── arkade.ts              # Arkade refund logic
-│   └── onchain.ts             # On-chain refund logic
-├── evm/
-│   ├── index.ts               # EVM HTLC utilities
-│   ├── coordinator.ts         # Coordinator interaction
-│   ├── htlc.ts                # HTLC contract utilities
-│   └── signing.ts             # EVM signing utilities
-├── signer/
-│   └── index.ts               # HD wallet key derivation (BIP39/BIP32)
-├── storage/
-│   ├── index.ts               # Storage interfaces and in-memory implementations
-│   ├── idb.ts                 # IndexedDB storage for browsers
-│   ├── sqlite.ts              # SQLite storage for Node.js
-│   └── types.ts               # StoredSwap type definition
-├── client.ts                  # High-level Client class with convenience methods
-├── arkade.ts                  # Arkade VHTLC query utilities
-├── delegate.ts                # Delegate settlement utilities
-├── tokens.ts                  # Token helpers and constants
-├── usd-price.ts               # USD price fetching via CoinGecko
-├── price-calculations.ts      # Price calculation utilities
-├── node.ts                    # Node.js-specific exports (SQLite storage)
-└── index.ts                   # Public exports
-```
 
 ### Auto-generated API Types
 
@@ -402,11 +280,3 @@ When adding new functionality:
 1. **API methods**: Add convenience methods to `src/client.ts` that wrap the low-level API calls
 2. **New types**: If the backend adds new endpoints, regenerate the API types first
 3. **Exports**: Update `src/index.ts` to export any new public types or classes
-
-### Dependencies
-
-- `openapi-fetch` - Type-safe HTTP client for OpenAPI specs
-- `@noble/hashes` - Cryptographic hash functions
-- `@scure/bip32` - BIP32 HD wallet derivation
-- `@scure/bip39` - BIP39 mnemonic phrase handling
-- `dexie` - IndexedDB wrapper for browser storage
