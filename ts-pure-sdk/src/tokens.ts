@@ -249,20 +249,7 @@ export function toChain(str: string): Chain {
 }
 
 export function toChainName(chain: Chain): string {
-  // Known source chains
-  switch (chain) {
-    case "1":
-      return "Ethereum";
-    case "137":
-      return "Polygon";
-    case "42161":
-      return "Arbitrum";
-  }
-  // Look up by chain ID
-  if (CHAIN_ID_TO_NAME[chain]) {
-    return CHAIN_ID_TO_NAME[chain];
-  }
-  return chain.toString();
+  return CHAIN_ID_TO_NAME[chain] ?? chain.toString();
 }
 
 /**
