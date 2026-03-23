@@ -66,6 +66,15 @@ import {
   type UnsignedPermit2FundingData,
 } from "./evm";
 import {
+  decodeUint256,
+  type EvmSigner,
+  encodeAllowanceCall,
+  encodeBalanceOfCall,
+  encodeMaxApproveData,
+  getRevertReason,
+  pollForReceipt,
+} from "./evm/wallet.js";
+import {
   buildArkadeClaim,
   type ClaimGaslessResult,
   type ClaimResult,
@@ -3776,6 +3785,137 @@ export class Client {
       deadline,
       typedData,
     };
+  }
+
+  /**
+   * Fund an EVM-sourced swap using an external wallet (e.g. MetaMask).
+   *
+   * Handles the full flow:
+   * 1. Check ERC-20 allowance to Permit2 — approve if insufficient
+   * 2. Sign the Permit2 EIP-712 typed data
+   * 3. Encode and send the `executeAndCreateWithPermit2` transaction
+   * 4. Wait for the transaction receipt
+   *
+   * @param swapId - The UUID of the swap
+   * @param signer - An {@link EvmSigner} wrapping the user's wallet
+   * @returns The funding transaction hash
+   *
+   * @example
+   * ```ts
+   * // Wrap wagmi/viem into an EvmSigner
+   * const signer: EvmSigner = {
+   *   address: walletClient.account.address,
+   *   chainId: walletClient.chain.id,
+   *   signTypedData: (td) => walletClient.signTypedData({ ...td, account: walletClient.account }),
+   *   sendTransaction: (tx) => walletClient.sendTransaction({ to: tx.to, data: tx.data, chain, gas: tx.gas }),
+   *   getTransactionReceipt: (hash) => publicClient.getTransactionReceipt({ hash }),
+   *   getTransaction: (hash) => publicClient.getTransaction({ hash }),
+   *   call: (tx) => publicClient.call(tx),
+   * };
+   *
+   * const { txHash } = await client.fundSwap(swapId, signer);
+   * ```
+   */
+  async fundSwap(
+    swapId: string,
+    signer: EvmSigner,
+  ): Promise<{ txHash: string }> {
+    // 1. Fetch Permit2 funding params
+    const funding = await this.getPermit2FundingParamsUnsigned(
+      swapId,
+      signer.chainId,
+    );
+
+    const tokenAddress = funding.sourceTokenAddress;
+    const permit2 = PERMIT2_ADDRESS;
+
+    // 2. Check allowance to Permit2 — approve if insufficient
+    const allowanceCall = encodeAllowanceCall(
+      tokenAddress,
+      signer.address,
+      permit2,
+    );
+    const allowanceResult = await signer.call({
+      to: allowanceCall.to,
+      data: allowanceCall.data,
+    });
+    const allowance = decodeUint256(allowanceResult);
+
+    if (allowance < funding.sourceAmount) {
+      // Check balance first
+      const balanceCall = encodeBalanceOfCall(tokenAddress, signer.address);
+      const balanceResult = await signer.call({
+        to: balanceCall.to,
+        data: balanceCall.data,
+      });
+      const balance = decodeUint256(balanceResult);
+      if (balance < funding.sourceAmount) {
+        throw new Error(
+          `Insufficient token balance: have ${balance}, need ${funding.sourceAmount}`,
+        );
+      }
+
+      // Send approve(Permit2, max)
+      const approveData = encodeMaxApproveData(tokenAddress, permit2);
+      const approveTxHash = await signer.sendTransaction({
+        to: approveData.to,
+        data: approveData.data,
+        gas: 100_000n,
+      });
+
+      const approveReceipt = await pollForReceipt(signer, approveTxHash);
+      if (approveReceipt.status !== "success") {
+        const reason = await getRevertReason(
+          signer,
+          approveTxHash,
+          approveReceipt.blockNumber,
+        );
+        throw new Error(`Token approval failed: ${reason}`);
+      }
+    }
+
+    // 3. Re-fetch fresh funding params (1inch quotes expire quickly)
+    const freshFunding = await this.getPermit2FundingParamsUnsigned(
+      swapId,
+      signer.chainId,
+    );
+
+    // 4. Sign the Permit2 EIP-712 typed data
+    const signature = await signer.signTypedData(freshFunding.typedData);
+
+    // 5. Encode executeAndCreateWithPermit2 calldata
+    const encoded = encodeExecuteAndCreateWithPermit2(
+      freshFunding.coordinatorAddress,
+      {
+        calls: freshFunding.calls,
+        preimageHash: freshFunding.preimageHash,
+        token: freshFunding.lockTokenAddress,
+        claimAddress: freshFunding.claimAddress,
+        timelock: freshFunding.timelock,
+        depositor: signer.address,
+        sourceToken: freshFunding.sourceTokenAddress,
+        sourceAmount: freshFunding.sourceAmount,
+        nonce: freshFunding.nonce,
+        deadline: freshFunding.deadline,
+        signature,
+      },
+    );
+
+    // 6. Send the funding transaction
+    const txHash = await signer.sendTransaction({
+      to: encoded.to,
+      data: encoded.data,
+      gas: 500_000n,
+    });
+
+    // 7. Wait for receipt
+    const receipt = await pollForReceipt(signer, txHash);
+    if (receipt.status !== "success") {
+      const reason = await getRevertReason(signer, txHash, receipt.blockNumber);
+      throw new Error(`Funding transaction failed: ${reason}`);
+    }
+
+    return { txHash };
   }
 
   /**

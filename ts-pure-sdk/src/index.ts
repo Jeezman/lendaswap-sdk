@@ -77,6 +77,7 @@ export {
   type CreateSwapCallData,
   type CreateSwapParams,
   deriveEvmAddress,
+  type EvmSigner,
   type ExecuteAndCreateWithPermit2Params,
   encodeApproveCallData,
   encodeCreateSwapCallData,
@@ -84,9 +85,11 @@ export {
   encodeHtlcErc20CreateCallData,
   type HtlcErc20CreateCallData,
   type HtlcErc20CreateParams,
+  isUserRejection,
   PERMIT2_ADDRESS,
   type Permit2TypedData,
   signEvmDigest,
+  type TxReceipt,
   type UnsignedPermit2FundingData,
 } from "./evm/index.js";
 export {

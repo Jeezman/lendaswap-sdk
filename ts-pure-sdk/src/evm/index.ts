@@ -52,3 +52,8 @@ export {
   uuidToBytes32,
 } from "./htlc.js";
 export { deriveEvmAddress, signEvmDigest } from "./signing.js";
+export {
+  type EvmSigner,
+  isUserRejection,
+  type TxReceipt,
+} from "./wallet.js";
