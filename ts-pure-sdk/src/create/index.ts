@@ -46,4 +46,5 @@ export type {
   LightningToArkadeSwapResult,
   LightningToEvmSwapGenericOptions,
   LightningToEvmSwapGenericResult,
+  UsdcBridgeParams,
 } from "./types.js";

@@ -61,8 +61,8 @@ export async function createBitcoinToEvmSwap(
       amount_out: options.targetAmount,
       referral_code: options.referralCode,
       gasless: options.gasless ?? true,
-      bridge_target_chain: options.bridgeTargetChain,
-      bridge_target_token_address: options.bridgeTargetTokenAddress,
+      bridge_target_chain: options.bridgeParams?.targetChain,
+      bridge_target_token_address: options.bridgeParams?.targetTokenAddress,
     },
   });
 

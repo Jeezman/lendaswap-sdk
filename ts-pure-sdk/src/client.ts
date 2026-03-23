@@ -135,6 +135,7 @@ export type {
   EvmToBitcoinSwapOptions,
   EvmToBitcoinSwapResult,
   EvmToLightningSwapOptions,
+  UsdcBridgeParams,
 } from "./create/index.js";
 
 import type { BitcoinToEvmSwapResponse } from "./create";
@@ -3081,8 +3082,7 @@ export class Client {
           ? BigInt(options.targetAmount)
           : undefined,
         referralCode: options.referralCode,
-        bridgeTargetChain: options.bridgeTargetChain,
-        bridgeTargetTokenAddress: options.bridgeTargetTokenAddress,
+        bridgeParams: options.bridgeParams,
       });
     }
 
@@ -3095,8 +3095,7 @@ export class Client {
         amountIn: options.sourceAmount,
         amountOut: options.targetAmount,
         referralCode: options.referralCode,
-        bridgeTargetChain: options.bridgeTargetChain,
-        bridgeTargetTokenAddress: options.bridgeTargetTokenAddress,
+        bridgeParams: options.bridgeParams,
       });
     }
 
@@ -3154,8 +3153,7 @@ export class Client {
         sourceAmount: options.sourceAmount,
         targetAmount: options.targetAmount,
         referralCode: options.referralCode,
-        bridgeTargetChain: options.bridgeTargetChain,
-        bridgeTargetTokenAddress: options.bridgeTargetTokenAddress,
+        bridgeParams: options.bridgeParams,
       });
     }
 

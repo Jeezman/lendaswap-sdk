@@ -94,6 +94,7 @@ export type {
   RefundOptions,
   RefundResult,
   SupportAgentInfo,
+  UsdcBridgeParams,
 } from "./client.js";
 // Main client
 export { Client, ClientBuilder } from "./client.js";

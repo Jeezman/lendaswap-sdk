@@ -25,6 +25,14 @@ import type { Asset } from "../tokens.js";
 /** Supported EVM chains for swaps */
 export type EvmChain = "polygon" | "arbitrum" | "ethereum" | string;
 
+/** Parameters for CCTP USDC bridging after a DEX swap. */
+export interface UsdcBridgeParams {
+  /** CCTP destination chain name (e.g., "Base", "Ethereum"). */
+  targetChain: string;
+  /** Native USDC contract address on the destination chain. */
+  targetTokenAddress: string;
+}
+
 /** Options for creating an Arkade or Lightning to EVM swap */
 export interface BtcToEvmSwapOptions {
   /** Target EVM address to receive tokens */
@@ -57,10 +65,8 @@ export interface BitcoinToEvmSwapOptions {
   referralCode?: string;
   /** Whether the server should execute the DEX swap on behalf of the user (gasless claim). Defaults to true. */
   gasless?: boolean;
-  /** Optional: CCTP bridge destination chain (e.g., "Ethereum"). When set, USDC is bridged cross-chain after the DEX swap. */
-  bridgeTargetChain?: string;
-  /** Optional: USDC address on the bridge destination chain. */
-  bridgeTargetTokenAddress?: string;
+  /** Optional: when set, USDC is bridged via CCTP to the destination chain after the DEX swap. */
+  bridgeParams?: UsdcBridgeParams;
 }
 
 /** Response from the generic `/swap/bitcoin/evm` endpoint. */
@@ -146,10 +152,8 @@ export interface LightningToEvmSwapGenericOptions {
   referralCode?: string;
   /** Whether the server should execute the DEX swap on behalf of the user (gasless claim). Defaults to true. */
   gasless?: boolean;
-  /** Optional: CCTP bridge destination chain (e.g., "Ethereum"). When set, USDC is bridged cross-chain after the DEX swap. */
-  bridgeTargetChain?: string;
-  /** Optional: USDC address on the bridge destination chain. */
-  bridgeTargetTokenAddress?: string;
+  /** Optional: when set, USDC is bridged via CCTP to the destination chain after the DEX swap. */
+  bridgeParams?: UsdcBridgeParams;
 }
 
 /** Result of creating a Lightning-to-EVM swap via the generic endpoint */
@@ -266,10 +270,8 @@ export interface ArkadeToEvmSwapOptions {
   referralCode?: string;
   /** Whether the server should execute the DEX swap on behalf of the user (gasless claim). Defaults to true. */
   gasless?: boolean;
-  /** Optional: CCTP bridge destination chain (e.g., "Ethereum"). When set, USDC is bridged cross-chain after the DEX swap. */
-  bridgeTargetChain?: string;
-  /** Optional: USDC address on the bridge destination chain. */
-  bridgeTargetTokenAddress?: string;
+  /** Optional: when set, USDC is bridged via CCTP to the destination chain after the DEX swap. */
+  bridgeParams?: UsdcBridgeParams;
 }
 
 /** Result of creating an Arkade-to-EVM swap via the generic endpoint */
@@ -323,10 +325,8 @@ export interface CreateSwapOptions {
   referralCode?: string;
   /** Whether to use gasless relay for EVM funding (no wallet needed). When true, the SDK-derived EVM address is used as the depositor. */
   gasless?: boolean;
-  /** Optional: CCTP bridge destination chain (e.g., "Ethereum"). When set, USDC is bridged cross-chain after the DEX swap. */
-  bridgeTargetChain?: string;
-  /** Optional: USDC address on the bridge destination chain. */
-  bridgeTargetTokenAddress?: string;
+  /** Optional: when set, USDC is bridged via CCTP to the destination chain after the DEX swap. */
+  bridgeParams?: UsdcBridgeParams;
 }
 
 /** Options for creating a Lightning-to-Arkade swap */

@@ -61,8 +61,8 @@ export async function createLightningToEvmSwapGeneric(
     amount_out: options.amountOut,
     referral_code: options.referralCode,
     gasless: options.gasless ?? true,
-    bridge_target_chain: options.bridgeTargetChain,
-    bridge_target_token_address: options.bridgeTargetTokenAddress,
+    bridge_target_chain: options.bridgeParams?.targetChain,
+    bridge_target_token_address: options.bridgeParams?.targetTokenAddress,
   };
 
   // Use fetch directly since the generated types don't have this endpoint yet
