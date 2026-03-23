@@ -2,13 +2,13 @@
  * USDT on Polygon → Lightning: end-to-end example (non-gasless).
  *
  * The user signs a Permit2 message with their browser wallet and
- * submits the funding transaction themselves.
+ * submits the funding transaction themselves via `fundSwap`.
  */
 
 import {
   BTC_LIGHTNING,
   Client,
-  encodeExecuteAndCreateWithPermit2,
+  type EvmSigner,
   InMemorySwapStorage,
   InMemoryWalletStorage,
   type TokenInfo,
@@ -31,8 +31,6 @@ const client = await Client.builder()
 // #endregion evm-to-lightning-setup
 
 const lightningInvoice = "lnbc1m1p..."; // Your BOLT11 invoice
-const userWalletAddress = "0xYourPolygonAddress";
-const polygonChainId = 137;
 
 // #region find-source-token
 const tokens = await client.getTokens();
@@ -62,48 +60,27 @@ console.log("Swap ID:", response.id);
 console.log("Source amount:", response.source_amount, usdtPolygon.symbol);
 
 // #region fund-swap
-// 1. Get unsigned Permit2 funding parameters
-const params = await client.getPermit2FundingParamsUnsigned(
-  response.id,
-  polygonChainId,
-);
-
-// 2. Sign the EIP-712 typed data with the user's wallet (e.g. wagmi/viem)
-// const signature = await walletClient.signTypedData(params.typedData);
-const signature = "0x..."; // placeholder — use walletClient.signTypedData(params.typedData)
-
-// 3. Encode the executeAndCreateWithPermit2 transaction calldata
-// biome-ignore lint/correctness/noUnusedVariables: example code
-const { to, data } = encodeExecuteAndCreateWithPermit2(
-  params.coordinatorAddress,
-  {
-    calls: params.calls,
-    preimageHash: params.preimageHash,
-    token: params.lockTokenAddress,
-    claimAddress: params.claimAddress,
-    timelock: params.timelock,
-    depositor: userWalletAddress,
-    sourceToken: params.sourceTokenAddress,
-    sourceAmount: params.sourceAmount,
-    nonce: params.nonce,
-    deadline: params.deadline,
-    signature,
-  },
-);
-
-// 4. Submit two transactions:
-//    a) One-time approve: source token → Permit2 (skip if already approved)
-//    await walletClient.sendTransaction({
-//      to: params.sourceTokenAddress,
-//      data: encodeApproveCallData(PERMIT2_ADDRESS, MaxUint256),
-//    });
+// Build an EvmSigner from your wallet (wagmi/viem example):
 //
-//    b) Fund the swap via the coordinator
-//    await walletClient.sendTransaction({ to, data });
+// import { createPublicClient, http } from "viem";
+// const publicClient = createPublicClient({ chain, transport: http() });
+// const signer: EvmSigner = {
+//   address: walletClient.account.address,
+//   chainId: chain.id,
+//   signTypedData: (td) => walletClient.signTypedData({ ...td, account: walletClient.account }),
+//   sendTransaction: (tx) => walletClient.sendTransaction({ to: tx.to, data: tx.data, chain, gas: tx.gas }),
+//   getTransactionReceipt: (h) => publicClient.getTransactionReceipt({ hash: h }).then((r) => ({ status: r.status, blockNumber: r.blockNumber, transactionHash: r.transactionHash })),
+//   getTransaction: (h) => publicClient.getTransaction({ hash: h }).then((tx) => ({ to: tx.to ?? null, input: tx.input, from: tx.from })),
+//   call: (tx) => publicClient.call({ to: tx.to, data: tx.data, account: tx.from, blockNumber: tx.blockNumber }).then((r) => r.data ?? "0x"),
+// };
 
+declare const signer: EvmSigner; // your wallet — see EvmSigner docs
+
+// fundSwap handles everything: allowance check, ERC-20 approval,
+// Permit2 EIP-712 signing, and transaction submission.
+const { txHash } = await client.fundSwap(response.id, signer);
+console.log("Funded! TX:", txHash);
 // #endregion fund-swap
-
-console.log("Funded!");
 
 // #region poll-status
 let swap = await client.getSwap(response.id);

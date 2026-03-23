@@ -4,10 +4,15 @@
  * When an EVM-to-Lightning swap fails and collaborative refund is
  * unavailable (e.g. server is down), the user can still reclaim
  * their funds after the HTLC timelock expires by submitting the
- * refund transaction themselves.
+ * refund transaction themselves via `refundEvmWithSigner`.
  */
 
-import { Client, InMemorySwapStorage, InMemoryWalletStorage } from "../src";
+import {
+  Client,
+  type EvmSigner,
+  InMemorySwapStorage,
+  InMemoryWalletStorage,
+} from "../src";
 
 // #region setup
 const client = await Client.builder()
@@ -33,37 +38,21 @@ console.log("Direction:", swap.direction);
 // The user must wait for the HTLC timelock to expire, then submit
 // the refund transaction themselves with their EVM wallet.
 //
-// Set collaborative: false (or omit it) to use timeout-based refund.
-const result = await client.refundSwap(swapId, {
-  mode: "swap-back", // or "direct" to receive WBTC/tBTC
-  collaborative: false,
-});
+// Build an EvmSigner from your wallet (see funding example for details)
+declare const signer: EvmSigner; // your wallet — see EvmSigner docs
 
-if (!result.success) {
-  throw new Error(`Refund failed: ${result.message}`);
-}
+// refundEvmWithSigner handles everything: fetches calldata, sends the
+// transaction, and waits for the receipt.
+//
+// Settlement modes:
+// - "swap-back": swap WBTC back to your original token (e.g. USDT) via DEX
+// - "direct":    return the locked WBTC/tBTC directly
+const { txHash } = await client.refundEvmWithSigner(
+  swapId,
+  signer,
+  "swap-back",
+);
 
-const { evmRefundData } = result;
-if (!evmRefundData) {
-  throw new Error("Expected EVM refund data");
-}
-
-if (!evmRefundData.timelockExpired) {
-  const expiryDate = new Date(evmRefundData.timelockExpiry * 1000);
-  console.log(
-    `Timelock has not expired yet. Refund available at: ${expiryDate.toISOString()}`,
-  );
-  // Wait until the timelock expires, then re-run this script.
-} else {
-  console.log("Timelock expired — refund is available now!");
-}
-
-// Submit the refund transaction with your EVM wallet (e.g. wagmi/viem):
-// await walletClient.sendTransaction({
-//   to: evmRefundData.to,
-//   data: evmRefundData.data,
-// });
-
-console.log("Send refund tx to:", evmRefundData.to);
-console.log("Calldata:", evmRefundData.data);
+console.log("Refund TX:", txHash);
+// ... "0xabc123..."
 // #endregion timeout-refund
