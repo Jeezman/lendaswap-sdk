@@ -4312,9 +4312,8 @@ export class Client {
       );
     }
 
-    const tokenAddress = (
-      swap as { source_token: { token_id: string } }
-    ).source_token.token_id;
+    const tokenAddress = (swap as { source_token: { token_id: string } })
+      .source_token.token_id;
 
     // Check the depositor's token balance
     const balanceOfSelector = "0x70a08231";
