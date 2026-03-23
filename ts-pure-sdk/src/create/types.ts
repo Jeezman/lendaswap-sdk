@@ -17,6 +17,7 @@ import type {
   TokenInfo,
 } from "../api/client.js";
 import type { SwapParams } from "../signer/index.js";
+import type { Asset } from "../tokens.js";
 
 // Placeholder types until OpenAPI spec is regenerated
 // These match the Rust API response types
@@ -267,10 +268,40 @@ export interface ArkadeToEvmSwapResult {
   swapParams: SwapParams;
 }
 
-/** Options for the generic `createSwap` method that routes to the correct direction. */
+/**
+ * Options for the generic `createSwap` method that routes to the correct direction.
+ *
+ * Accepts either:
+ * - `source` / `target` — simplified {@link Asset} identifiers (preferred)
+ * - `sourceAsset` / `targetAsset` — full `TokenInfo` objects (legacy, still supported)
+ *
+ * ```ts
+ * // Preferred: use Asset constants
+ * await client.createSwap({
+ *   source: Asset.BTC_ARKADE,
+ *   target: Asset.USDC_POLYGON,
+ *   sourceAmount: 100_000,
+ *   targetAddress: "0x...",
+ * });
+ *
+ * // Also works: any chain + tokenId
+ * await client.createSwap({
+ *   source: { chain: "Arkade", tokenId: "btc" },
+ *   target: { chain: "137", tokenId: "0x3c499c..." },
+ *   sourceAmount: 100_000,
+ *   targetAddress: "0x...",
+ * });
+ * ```
+ */
 export interface CreateSwapOptions {
-  sourceAsset: TokenInfo;
-  targetAsset: TokenInfo;
+  /** Source asset (preferred). Takes priority over `sourceAsset`. */
+  source?: Asset;
+  /** Target asset (preferred). Takes priority over `targetAsset`. */
+  target?: Asset;
+  /** @deprecated Use `source` instead. Full TokenInfo object. */
+  sourceAsset?: TokenInfo;
+  /** @deprecated Use `target` instead. Full TokenInfo object. */
+  targetAsset?: TokenInfo;
   sourceAmount?: number;
   targetAmount?: number;
   /** Target address: EVM address, Arkade address, or Lightning invoice */

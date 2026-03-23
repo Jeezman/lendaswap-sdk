@@ -3027,7 +3027,25 @@ export class Client {
    * @throws Error if the swap direction is unsupported or required fields are missing.
    */
   async createSwap(options: CreateSwapOptions): Promise<CreateSwapResult> {
-    const { sourceAsset, targetAsset } = options;
+    // Resolve source/target from either the new Asset form or the legacy TokenInfo form
+    const src = options.source ?? options.sourceAsset;
+    const tgt = options.target ?? options.targetAsset;
+    if (!src || !tgt) {
+      throw new Error(
+        "source and target are required (use Asset constants or { chain, tokenId })",
+      );
+    }
+
+    // Normalize to a common shape with .chain and .token_id
+    const sourceAsset: { chain: string; token_id: string } =
+      "token_id" in src
+        ? { chain: src.chain, token_id: src.token_id }
+        : { chain: src.chain, token_id: src.tokenId };
+    const targetAsset: { chain: string; token_id: string } =
+      "token_id" in tgt
+        ? { chain: tgt.chain, token_id: tgt.token_id }
+        : { chain: tgt.chain, token_id: tgt.tokenId };
+
     const sourceChain = sourceAsset.chain;
     const targetChain = targetAsset.chain;
 

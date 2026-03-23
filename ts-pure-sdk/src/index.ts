@@ -139,6 +139,7 @@ export {
 } from "./storage/index.js";
 // Token helpers and constants
 export {
+  Asset,
   BTC_ARKADE,
   BTC_ARKADE_INFO,
   BTC_LIGHTNING,
