@@ -4219,6 +4219,145 @@ export class Client {
   }
 
   /**
+   * Get the ephemeral depositor key for a gasless swap.
+   *
+   * Returns the private key and derived EVM address of the ephemeral
+   * depositor used in a gasless swap. Use this to build a wallet/signer
+   * for recovering stuck funds via {@link recoverGaslessFunds}.
+   *
+   * The key is deterministically derived from the user's mnemonic and
+   * the swap's key index, so it can be re-derived even if local storage
+   * is rebuilt from the mnemonic.
+   *
+   * @param swapId - The UUID of the swap
+   * @returns The depositor's private key (hex) and EVM address
+   *
+   * @example
+   * ```ts
+   * const { privateKey, address } = await client.getSwapDepositorKey(swapId);
+   * // Build a viem wallet from the key:
+   * const account = privateKeyToAccount(privateKey);
+   * ```
+   */
+  async getSwapDepositorKey(
+    swapId: string,
+  ): Promise<{ privateKey: string; address: string }> {
+    const storedSwap = await this.getStoredSwap(swapId);
+    if (!storedSwap) {
+      throw new Error(
+        `Swap ${swapId} not found in local storage. Cannot recover without the secret key.`,
+      );
+    }
+
+    const { deriveEvmAddress } = await import("./evm/signing.js");
+    const privateKey = storedSwap.secretKey.startsWith("0x")
+      ? storedSwap.secretKey
+      : `0x${storedSwap.secretKey}`;
+    const address = deriveEvmAddress(storedSwap.secretKey);
+
+    return { privateKey, address };
+  }
+
+  /**
+   * Recover ERC-20 tokens stuck in a gasless swap's ephemeral depositor address.
+   *
+   * When a gasless swap fails after the user transfers tokens to the
+   * SDK-derived depositor address but before the Permit2 tx is published,
+   * this method sweeps the tokens back to a destination address.
+   *
+   * Requires an {@link EvmSigner} backed by the depositor's private key
+   * (obtainable via {@link getSwapDepositorKey}). The depositor needs
+   * a small amount of ETH for gas — the caller must fund it beforehand.
+   *
+   * @param swapId - The UUID of the swap whose depositor holds stuck tokens
+   * @param depositorSigner - An {@link EvmSigner} backed by the depositor's private key
+   * @param destination - EVM address to send recovered tokens to
+   * @returns The recovery transaction hash and recovered amount
+   *
+   * @example
+   * ```ts
+   * // 1. Get the depositor key
+   * const { privateKey } = await client.getSwapDepositorKey(swapId);
+   *
+   * // 2. Build a signer from the depositor key (e.g. with viem)
+   * const depositorAccount = privateKeyToAccount(privateKey);
+   * const depositorWallet = createWalletClient({ account: depositorAccount, ... });
+   * const depositorSigner = buildEvmSigner(depositorWallet, publicClient);
+   *
+   * // 3. Fund the depositor with ETH for gas, then recover
+   * const result = await client.recoverGaslessFunds(swapId, depositorSigner, myAddress);
+   * console.log(`Recovered ${result.amount} tokens, tx: ${result.txHash}`);
+   * ```
+   */
+  async recoverGaslessFunds(
+    swapId: string,
+    depositorSigner: EvmSigner,
+    destination: string,
+  ): Promise<{ txHash: string; amount: string }> {
+    const storedSwap = await this.getStoredSwap(swapId);
+    if (!storedSwap) {
+      throw new Error(
+        `Swap ${swapId} not found in local storage. Cannot recover without the secret key.`,
+      );
+    }
+
+    const swap = await this.getSwap(swapId);
+    if (
+      swap.direction !== "evm_to_arkade" &&
+      swap.direction !== "evm_to_bitcoin" &&
+      swap.direction !== "evm_to_lightning"
+    ) {
+      throw new Error(
+        `Expected EVM-sourced swap, got ${swap.direction}. Recovery is only for gasless EVM swaps.`,
+      );
+    }
+
+    const tokenAddress = (
+      swap as { source_token: { token_id: string } }
+    ).source_token.token_id;
+
+    // Check the depositor's token balance
+    const balanceOfSelector = "0x70a08231";
+    const paddedDepositor = depositorSigner.address
+      .replace(/^0x/, "")
+      .toLowerCase()
+      .padStart(64, "0");
+    const balanceResult = await depositorSigner.call({
+      to: tokenAddress,
+      data: `${balanceOfSelector}${paddedDepositor}`,
+    });
+
+    const balance = BigInt(balanceResult || "0x0");
+    if (balance === 0n) {
+      throw new Error(
+        `No tokens found at depositor address ${depositorSigner.address}. Nothing to recover.`,
+      );
+    }
+
+    // Encode ERC-20 transfer(destination, balance)
+    const transferSelector = "0xa9059cbb";
+    const paddedDestination = destination
+      .replace(/^0x/, "")
+      .toLowerCase()
+      .padStart(64, "0");
+    const paddedAmount = balance.toString(16).padStart(64, "0");
+    const transferData = `${transferSelector}${paddedDestination}${paddedAmount}`;
+
+    const txHash = await depositorSigner.sendTransaction({
+      to: tokenAddress,
+      data: transferData,
+      gas: 100_000n,
+    });
+
+    const receipt = await depositorSigner.waitForReceipt(txHash);
+    if (receipt.status !== "success") {
+      throw new Error(`Recovery transaction reverted: ${txHash}`);
+    }
+
+    return { txHash, amount: balance.toString() };
+  }
+
+  /**
    * Check if a swap's VTXO has been received on Arkade.
    *
    * For Arkade-destination swaps (EVM/Bitcoin/Lightning → Arkade), queries the
