@@ -54,6 +54,10 @@ export interface EvmSigner {
 
   /**
    * Send a raw transaction and return the transaction hash (0x-prefixed).
+   *
+   * @param tx.to - Target contract address (0x-prefixed)
+   * @param tx.data - ABI-encoded calldata (0x-prefixed)
+   * @param tx.gas - Optional gas limit; the SDK provides sensible defaults
    */
   sendTransaction(tx: {
     to: string;
@@ -67,20 +71,34 @@ export interface EvmSigner {
    * The implementation should handle transaction replacements (speed-up /
    * cancel) — e.g. viem's `waitForTransactionReceipt` and ethers'
    * `provider.waitForTransaction` both do this automatically.
+   *
+   * @param hash - Transaction hash to wait for (0x-prefixed)
    */
   waitForReceipt(hash: string): Promise<TxReceipt>;
 
   /**
-   * Get a transaction by hash (used to replay reverted txs for error extraction).
+   * Get a transaction by hash. Used internally to replay reverted
+   * transactions and extract on-chain revert reasons.
+   *
+   * @param hash - Transaction hash (0x-prefixed)
    */
   getTransaction(hash: string): Promise<{
+    /** Target address, or null for contract creation */
     to: string | null;
+    /** ABI-encoded calldata (0x-prefixed) */
     input: string;
+    /** Sender address */
     from: string;
   }>;
 
   /**
-   * Simulate a call (used to extract revert reasons from failed transactions).
+   * Simulate a call via `eth_call`. Used internally to dry-run
+   * transactions before sending and to extract revert reasons.
+   *
+   * @param tx.to - Target contract address (0x-prefixed)
+   * @param tx.data - ABI-encoded calldata (0x-prefixed)
+   * @param tx.from - Optional sender address for simulation context
+   * @param tx.blockNumber - Optional block number to simulate against
    */
   call(tx: {
     to: string;
