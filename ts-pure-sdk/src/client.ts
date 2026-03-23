@@ -3830,7 +3830,20 @@ export class Client {
     const tokenAddress = funding.sourceTokenAddress;
     const permit2 = PERMIT2_ADDRESS;
 
-    // 2. Check allowance to Permit2 — approve if insufficient
+    // 2. Check balance — fail early before burning gas on approve/execute
+    const balanceCall = encodeBalanceOfCall(tokenAddress, signer.address);
+    const balanceResult = await signer.call({
+      to: balanceCall.to,
+      data: balanceCall.data,
+    });
+    const balance = decodeUint256(balanceResult);
+    if (balance < funding.sourceAmount) {
+      throw new Error(
+        `Insufficient token balance: have ${balance}, need ${funding.sourceAmount}`,
+      );
+    }
+
+    // 3. Check allowance to Permit2 — approve if insufficient
     const allowanceCall = encodeAllowanceCall(
       tokenAddress,
       signer.address,
@@ -3843,19 +3856,6 @@ export class Client {
     const allowance = decodeUint256(allowanceResult);
 
     if (allowance < funding.sourceAmount) {
-      // Check balance first
-      const balanceCall = encodeBalanceOfCall(tokenAddress, signer.address);
-      const balanceResult = await signer.call({
-        to: balanceCall.to,
-        data: balanceCall.data,
-      });
-      const balance = decodeUint256(balanceResult);
-      if (balance < funding.sourceAmount) {
-        throw new Error(
-          `Insufficient token balance: have ${balance}, need ${funding.sourceAmount}`,
-        );
-      }
-
       // Send approve(Permit2, max)
       const approveData = encodeMaxApproveData(tokenAddress, permit2);
       const approveTxHash = await signer.sendTransaction({
@@ -3875,16 +3875,16 @@ export class Client {
       }
     }
 
-    // 3. Re-fetch fresh funding params (1inch quotes expire quickly)
+    // 4. Re-fetch fresh funding params (1inch quotes expire quickly)
     const freshFunding = await this.getPermit2FundingParamsUnsigned(
       swapId,
       signer.chainId,
     );
 
-    // 4. Sign the Permit2 EIP-712 typed data
+    // 5. Sign the Permit2 EIP-712 typed data
     const signature = await signer.signTypedData(freshFunding.typedData);
 
-    // 5. Encode executeAndCreateWithPermit2 calldata
+    // 6. Encode executeAndCreateWithPermit2 calldata
     const encoded = encodeExecuteAndCreateWithPermit2(
       freshFunding.coordinatorAddress,
       {
@@ -3902,14 +3902,14 @@ export class Client {
       },
     );
 
-    // 6. Send the funding transaction
+    // 7. Send the funding transaction
     const txHash = await signer.sendTransaction({
       to: encoded.to,
       data: encoded.data,
       gas: 500_000n,
     });
 
-    // 7. Wait for receipt
+    // 8. Wait for receipt
     const receipt = await pollForReceipt(signer, txHash);
     if (receipt.status !== "success") {
       const reason = await getRevertReason(signer, txHash, receipt.blockNumber);
