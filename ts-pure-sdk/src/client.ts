@@ -112,6 +112,7 @@ import {
   isBtcPegged,
   isEvmToken,
   isLightning,
+  isSourceEvmChain,
   toChainName,
 } from "./tokens.js";
 
@@ -3190,7 +3191,7 @@ export class Client {
     }
 
     // EVM → Arkade
-    if (isEvmToken(sourceChain) && isArkade(targetAsset)) {
+    if (isSourceEvmChain(sourceChain) && isArkade(targetAsset)) {
       if (!options.userAddress && !options.gasless) {
         throw new Error(
           "userAddress is required for EVM → Arkade swaps (unless gasless)",
@@ -3211,7 +3212,7 @@ export class Client {
     }
 
     // EVM → Bitcoin (on-chain)
-    if (isEvmToken(sourceChain) && isBtcOnchain(targetAsset)) {
+    if (isSourceEvmChain(sourceChain) && isBtcOnchain(targetAsset)) {
       if (!options.userAddress && !options.gasless) {
         throw new Error(
           "userAddress is required for EVM → Bitcoin swaps (unless gasless)",
@@ -3232,7 +3233,7 @@ export class Client {
     }
 
     // EVM → Lightning
-    if (isEvmToken(sourceChain) && isLightning(targetAsset)) {
+    if (isSourceEvmChain(sourceChain) && isLightning(targetAsset)) {
       if (!options.userAddress && !options.gasless) {
         throw new Error(
           "userAddress is required for EVM → Lightning swaps (unless gasless)",
