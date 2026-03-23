@@ -169,6 +169,28 @@ export function decodeUint256(hex: string): bigint {
   return BigInt(`0x${clean}`);
 }
 
+// ── Simulation ───────────────────────────────────────────────────────────────
+
+/**
+ * Simulate a transaction via `eth_call`. Throws with the revert reason
+ * if the call would fail, so callers don't burn gas on doomed transactions.
+ */
+export async function simulateTransaction(
+  signer: EvmSigner,
+  tx: { to: string; data: string },
+  label: string,
+): Promise<void> {
+  try {
+    await signer.call({ to: tx.to, data: tx.data, from: signer.address });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const match =
+      msg.match(/reverted with.*?:\s*(.+)/i) ?? msg.match(/reason:\s*(.+)/i);
+    const reason = match?.[1]?.trim() ?? msg;
+    throw new Error(`${label} would revert: ${reason}`);
+  }
+}
+
 // ── Poll for receipt ─────────────────────────────────────────────────────────
 
 /**

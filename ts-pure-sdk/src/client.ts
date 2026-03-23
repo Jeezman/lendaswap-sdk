@@ -74,6 +74,7 @@ import {
   getRevertReason,
   parseSignature,
   pollForReceipt,
+  simulateTransaction,
 } from "./evm/wallet.js";
 import {
   buildArkadeClaim,
@@ -3902,14 +3903,17 @@ export class Client {
       },
     );
 
-    // 7. Send the funding transaction
+    // 7. Simulate before sending to catch reverts without burning gas
+    await simulateTransaction(signer, encoded, "Funding transaction");
+
+    // 8. Send the funding transaction
     const txHash = await signer.sendTransaction({
       to: encoded.to,
       data: encoded.data,
       gas: 500_000n,
     });
 
-    // 8. Wait for receipt
+    // 9. Wait for receipt
     const receipt = await pollForReceipt(signer, txHash);
     if (receipt.status !== "success") {
       const reason = await getRevertReason(signer, txHash, receipt.blockNumber);
@@ -3945,6 +3949,9 @@ export class Client {
         `Unable to get EVM refund data for: ${swapId}. ${result.message}`,
       );
     }
+
+    // Simulate before sending to catch reverts without burning gas
+    await simulateTransaction(signer, result.evmRefundData, "Refund transaction");
 
     const txHash = await signer.sendTransaction({
       to: result.evmRefundData.to,
