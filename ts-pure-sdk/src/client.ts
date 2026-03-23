@@ -72,6 +72,7 @@ import {
   encodeBalanceOfCall,
   encodeMaxApproveData,
   getRevertReason,
+  parseSignature,
   pollForReceipt,
 } from "./evm/wallet.js";
 import {
@@ -3916,6 +3917,89 @@ export class Client {
     }
 
     return { txHash };
+  }
+
+  /**
+   * Refund an EVM-sourced swap using an external wallet.
+   *
+   * Fetches refund calldata from the server, sends the transaction via the
+   * provided signer, and waits for the receipt.
+   *
+   * Use this for manual (timelock-based) refunds where the user pays gas.
+   * For collaborative (gasless) refunds, use {@link collabRefundEvmWithSigner}.
+   *
+   * @param swapId - The UUID of the swap
+   * @param signer - An {@link EvmSigner} wrapping the user's wallet
+   * @param mode - "swap-back" (refund as original token via DEX) or "direct" (refund as WBTC)
+   * @returns The refund transaction hash
+   */
+  async refundEvmWithSigner(
+    swapId: string,
+    signer: EvmSigner,
+    mode: "swap-back" | "direct" = "swap-back",
+  ): Promise<{ txHash: string }> {
+    const result = await this.refundSwap(swapId, { mode });
+
+    if (!result.evmRefundData) {
+      throw new Error(
+        `Unable to get EVM refund data for: ${swapId}. ${result.message}`,
+      );
+    }
+
+    const txHash = await signer.sendTransaction({
+      to: result.evmRefundData.to,
+      data: result.evmRefundData.data,
+      gas: 500_000n,
+    });
+
+    const receipt = await pollForReceipt(signer, txHash);
+    if (receipt.status !== "success") {
+      const reason = await getRevertReason(signer, txHash, receipt.blockNumber);
+      throw new Error(`Refund transaction reverted: ${reason}`);
+    }
+
+    return { txHash };
+  }
+
+  /**
+   * Collaborative refund of an EVM-sourced swap using an external wallet.
+   *
+   * Signs the EIP-712 `CollabRefund` digest with the provided signer and
+   * submits it to the server, which cosigns and executes the refund on-chain.
+   * Gasless for the user — no timelock wait required.
+   *
+   * For gasless (Permit2) swaps where the SDK's embedded key is the depositor,
+   * use {@link collabRefundEvmSwap} instead (no external signer needed).
+   *
+   * @param swapId - The UUID of the swap
+   * @param signer - An {@link EvmSigner} wrapping the user's wallet
+   * @param settlement - "swap-back" (original token via DEX) or "direct" (WBTC)
+   * @returns The refund transaction hash
+   */
+  async collabRefundEvmWithSigner(
+    swapId: string,
+    signer: EvmSigner,
+    settlement: "swap-back" | "direct" = "direct",
+  ): Promise<{ txHash: string }> {
+    const { typedData, params } = await this.buildCollabRefundEvmTypedData(
+      swapId,
+      settlement,
+    );
+
+    const signature = await signer.signTypedData(typedData);
+    const { v, r, s } = parseSignature(signature);
+
+    const result = await this.submitCollabRefundEvm(swapId, {
+      v,
+      r,
+      s,
+      depositor_address: signer.address,
+      mode: settlement,
+      sweep_token: params.sweepToken,
+      min_amount_out: params.minAmountOut,
+    });
+
+    return { txHash: result.txHash };
   }
 
   /**

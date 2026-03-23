@@ -7,12 +7,25 @@
  * EVM library.
  */
 
-import type { Permit2TypedData } from "./coordinator.js";
+// ── EIP-712 typed data ───────────────────────────────────────────────────────
+
+/** Generic EIP-712 typed data that can be passed to a wallet for signing. */
+export interface EIP712TypedData {
+  domain: {
+    name?: string;
+    version?: string;
+    chainId?: number;
+    verifyingContract?: string;
+  };
+  types: Record<string, Array<{ name: string; type: string }>>;
+  primaryType: string;
+  message: Record<string, unknown>;
+}
 
 // ── Signer interface ─────────────────────────────────────────────────────────
 
 /**
- * Minimal EVM signer that the SDK needs to fund a swap.
+ * Minimal EVM signer that the SDK needs to fund and refund swaps.
  *
  * Example implementation using wagmi/viem:
  * ```ts
@@ -37,7 +50,7 @@ export interface EvmSigner {
    * Sign EIP-712 typed data.
    * Must return the 65-byte hex signature (0x-prefixed).
    */
-  signTypedData(typedData: Permit2TypedData): Promise<string>;
+  signTypedData(typedData: EIP712TypedData): Promise<string>;
 
   /**
    * Send a raw transaction and return the transaction hash (0x-prefixed).
@@ -216,4 +229,22 @@ export async function getRevertReason(
 export function isUserRejection(error: unknown): boolean {
   const msg = error instanceof Error ? error.message : String(error);
   return /user rejected|user denied|rejected the request/i.test(msg);
+}
+
+// ── Signature parsing ────────────────────────────────────────────────────────
+
+/**
+ * Parse a 65-byte hex signature into its `v`, `r`, `s` components.
+ */
+export function parseSignature(signature: string): {
+  v: number;
+  r: string;
+  s: string;
+} {
+  const hex = signature.replace(/^0x/, "");
+  return {
+    r: `0x${hex.slice(0, 64)}`,
+    s: `0x${hex.slice(64, 128)}`,
+    v: Number.parseInt(hex.slice(128, 130), 16),
+  };
 }

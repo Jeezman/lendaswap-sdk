@@ -53,6 +53,7 @@ export {
 } from "./htlc.js";
 export { deriveEvmAddress, signEvmDigest } from "./signing.js";
 export {
+  type EIP712TypedData,
   type EvmSigner,
   isUserRejection,
   type TxReceipt,
