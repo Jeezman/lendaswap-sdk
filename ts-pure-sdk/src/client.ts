@@ -3827,7 +3827,7 @@ export class Client {
    *   chainId: walletClient.chain.id,
    *   signTypedData: (td) => walletClient.signTypedData({ ...td, account: walletClient.account }),
    *   sendTransaction: (tx) => walletClient.sendTransaction({ to: tx.to, data: tx.data, chain, gas: tx.gas }),
-   *   getTransactionReceipt: (hash) => publicClient.getTransactionReceipt({ hash }),
+   *   waitForReceipt: (hash) => publicClient.waitForReceipt({ hash }),
    *   getTransaction: (hash) => publicClient.getTransaction({ hash }),
    *   call: (tx) => publicClient.call(tx),
    * };

@@ -16,7 +16,7 @@ This SDK supports the following swap directions:
 ### BTC to EVM
 
 | Source    | Target                      | Status    |
-|-----------|-----------------------------|-----------|
+| --------- | --------------------------- | --------- |
 | Lightning | Ethereum, Polygon, Arbitrum | Supported |
 | Arkade    | Ethereum, Polygon, Arbitrum | Supported |
 | On-chain  | Ethereum, Polygon, Arbitrum | Supported |
@@ -24,7 +24,7 @@ This SDK supports the following swap directions:
 ### EVM to BTC
 
 | Source                      | Target    | Status    |
-|-----------------------------|-----------|-----------|
+| --------------------------- | --------- | --------- |
 | Polygon, Arbitrus, Ethereum | Arkade    | Supported |
 | Polygon, Arbitrus, Ethereum | Lightning | Supported |
 | Polygon, Arbitrus, Ethereum | On-chain  | Supported |
@@ -225,7 +225,7 @@ const {txHash} = await client.collabRefundEvmSwap(swapId, "swap-back");
 
 Refund mode controls what token you receive:
 
-- `"direct"` — refund as WBTC (the HTLC lock token)
+- `"direct"` — refund as WBTC/TBTC (the HTLC lock token)
 - `"swap-back"` — refund as the original source token (e.g., USDC) via DEX swap
 
 ### Storage
@@ -266,7 +266,7 @@ This will regenerate `src/generated/api.ts` with the updated types.
 ### Scripts
 
 | Command                | Description                            |
-|------------------------|----------------------------------------|
+| ---------------------- | -------------------------------------- |
 | `npm run build`        | Compile TypeScript to JavaScript       |
 | `npm run test`         | Run tests with Vitest                  |
 | `npm run lint`         | Run Biome linter                       |
