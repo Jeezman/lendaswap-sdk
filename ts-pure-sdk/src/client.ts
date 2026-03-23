@@ -3950,8 +3950,21 @@ export class Client {
       );
     }
 
+    if (!result.evmRefundData.timelockExpired) {
+      const expiryDate = new Date(
+        result.evmRefundData.timelockExpiry * 1000,
+      ).toISOString();
+      throw new Error(
+        `Refund timelock has not expired yet (expires ${expiryDate}). Use collabRefundEvmWithSigner for instant refunds.`,
+      );
+    }
+
     // Simulate before sending to catch reverts without burning gas
-    await simulateTransaction(signer, result.evmRefundData, "Refund transaction");
+    await simulateTransaction(
+      signer,
+      result.evmRefundData,
+      "Refund transaction",
+    );
 
     const txHash = await signer.sendTransaction({
       to: result.evmRefundData.to,
