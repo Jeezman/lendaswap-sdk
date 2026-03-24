@@ -4316,35 +4316,25 @@ export class Client {
       .source_token.token_id;
 
     // Check the depositor's token balance
-    const balanceOfSelector = "0x70a08231";
-    const paddedDepositor = depositorSigner.address
-      .replace(/^0x/, "")
-      .toLowerCase()
-      .padStart(64, "0");
-    const balanceResult = await depositorSigner.call({
-      to: tokenAddress,
-      data: `${balanceOfSelector}${paddedDepositor}`,
-    });
+    const { encodeBalanceOfCall, encodeTransferCall, decodeUint256 } =
+      await import("./evm/wallet.js");
+    const balanceCall = encodeBalanceOfCall(
+      tokenAddress,
+      depositorSigner.address,
+    );
+    const balanceResult = await depositorSigner.call(balanceCall);
 
-    const balance = BigInt(balanceResult || "0x0");
+    const balance = decodeUint256(balanceResult || "0x0");
     if (balance === 0n) {
       throw new Error(
         `No tokens found at depositor address ${depositorSigner.address}. Nothing to recover.`,
       );
     }
 
-    // Encode ERC-20 transfer(destination, balance)
-    const transferSelector = "0xa9059cbb";
-    const paddedDestination = destination
-      .replace(/^0x/, "")
-      .toLowerCase()
-      .padStart(64, "0");
-    const paddedAmount = balance.toString(16).padStart(64, "0");
-    const transferData = `${transferSelector}${paddedDestination}${paddedAmount}`;
-
+    // Transfer all tokens to destination
+    const transferCall = encodeTransferCall(tokenAddress, destination, balance);
     const txHash = await depositorSigner.sendTransaction({
-      to: tokenAddress,
-      data: transferData,
+      ...transferCall,
       gas: 100_000n,
     });
 

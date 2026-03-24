@@ -136,6 +136,7 @@ function encodeUint256(value: bigint): string {
 const ALLOWANCE_SELECTOR = "0xdd62ed3e"; // allowance(address,address)
 const BALANCE_SELECTOR = "0x70a08231"; // balanceOf(address)
 const APPROVE_SELECTOR = "0x095ea7b3"; // approve(address,uint256)
+const TRANSFER_SELECTOR = "0xa9059cbb"; // transfer(address,uint256)
 
 const MAX_UINT256 = BigInt(
   "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
@@ -178,6 +179,20 @@ export function encodeMaxApproveData(
   return {
     to: tokenAddress,
     data: `${APPROVE_SELECTOR}${padAddress(spender)}${encodeUint256(MAX_UINT256)}`,
+  };
+}
+
+/**
+ * Encode a `transfer(to, amount)` transaction.
+ */
+export function encodeTransferCall(
+  tokenAddress: string,
+  to: string,
+  amount: bigint,
+): { to: string; data: string } {
+  return {
+    to: tokenAddress,
+    data: `${TRANSFER_SELECTOR}${padAddress(to)}${encodeUint256(amount)}`,
   };
 }
 
