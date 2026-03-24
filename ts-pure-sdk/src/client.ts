@@ -4219,7 +4219,7 @@ export class Client {
   }
 
   /**
-   * Get the ephemeral depositor key for a gasless swap.
+   * Get the ephemeral depositor key for a gasless swap funded swap.
    *
    * Returns the private key and derived EVM address of the ephemeral
    * depositor used in a gasless swap. Use this to build a wallet/signer
