@@ -4267,7 +4267,7 @@ export class Client {
    *
    * Requires an {@link EvmSigner} backed by the depositor's private key
    * (obtainable via {@link getSwapDepositorKey}). The depositor needs
-   * a small amount of ETH for gas — the caller must fund it beforehand.
+   * a small amount of ETH/POL for gas — the caller must fund it beforehand.
    *
    * @param swapId - The UUID of the swap whose depositor holds stuck tokens
    * @param depositorSigner - An {@link EvmSigner} backed by the depositor's private key
