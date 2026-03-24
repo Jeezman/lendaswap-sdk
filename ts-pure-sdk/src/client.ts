@@ -4333,10 +4333,7 @@ export class Client {
 
     // Transfer all tokens to destination
     const transferCall = encodeTransferCall(tokenAddress, destination, balance);
-    const txHash = await depositorSigner.sendTransaction({
-      ...transferCall,
-      gas: 100_000n,
-    });
+    const txHash = await depositorSigner.sendTransaction(transferCall);
 
     const receipt = await depositorSigner.waitForReceipt(txHash);
     if (receipt.status !== "success") {
