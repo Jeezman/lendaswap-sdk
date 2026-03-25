@@ -62,6 +62,10 @@ export type LightningToEvmSwapResponse =
 export type LightningToArkadeSwapResponse =
   components["schemas"]["LightningToArkadeSwapResponse"];
 
+// Limits types
+export type SwapPairLimits = components["schemas"]["SwapPairLimits"];
+export type SwapLimitsResponse = components["schemas"]["SwapLimitsResponse"];
+
 export interface ApiClientOptions {
   baseUrl: string;
   apiKey?: string;

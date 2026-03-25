@@ -247,6 +247,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Return the min/max swap limits (in satoshis) for every supported chain pair. */
+        get: operations["get_limits"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mtp": {
         parameters: {
             query?: never;
@@ -2085,12 +2102,12 @@ export interface components {
             gasless_network_fee: number;
             /**
              * Format: int64
-             * @description Maximum swap amount in satoshis (lesser of: config max or 90% of available balance)
+             * @description Maximum BTC value of the swap in satoshis
              */
             max_amount: number;
             /**
              * Format: int64
-             * @description Minimum swap amount in satoshis (from config)
+             * @description Minimum BTC value of the swap in satoshis
              */
             min_amount: number;
             /**
@@ -2193,6 +2210,25 @@ export interface components {
         };
         SupportAgentsResponse: {
             agents: components["schemas"]["SupportAgentInfo"][];
+        };
+        /** @description All supported swap routes with their limits. */
+        SwapLimitsResponse: {
+            limits: components["schemas"]["SwapPairLimits"][];
+        };
+        /** @description Min/max swap amount in satoshis for a particular source→target pair. */
+        SwapPairLimits: {
+            /**
+             * Format: double
+             * @description Maximum BTC amount in satoshis.
+             */
+            max_sats: number;
+            /**
+             * Format: double
+             * @description Minimum BTC amount in satoshis.
+             */
+            min_sats: number;
+            source: components["schemas"]["Chain"];
+            target: components["schemas"]["Chain"];
         };
         /**
          * @description Atomic swap state machine for BTC --> Target Asset swaps using HTLCs.
@@ -2832,6 +2868,26 @@ export interface operations {
                 };
                 content: {
                     "text/plain": string;
+                };
+            };
+        };
+    };
+    get_limits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Swap limits for all supported chain combinations */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwapLimitsResponse"];
                 };
             };
         };
