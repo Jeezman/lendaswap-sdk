@@ -728,15 +728,12 @@ export class Client {
   }
 
   /**
-   * Get the EVM signing key for a stored swap.
-   *
-   * For swaps created with the deterministic EVM address (evmSecretKey present),
-   * returns the fixed key. For legacy swaps, falls back to the per-swap secretKey.
+   * Get the EVM signing key, derived deterministically from the mnemonic.
    *
    * @internal
    */
-  #getEvmSigningKey(storedSwap: StoredSwap): string {
-    return storedSwap.evmSecretKey ?? storedSwap.secretKey;
+  #getEvmSigningKey(): string {
+    return bytesToHex(this.#signer.deriveEvmKey().secretKey);
   }
 
   /**
@@ -1349,7 +1346,7 @@ export class Client {
     return gaslessClaim({
       baseUrl: this.#config.baseUrl,
       preimage: stored.preimage,
-      secretKey: hexToBytes(this.#getEvmSigningKey(stored)),
+      secretKey: hexToBytes(this.#getEvmSigningKey()),
       swap,
       destination,
       dexCalldata,
@@ -2906,7 +2903,7 @@ export class Client {
         "No secret key found for this swap. Cannot sign collab refund.",
       );
     }
-    const evmKey = this.#getEvmSigningKey(storedSwap);
+    const evmKey = this.#getEvmSigningKey();
     const sig = signEvmDigest(evmKey, digest);
 
     // Derive the on-chain depositor address from the EVM signing key
@@ -3049,7 +3046,6 @@ export class Client {
       preimage: bytesToHex(swapParams.preimage),
       preimageHash: bytesToHex(swapParams.preimageHash),
       secretKey: bytesToHex(swapParams.secretKey),
-      evmSecretKey: bytesToHex(this.#signer.deriveEvmKey().secretKey),
       storedAt: Date.now(),
       updatedAt: Date.now(),
       targetAddress,
@@ -3680,7 +3676,7 @@ export class Client {
     });
 
     // 5. Sign with the EVM key (deterministic for new swaps, per-swap for legacy)
-    const evmKey = this.#getEvmSigningKey(storedSwap);
+    const evmKey = this.#getEvmSigningKey();
     const sig = signEvmDigest(evmKey, digest);
     // Compact signature: r (32 bytes) || s (32 bytes) || v (1 byte)
     const rClean = sig.r.replace(/^0x/, "");
@@ -4212,7 +4208,7 @@ export class Client {
       deadline,
     });
     // 4b. Use the EVM key (deterministic for new swaps, per-swap for legacy)
-    const evmKey = this.#getEvmSigningKey(storedSwap);
+    const evmKey = this.#getEvmSigningKey();
     const permit2Sig = signEvmDigest(evmKey, digest);
     const rClean = permit2Sig.r.replace(/^0x/, "");
     const sClean = permit2Sig.s.replace(/^0x/, "");
@@ -4320,7 +4316,7 @@ export class Client {
       );
     }
 
-    const evmKey = this.#getEvmSigningKey(storedSwap);
+    const evmKey = this.#getEvmSigningKey();
     const privateKey = evmKey.startsWith("0x") ? evmKey : `0x${evmKey}`;
     const address = deriveEvmAddress(evmKey);
 

@@ -66,9 +66,4 @@ export interface StoredSwap {
 
   /** Target address for receiving funds (e.g., BTC address for EVM→Bitcoin swaps) */
   targetAddress?: string;
-
-  /** Fixed EVM secret key for signing (hex-encoded, 32 bytes).
-   *  Present for swaps created with the deterministic EVM address.
-   *  For legacy swaps without this field, the per-swap secretKey is used instead. */
-  evmSecretKey?: string;
 }
