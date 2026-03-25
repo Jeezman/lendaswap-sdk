@@ -393,6 +393,8 @@ export interface CreateSwapContext {
   baseUrl: string;
   /** Function to derive swap parameters (auto-increments key index) */
   deriveSwapParams: () => Promise<SwapParams>;
+  /** Deterministic EVM address derived from the SDK key, reused across all swaps for Permit2 efficiency. */
+  evmAddress: string;
   /** Function to store the swap in storage (if configured) */
   storeSwap: (
     swapId: string,

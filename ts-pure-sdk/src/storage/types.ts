@@ -8,7 +8,7 @@
 import type { GetSwapResponse } from "../api/client.js";
 
 /** Current schema version for stored swaps */
-export const SWAP_STORAGE_VERSION = 1;
+export const SWAP_STORAGE_VERSION = 2;
 
 /**
  * Extended swap data stored locally.
@@ -66,4 +66,9 @@ export interface StoredSwap {
 
   /** Target address for receiving funds (e.g., BTC address for EVM→Bitcoin swaps) */
   targetAddress?: string;
+
+  /** Fixed EVM secret key for signing (hex-encoded, 32 bytes).
+   *  Present for swaps created with the deterministic EVM address.
+   *  For legacy swaps without this field, the per-swap secretKey is used instead. */
+  evmSecretKey?: string;
 }

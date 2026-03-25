@@ -2,7 +2,6 @@
  * Arkade to EVM swap creation.
  */
 
-import { deriveEvmAddress } from "../evm";
 import { bytesToHex } from "../signer/index.js";
 import type {
   ArkadeToEvmSwapOptions,
@@ -47,9 +46,9 @@ export async function createArkadeToEvmSwapGeneric(
   const refundPk = bytesToHex(swapParams.publicKey);
   const userId = bytesToHex(swapParams.userId);
 
-  // The claiming address is derived from the swap's secret key.
-  // This allows the SDK to sign gasless claims internally.
-  const claimingAddress = deriveEvmAddress(swapParams.secretKey);
+  // The claiming address is the SDK's deterministic EVM address,
+  // reused across swaps so a single Permit2 approval suffices.
+  const claimingAddress = ctx.evmAddress;
 
   // Target address is where tokens are swept after the claim (user's final destination).
   // This is required and stored on the server for use during redemption.

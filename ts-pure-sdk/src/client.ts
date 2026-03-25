@@ -58,6 +58,7 @@ import {
   buildPermit2TypedData,
   type CollabRefundEvmDigestParams,
   type CollabRefundEvmTypedData,
+  deriveEvmAddress,
   encodeApproveCallData,
   encodeExecuteAndCreateWithPermit2,
   encodeHtlcErc20RefundCallData,
@@ -714,6 +715,31 @@ export class Client {
   }
 
   /**
+   * Get the deterministic EVM address for this SDK key.
+   *
+   * This address is reused across all gasless swaps, so a single
+   * Permit2 approval is sufficient for multiple swaps.
+   *
+   * @returns Checksummed EVM address (0x-prefixed).
+   */
+  getEvmAddress(): string {
+    const { secretKey } = this.#signer.deriveEvmKey();
+    return deriveEvmAddress(secretKey);
+  }
+
+  /**
+   * Get the EVM signing key for a stored swap.
+   *
+   * For swaps created with the deterministic EVM address (evmSecretKey present),
+   * returns the fixed key. For legacy swaps, falls back to the per-swap secretKey.
+   *
+   * @internal
+   */
+  #getEvmSigningKey(storedSwap: StoredSwap): string {
+    return storedSwap.evmSecretKey ?? storedSwap.secretKey;
+  }
+
+  /**
    * Gets the current key index from storage.
    * @returns The current key index, or 0 if no storage is configured.
    */
@@ -1323,7 +1349,7 @@ export class Client {
     return gaslessClaim({
       baseUrl: this.#config.baseUrl,
       preimage: stored.preimage,
-      secretKey: hexToBytes(stored.secretKey),
+      secretKey: hexToBytes(this.#getEvmSigningKey(stored)),
       swap,
       destination,
       dexCalldata,
@@ -2873,18 +2899,18 @@ export class Client {
       settlement,
     );
 
-    // Sign using the SDK's stored EVM secret key for this swap
+    // Sign using the EVM secret key for this swap
     const storedSwap = await this.getStoredSwap(swapId);
     if (!storedSwap?.secretKey) {
       throw new Error(
         "No secret key found for this swap. Cannot sign collab refund.",
       );
     }
-    const sig = signEvmDigest(storedSwap.secretKey, digest);
+    const evmKey = this.#getEvmSigningKey(storedSwap);
+    const sig = signEvmDigest(evmKey, digest);
 
-    // Derive the on-chain depositor address (the key that funded the HTLC)
-    const { deriveEvmAddress } = await import("./evm/signing.js");
-    const depositorAddress = deriveEvmAddress(storedSwap.secretKey);
+    // Derive the on-chain depositor address from the EVM signing key
+    const depositorAddress = deriveEvmAddress(evmKey);
 
     // POST to the server
     const response = await this.#apiClient.POST(
@@ -2996,6 +3022,7 @@ export class Client {
       apiClient: this.#apiClient,
       baseUrl: this.#config.baseUrl,
       deriveSwapParams: () => this.deriveSwapParams(),
+      evmAddress: this.getEvmAddress(),
       storeSwap: (swapId, swapParams, response) =>
         this.#storeSwap(swapId, swapParams, response),
     };
@@ -3022,6 +3049,7 @@ export class Client {
       preimage: bytesToHex(swapParams.preimage),
       preimageHash: bytesToHex(swapParams.preimageHash),
       secretKey: bytesToHex(swapParams.secretKey),
+      evmSecretKey: bytesToHex(this.#signer.deriveEvmKey().secretKey),
       storedAt: Date.now(),
       updatedAt: Date.now(),
       targetAddress,
@@ -3651,8 +3679,9 @@ export class Client {
       deadline,
     });
 
-    // 5. Sign with the stored secret key
-    const sig = signEvmDigest(storedSwap.secretKey, digest);
+    // 5. Sign with the EVM key (deterministic for new swaps, per-swap for legacy)
+    const evmKey = this.#getEvmSigningKey(storedSwap);
+    const sig = signEvmDigest(evmKey, digest);
     // Compact signature: r (32 bytes) || s (32 bytes) || v (1 byte)
     const rClean = sig.r.replace(/^0x/, "");
     const sClean = sig.s.replace(/^0x/, "");
@@ -3666,9 +3695,8 @@ export class Client {
       data: c.call_data,
     }));
 
-    // Derive depositor address from secret key
-    const { deriveEvmAddress } = await import("./evm/signing.js");
-    const depositorAddress = deriveEvmAddress(storedSwap.secretKey);
+    // Derive depositor address from the EVM signing key
+    const depositorAddress = deriveEvmAddress(evmKey);
 
     // 7. Encode executeAndCreateWithPermit2 calldata
     const encoded = encodeExecuteAndCreateWithPermit2(
@@ -4183,15 +4211,16 @@ export class Client {
       nonce,
       deadline,
     });
-    const permit2Sig = signEvmDigest(storedSwap.secretKey, digest);
+    // 4b. Use the EVM key (deterministic for new swaps, per-swap for legacy)
+    const evmKey = this.#getEvmSigningKey(storedSwap);
+    const permit2Sig = signEvmDigest(evmKey, digest);
     const rClean = permit2Sig.r.replace(/^0x/, "");
     const sClean = permit2Sig.s.replace(/^0x/, "");
     const vHex = permit2Sig.v.toString(16).padStart(2, "0");
     const compactSignature = `0x${rClean}${sClean}${vHex}`;
 
-    // 5. Derive depositor address
-    const { deriveEvmAddress } = await import("./evm/signing.js");
-    const depositorAddress = deriveEvmAddress(storedSwap.secretKey);
+    // 5. Derive depositor address from EVM key
+    const depositorAddress = deriveEvmAddress(evmKey);
 
     // 6. If EIP-2612 needed (token supports it and not yet approved to Permit2)
     let eip2612Permit:
@@ -4217,7 +4246,7 @@ export class Client {
         nonce: serverData.eip2612.nonce,
         deadline,
       });
-      const sig = signEvmDigest(storedSwap.secretKey, eip2612Digest);
+      const sig = signEvmDigest(evmKey, eip2612Digest);
       eip2612Permit = {
         v: sig.v,
         r: sig.r.replace(/^0x/, ""),
@@ -4291,11 +4320,9 @@ export class Client {
       );
     }
 
-    const { deriveEvmAddress } = await import("./evm/signing.js");
-    const privateKey = storedSwap.secretKey.startsWith("0x")
-      ? storedSwap.secretKey
-      : `0x${storedSwap.secretKey}`;
-    const address = deriveEvmAddress(storedSwap.secretKey);
+    const evmKey = this.#getEvmSigningKey(storedSwap);
+    const privateKey = evmKey.startsWith("0x") ? evmKey : `0x${evmKey}`;
+    const address = deriveEvmAddress(evmKey);
 
     return { privateKey, address };
   }

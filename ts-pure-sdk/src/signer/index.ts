@@ -219,6 +219,30 @@ export class Signer {
   }
 
   /**
+   * Derive a deterministic EVM signing key from the mnemonic.
+   *
+   * Unlike per-swap keys, this key is fixed for a given mnemonic,
+   * allowing a single Permit2 approval to be reused across all swaps.
+   * Uses the standard BIP-44 Ethereum path so the key is recoverable
+   * with any standard wallet in emergency scenarios.
+   *
+   * Derivation path: `m/44'/60'/0'/0/0`
+   *
+   * @returns The 32-byte secret key for EVM signing.
+   */
+  deriveEvmKey(): { secretKey: Uint8Array } {
+    const master = HDKey.fromMasterSeed(this.#seed);
+    const path = "m/44'/60'/0'/0/0";
+    const derived = master.derive(path);
+
+    if (!derived.privateKey) {
+      throw new Error("Failed to derive EVM key");
+    }
+
+    return { secretKey: derived.privateKey };
+  }
+
+  /**
    * Derive a deterministic Nostr private key from the mnemonic.
    *
    * Uses the NIP-06 derivation path: `m/44'/1237'/account'/0/0`

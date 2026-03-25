@@ -126,10 +126,19 @@ export class SqliteSwapStorage implements SwapStorage {
         preimage_hash TEXT NOT NULL,
         secret_key TEXT NOT NULL,
         stored_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
+        updated_at INTEGER NOT NULL,
+        evm_secret_key TEXT
       );
       CREATE INDEX IF NOT EXISTS idx_swaps_stored_at ON swaps(stored_at);
     `);
+
+    // Migrate existing databases: add evm_secret_key column if missing
+    const columns = this.#db.prepare("PRAGMA table_info(swaps)").all() as {
+      name: string;
+    }[];
+    if (!columns.some((c) => c.name === "evm_secret_key")) {
+      this.#db.exec("ALTER TABLE swaps ADD COLUMN evm_secret_key TEXT");
+    }
   }
 
   async get(swapId: string): Promise<StoredSwap | null> {
@@ -145,8 +154,8 @@ export class SqliteSwapStorage implements SwapStorage {
     this.#db
       .prepare(
         `INSERT OR REPLACE INTO swaps
-         (swap_id, version, key_index, response, public_key, preimage, preimage_hash, secret_key, stored_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (swap_id, version, key_index, response, public_key, preimage, preimage_hash, secret_key, evm_secret_key, stored_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         swap.swapId,
@@ -157,6 +166,7 @@ export class SqliteSwapStorage implements SwapStorage {
         swap.preimage,
         swap.preimageHash,
         swap.secretKey,
+        swap.evmSecretKey ?? null,
         swap.storedAt,
         swap.updatedAt,
       );
@@ -202,6 +212,7 @@ export class SqliteSwapStorage implements SwapStorage {
       preimage: row.preimage,
       preimageHash: row.preimage_hash,
       secretKey: row.secret_key,
+      evmSecretKey: row.evm_secret_key ?? undefined,
       storedAt: row.stored_at,
       updatedAt: row.updated_at,
     };
@@ -224,6 +235,7 @@ interface SqliteSwapRow {
   preimage: string;
   preimage_hash: string;
   secret_key: string;
+  evm_secret_key: string | null;
   stored_at: number;
   updated_at: number;
 }

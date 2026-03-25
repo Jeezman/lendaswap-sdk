@@ -3,7 +3,6 @@
  */
 
 import type { LightningToEvmSwapResponse } from "../api/client";
-import { deriveEvmAddress } from "../evm";
 import { bytesToHex } from "../signer/index.js";
 import type {
   CreateSwapContext,
@@ -45,9 +44,9 @@ export async function createLightningToEvmSwapGeneric(
   const refundPk = bytesToHex(swapParams.publicKey);
   const userId = bytesToHex(swapParams.userId);
 
-  // The claiming address is derived from the swap's secret key.
-  // This allows the SDK to sign gasless claims internally.
-  const claimingAddress = deriveEvmAddress(swapParams.secretKey);
+  // The claiming address is the SDK's deterministic EVM address,
+  // reused across swaps so a single Permit2 approval suffices.
+  const claimingAddress = ctx.evmAddress;
 
   const body = {
     hash_lock: hashLock,

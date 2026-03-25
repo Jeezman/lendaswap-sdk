@@ -4,7 +4,6 @@
  * Supports swapping tokens from Polygon, Arbitrum, or Ethereum to BTC on Arkade.
  */
 
-import { deriveEvmAddress } from "../evm/index.js";
 import { bytesToHex } from "../signer/index.js";
 import type {
   CreateSwapContext,
@@ -47,9 +46,7 @@ export async function createEvmToArkadeSwapGeneric(
   const receiverPk = bytesToHex(swapParams.publicKey);
   const userId = bytesToHex(swapParams.userId);
 
-  const userAddress = options.gasless
-    ? deriveEvmAddress(bytesToHex(swapParams.secretKey))
-    : options.userAddress;
+  const userAddress = options.gasless ? ctx.evmAddress : options.userAddress;
 
   const { data, error } = await ctx.apiClient.POST("/swap/evm/arkade", {
     body: {

@@ -2,7 +2,6 @@
  * Bitcoin (on-chain) to EVM swap creation via the generic endpoint.
  */
 
-import { deriveEvmAddress } from "../evm/signing.js";
 import { bytesToHex } from "../signer/index.js";
 import type {
   BitcoinToEvmSwapOptions,
@@ -44,9 +43,9 @@ export async function createBitcoinToEvmSwap(
   const refundPk = bytesToHex(swapParams.publicKey);
   const userId = bytesToHex(swapParams.userId);
 
-  // The claiming address is derived from the swap's secret key.
-  // This allows the SDK to sign gasless claims internally.
-  const claimingAddress = deriveEvmAddress(swapParams.secretKey);
+  // The claiming address is the SDK's deterministic EVM address,
+  // reused across swaps so a single Permit2 approval suffices.
+  const claimingAddress = ctx.evmAddress;
 
   const { data, error } = await ctx.apiClient.POST("/swap/bitcoin/evm", {
     body: {
