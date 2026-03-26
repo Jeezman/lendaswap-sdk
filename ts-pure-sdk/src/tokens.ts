@@ -153,17 +153,17 @@ const CHAIN_ID_TO_NAME: Record<string, string> = Object.fromEntries(
 
 /** Returns true if the token is Bitcoin on Lightning. */
 export function isLightning(token: { chain: string }): boolean {
-  return token.chain === "Lightning";
+  return token.chain.toLowerCase() === "lightning";
 }
 
 /** Returns true if the token is Bitcoin on Arkade. */
 export function isArkade(token: { chain: string }): boolean {
-  return token.chain === "Arkade";
+  return token.chain.toLowerCase() === "arkade";
 }
 
 /** Returns true if the token is Bitcoin on-chain (L1). */
 export function isBtcOnchain(token: { chain: string }): boolean {
-  return token.chain === "Bitcoin";
+  return token.chain.toLowerCase() === "bitcoin";
 }
 
 /** Returns true if the token is any form of Bitcoin (Lightning, Arkade, or on-chain). */
@@ -203,33 +203,33 @@ export function isBridgeOnlyChain(chain: string): boolean {
 
 /** Returns true if the chain is Ethereum. */
 export function isEthereumToken(c: string): boolean {
-  return c === "ethereum" || c === "1";
+  return c.toLowerCase() === "ethereum" || c === "1";
 }
 
 /** Returns true if the chain is Polygon. */
 export function isPolygonToken(c: string): boolean {
-  return c === "polygon" || c === "137";
+  return c.toLowerCase() === "polygon" || c === "137";
 }
 
 /** Returns true if the chain is Arbitrum. */
 export function isArbitrumToken(chain: string): boolean {
-  return chain === "arbitrum" || chain === "42161";
+  return chain.toLowerCase() === "arbitrum" || chain === "42161";
 }
 
 export function isBaseToken(chain: string): boolean {
-  return chain === "base" || chain === "8453";
+  return chain.toLowerCase() === "base" || chain === "8453";
 }
 
 export function isOptimismToken(chain: string): boolean {
-  return chain === "optimism" || chain === "10";
+  return chain.toLowerCase() === "optimism" || chain === "10";
 }
 
 export function isAvalancheToken(chain: string): boolean {
-  return chain === "avalanche" || chain === "43114";
+  return chain.toLowerCase() === "avalanche" || chain === "43114";
 }
 
 export function isLineaToken(chain: string): boolean {
-  return chain === "linea" || chain === "59144";
+  return chain.toLowerCase() === "linea" || chain === "59144";
 }
 
 /** Normalizes any chain string to its canonical Chain value. */
