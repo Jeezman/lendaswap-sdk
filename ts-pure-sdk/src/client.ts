@@ -546,10 +546,10 @@ export class ClientBuilder {
 
     return new Client(
       {
-        baseUrl: this.#baseUrl,
+        baseUrl: this.#baseUrl.replace(/\/+$/, ""),
         apiKey: this.#apiKey,
-        esploraUrl: this.#esploraUrl,
-        arkadeServerUrl: this.#arkadeServerUrl,
+        esploraUrl: this.#esploraUrl?.replace(/\/+$/, ""),
+        arkadeServerUrl: this.#arkadeServerUrl?.replace(/\/+$/, ""),
       },
       signer,
       this.#signerStorage,
