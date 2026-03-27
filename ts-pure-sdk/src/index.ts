@@ -23,8 +23,8 @@ export type {
   // Types
   paths,
   QuoteResponse,
-  SwapPairsResponse,
   SwapPairInfo,
+  SwapPairsResponse,
   SwapStatus,
   TokenId,
   TokenInfo,
