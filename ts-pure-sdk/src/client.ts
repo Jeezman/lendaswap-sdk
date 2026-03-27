@@ -12,7 +12,7 @@ import {
   type LightningToArkadeSwapResponse,
   type LightningToEvmSwapResponse,
   type QuoteResponse,
-  type SwapLimitsResponse,
+  type SwapPairsResponse,
   type TokenInfos,
 } from "./api/client.js";
 import { getVhtlcAmounts, type VhtlcAmounts } from "./arkade.js";
@@ -846,14 +846,14 @@ export class Client {
   }
 
   /**
-   * Gets the min/max swap limits (in satoshis) for every supported chain pair.
-   * @returns A promise that resolves to all swap pair limits.
+   * Gets all supported swap pairs with their limits (in satoshis) and base fee percentages.
+   * @returns A promise that resolves to all swap pairs with limits and fees.
    * @throws Error if the request fails.
    */
-  async getLimits(): Promise<SwapLimitsResponse> {
-    const { data, error } = await this.#apiClient.GET("/limits");
+  async getSwapPairs(): Promise<SwapPairsResponse> {
+    const { data, error } = await this.#apiClient.GET("/swap-pairs");
     if (error || !data) {
-      throw new Error(`Failed to get limits: ${JSON.stringify(error)}`);
+      throw new Error(`Failed to get swap pairs: ${JSON.stringify(error)}`);
     }
     return data;
   }

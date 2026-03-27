@@ -247,23 +247,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/limits": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Return the min/max swap limits (in satoshis) for every supported chain pair. */
-        get: operations["get_limits"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/mtp": {
         parameters: {
             query?: never;
@@ -312,6 +295,23 @@ export interface paths {
         };
         /** Return the configured support agent npubs. */
         get: operations["get_support_agents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/swap-pairs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Return all supported swap pairs with their limits (in satoshis) and base fee percentages. */
+        get: operations["get_swap_pairs"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2211,12 +2211,16 @@ export interface components {
         SupportAgentsResponse: {
             agents: components["schemas"]["SupportAgentInfo"][];
         };
-        /** @description All supported swap routes with their limits. */
-        SwapLimitsResponse: {
-            limits: components["schemas"]["SwapPairLimits"][];
-        };
-        /** @description Min/max swap amount in satoshis for a particular source→target pair. */
-        SwapPairLimits: {
+        /** @enum {string} */
+        SwapDirection: "BITCOIN_TO_EVM" | "BITCOIN_TO_ARKADE" | "ARKADE_TO_EVM" | "EVM_TO_ARKADE" | "EVM_TO_BITCOIN" | "LIGHTNING_TO_EVM" | "EVM_TO_LIGHTNING" | "LIGHTNING_TO_ARKADE" | "ARKADE_TO_LIGHTNING";
+        /** @description A supported swap pair with its limits and base fee. */
+        SwapPairInfo: {
+            direction: components["schemas"]["SwapDirection"];
+            /**
+             * Format: double
+             * @description Base fee percentage as a decimal (e.g. 0.0025 = 0.25%).
+             */
+            fee_percentage: number;
             /**
              * Format: double
              * @description Maximum BTC amount in satoshis.
@@ -2229,6 +2233,10 @@ export interface components {
             min_sats: number;
             source: components["schemas"]["Chain"];
             target: components["schemas"]["Chain"];
+        };
+        /** @description All supported swap pairs with their limits and fees. */
+        SwapPairsResponse: {
+            pairs: components["schemas"]["SwapPairInfo"][];
         };
         /**
          * @description Atomic swap state machine for BTC --> Target Asset swaps using HTLCs.
@@ -2872,26 +2880,6 @@ export interface operations {
             };
         };
     };
-    get_limits: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Swap limits for all supported chain combinations */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SwapLimitsResponse"];
-                };
-            };
-        };
-    };
     get_mtp: {
         parameters: {
             query?: never;
@@ -2985,6 +2973,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SupportAgentsResponse"];
+                };
+            };
+        };
+    };
+    get_swap_pairs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Supported swap pairs with limits and fees */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwapPairsResponse"];
                 };
             };
         };
