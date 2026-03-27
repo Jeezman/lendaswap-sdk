@@ -6,7 +6,7 @@ describe("Client", () => {
     const client = await Client.builder().build();
 
     expect(client).toBeDefined();
-    expect(client.baseUrl).toBe("https://api.lendaswap.com/");
+    expect(client.baseUrl).toBe("https://api.lendaswap.com");
   });
 
   it("should expose the underlying API client", async () => {
@@ -33,7 +33,7 @@ describe("ClientBuilder", () => {
     const client = await Client.builder().build();
 
     expect(client).toBeDefined();
-    expect(client.baseUrl).toBe("https://api.lendaswap.com/");
+    expect(client.baseUrl).toBe("https://api.lendaswap.com");
   });
 
   it("should build a client with custom base URL", async () => {
