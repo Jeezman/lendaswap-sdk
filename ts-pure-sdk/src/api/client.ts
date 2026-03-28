@@ -74,7 +74,7 @@ export interface ApiClientOptions {
 export function createApiClient(options: ApiClientOptions): ApiClient {
   const headers: Record<string, string> = {};
   if (options.apiKey) {
-    headers["X-API-Key"] = options.apiKey;
+    headers["X-Org-Code"] = options.apiKey;
   }
 
   return createClient<paths>({

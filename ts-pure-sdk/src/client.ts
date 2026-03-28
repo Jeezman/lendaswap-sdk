@@ -3642,7 +3642,7 @@ export class Client {
     const url = `${baseUrl}/swap/${swapId}/swap-and-lock-calldata-permit2`;
     const headers: Record<string, string> = {};
     if (this.#config.apiKey) {
-      headers["X-API-Key"] = this.#config.apiKey;
+      headers["X-Org-Code"] = this.#config.apiKey;
     }
 
     const resp = await fetch(url, { headers });
@@ -3816,7 +3816,7 @@ export class Client {
     const url = `${baseUrl}/swap/${swapId}/swap-and-lock-calldata-permit2`;
     const headers: Record<string, string> = {};
     if (this.#config.apiKey) {
-      headers["X-API-Key"] = this.#config.apiKey;
+      headers["X-Org-Code"] = this.#config.apiKey;
     }
 
     const resp = await fetch(url, { headers });
@@ -4169,7 +4169,7 @@ export class Client {
     const url = `${baseUrl}/swap/${swapId}/swap-and-lock-calldata-permit2`;
     const headers: Record<string, string> = {};
     if (this.#config.apiKey) {
-      headers["X-API-Key"] = this.#config.apiKey;
+      headers["X-Org-Code"] = this.#config.apiKey;
     }
 
     const resp = await fetch(url, { headers });

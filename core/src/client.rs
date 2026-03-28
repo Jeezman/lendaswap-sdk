@@ -174,9 +174,9 @@ impl<S, SS, VSS> ClientBuilder<S, SS, VSS> {
         self
     }
 
-    /// Set the API key for tracking swap creation.
+    /// Set the org code for tracking swap creation.
     ///
-    /// When set, the API key will be sent as the `X-API-Key` header on swap creation requests.
+    /// When set, the org code will be sent as the `X-Org-Code` header on swap creation requests.
     pub fn api_key(mut self, api_key: impl Into<String>) -> Self {
         self.api_key = Some(api_key.into());
         self
@@ -283,9 +283,9 @@ impl<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> Client<S, SS, VSS>
         &self.api_client
     }
 
-    /// Set the API key for tracking swap creation.
+    /// Set the org code for tracking swap creation.
     ///
-    /// When set, the API key will be sent as the `X-API-Key` header on swap creation requests.
+    /// When set, the org code will be sent as the `X-Org-Code` header on swap creation requests.
     pub fn set_api_key(&mut self, api_key: Option<String>) {
         self.api_client.set_api_key(api_key);
     }

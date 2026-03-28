@@ -55,9 +55,9 @@ impl ApiClient {
         &self.base_url
     }
 
-    /// Set the API key for tracking swap creation.
+    /// Set the org code for tracking swap creation.
     ///
-    /// When set, the API key will be sent as the `X-API-Key` header on swap creation requests.
+    /// When set, the org code will be sent as the `X-Org-Code` header on swap creation requests.
     pub fn set_api_key(&mut self, api_key: Option<String>) {
         self.api_key = api_key;
     }
@@ -365,9 +365,9 @@ impl ApiClient {
     ) -> Result<T> {
         let mut request = self.client.post(url).json(body);
 
-        // Add API key header if set
+        // Add org code header if set
         if let Some(ref api_key) = self.api_key {
-            request = request.header("X-API-Key", api_key);
+            request = request.header("X-Org-Code", api_key);
         }
 
         let response = request
