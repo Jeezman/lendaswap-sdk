@@ -4515,39 +4515,21 @@
           }
         }
       },
-      "SwapDirection": {
-        "type": "string",
-        "enum": [
-          "BITCOIN_TO_EVM",
-          "BITCOIN_TO_ARKADE",
-          "ARKADE_TO_EVM",
-          "EVM_TO_ARKADE",
-          "EVM_TO_BITCOIN",
-          "LIGHTNING_TO_EVM",
-          "EVM_TO_LIGHTNING",
-          "LIGHTNING_TO_ARKADE",
-          "ARKADE_TO_LIGHTNING"
-        ]
-      },
       "SwapPairInfo": {
         "type": "object",
         "description": "A supported swap pair with its limits and base fee.",
         "required": [
           "source",
           "target",
-          "direction",
           "min_sats",
           "max_sats",
           "fee_percentage"
         ],
         "properties": {
-          "direction": {
-            "$ref": "#/components/schemas/SwapDirection"
-          },
           "fee_percentage": {
             "type": "number",
             "format": "double",
-            "description": "Base fee percentage as a decimal (e.g. 0.0025 = 0.25%)."
+            "description": "Fee percentage as a decimal (e.g. 0.0025 = 0.25%).\n\nFor a swap of 100,000 sats at 0.25% fee, the fee would be 250 sats.\nSwaps involving Lightning may incur additional Lightning Network routing fees\non top of this percentage."
           },
           "max_sats": {
             "type": "number",

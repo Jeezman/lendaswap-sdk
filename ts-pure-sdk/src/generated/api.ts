@@ -2211,14 +2211,15 @@ export interface components {
         SupportAgentsResponse: {
             agents: components["schemas"]["SupportAgentInfo"][];
         };
-        /** @enum {string} */
-        SwapDirection: "BITCOIN_TO_EVM" | "BITCOIN_TO_ARKADE" | "ARKADE_TO_EVM" | "EVM_TO_ARKADE" | "EVM_TO_BITCOIN" | "LIGHTNING_TO_EVM" | "EVM_TO_LIGHTNING" | "LIGHTNING_TO_ARKADE" | "ARKADE_TO_LIGHTNING";
         /** @description A supported swap pair with its limits and base fee. */
         SwapPairInfo: {
-            direction: components["schemas"]["SwapDirection"];
             /**
              * Format: double
-             * @description Base fee percentage as a decimal (e.g. 0.0025 = 0.25%).
+             * @description Fee percentage as a decimal (e.g. 0.0025 = 0.25%).
+             *
+             *     For a swap of 100,000 sats at 0.25% fee, the fee would be 250 sats.
+             *     Swaps involving Lightning may incur additional Lightning Network routing fees
+             *     on top of this percentage.
              */
             fee_percentage: number;
             /**
