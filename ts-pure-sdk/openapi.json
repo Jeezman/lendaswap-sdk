@@ -6,7 +6,7 @@
     "license": {
       "name": ""
     },
-    "version": "0.2.11"
+    "version": "0.2.14"
   },
   "paths": {
     "/api/delegate/cosigner-pk": {
@@ -1862,8 +1862,7 @@
             "type": "string"
           },
           "evm_expected_sats": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string"
           },
           "evm_fund_txid": {
             "type": ["string", "null"]
@@ -2301,8 +2300,7 @@
             "description": "HTLCCoordinator contract address (for redeemAndExecute)"
           },
           "evm_expected_sats": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
             "description": "Amount of WBTC sats locked in the EVM HTLC"
           },
           "evm_fund_txid": {
@@ -3137,8 +3135,7 @@
             "type": ["string", "null"]
           },
           "evm_expected_sats": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string"
           },
           "evm_fund_txid": {
             "type": ["string", "null"]
@@ -3358,8 +3355,7 @@
             "type": ["string", "null"]
           },
           "evm_expected_sats": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
             "description": "Expected WBTC amount (in sats) on EVM"
           },
           "evm_fund_txid": {
@@ -3533,8 +3529,7 @@
             "type": ["string", "null"]
           },
           "evm_expected_sats": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string"
           },
           "evm_fund_txid": {
             "type": ["string", "null"]
@@ -4192,8 +4187,7 @@
             "type": "string"
           },
           "evm_expected_sats": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string"
           },
           "evm_fund_txid": {
             "type": ["string", "null"]

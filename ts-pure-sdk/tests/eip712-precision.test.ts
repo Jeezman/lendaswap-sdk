@@ -16,12 +16,12 @@ import { signEvmDigest } from "../src/evm/signing.js";
 describe("EIP-712 precision loss on large evm_expected_sats", () => {
   const TEST_SECRET_KEY = new Uint8Array(32).fill(0xab);
 
-  // Exact server JSON for the failed swap (evm_expected_sats as a number, not a string)
+  // Server JSON for the failed swap — after fix, evm_expected_sats is a string
   const SERVER_JSON = `{
     "evm_chain_id": 1,
     "evm_htlc_address": "0x5317dccd55DDe04d5F7Ba2e34fE8B1B214F1e022",
     "evm_coordinator_address": "0x57Ef7025F9f6F135e8338e18EB3027acB9D4785C",
-    "evm_expected_sats": 9949426433915211,
+    "evm_expected_sats": "9949426433915211",
     "wbtc_address": "0x18084fbA666a33d37592fA2633fD49a74DD93a88",
     "server_evm_address": "0x5ce278AAec6d9fa67bFcaF98512fE5175dFEebac",
     "target_evm_address": "0x72cf2114CB5aFaE7D058F9Df75962E79cd44dB85",
