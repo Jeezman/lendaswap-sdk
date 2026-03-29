@@ -3,6 +3,7 @@
  */
 
 import { bytesToHex } from "../signer/index.js";
+import { retryOnHashCollision } from "./retry.js";
 import type {
   CreateSwapContext,
   LightningToEvmSwapGenericOptions,
@@ -15,68 +16,57 @@ import type {
  * The claiming address is derived internally from the swap's secret key,
  * allowing the SDK to sign gasless claims without user interaction.
  *
+ * If the server rejects the hash lock (duplicate or Boltz collision), the
+ * function automatically retries with a new key index.
+ *
  * @param options - The swap options.
  * @param ctx - The context containing API client and helper functions.
  * @returns The swap response and parameters for storage.
- * @throws Error if the swap creation fails.
- *
- * @example
- * ```ts
- * const result = await createLightningToEvmSwapGeneric(
- *   {
- *     targetAddress: "0x5678...",   // User's final destination
- *     evmChainId: 137,              // Polygon
- *     tokenAddress: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", // USDC on Polygon
- *     amountIn: 100000,             // 100k sats
- *   },
- *   { apiClient, deriveSwapParams, storeSwap }
- * );
- * console.log("Pay this invoice:", result.response.ln_invoice);
- * ```
+ * @throws Error if the swap creation fails after all retries.
  */
 export async function createLightningToEvmSwapGeneric(
   options: LightningToEvmSwapGenericOptions,
   ctx: CreateSwapContext,
 ): Promise<LightningToEvmSwapGenericResult> {
-  const swapParams = await ctx.deriveSwapParams();
-  const hashLock = `0x${bytesToHex(swapParams.preimageHash)}`;
-  const refundPk = bytesToHex(swapParams.publicKey);
-  const userId = bytesToHex(swapParams.userId);
+  return retryOnHashCollision(ctx, async () => {
+    const swapParams = await ctx.deriveSwapParams();
+    const hashLock = `0x${bytesToHex(swapParams.preimageHash)}`;
+    const refundPk = bytesToHex(swapParams.publicKey);
+    const userId = bytesToHex(swapParams.userId);
 
-  // The claiming address is the SDK's deterministic EVM address,
-  // reused across swaps so a single Permit2 approval suffices.
-  const claimingAddress = ctx.evmAddress;
+    const claimingAddress = ctx.evmAddress;
 
-  const { data, error } = await ctx.apiClient.POST("/swap/lightning/evm", {
-    body: {
-      hash_lock: hashLock,
-      refund_pk: refundPk,
-      user_id: userId,
-      claiming_address: claimingAddress,
-      target_address: options.targetAddress,
-      evm_chain_id: options.evmChainId,
-      token_address: options.tokenAddress,
-      amount_in: options.amountIn,
-      amount_out: options.amountOut,
-      referral_code: options.referralCode,
-      gasless: options.gasless ?? true,
-      bridge_target_chain: options.bridgeParams?.targetChain,
-      bridge_target_token_address: options.bridgeParams?.targetTokenAddress,
-    },
+    const { data, error } = await ctx.apiClient.POST("/swap/lightning/evm", {
+      body: {
+        hash_lock: hashLock,
+        refund_pk: refundPk,
+        user_id: userId,
+        claiming_address: claimingAddress,
+        target_address: options.targetAddress,
+        evm_chain_id: options.evmChainId,
+        token_address: options.tokenAddress,
+        amount_in: options.amountIn,
+        amount_out: options.amountOut,
+        referral_code: options.referralCode,
+        gasless: options.gasless ?? true,
+        bridge_target_chain: options.bridgeParams?.targetChain,
+        bridge_target_token_address: options.bridgeParams?.targetTokenAddress,
+      },
+    });
+
+    if (error) {
+      throw new Error(`Failed to create swap: ${JSON.stringify(error)}`);
+    }
+    if (!data) {
+      throw new Error("No swap data returned");
+    }
+
+    // Store the swap if storage is configured
+    await ctx.storeSwap(data.id, swapParams, {
+      ...data,
+      direction: "lightning_to_evm",
+    });
+
+    return { response: data, swapParams };
   });
-
-  if (error) {
-    throw new Error(`Failed to create swap: ${JSON.stringify(error)}`);
-  }
-  if (!data) {
-    throw new Error("No swap data returned");
-  }
-
-  // Store the swap if storage is configured
-  await ctx.storeSwap(data.id, swapParams, {
-    ...data,
-    direction: "lightning_to_evm",
-  });
-
-  return { response: data, swapParams };
 }

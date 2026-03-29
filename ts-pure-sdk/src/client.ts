@@ -3034,6 +3034,12 @@ export class Client {
       baseUrl: this.#config.baseUrl,
       deriveSwapParams: () => this.deriveSwapParams(),
       evmAddress: this.getEvmAddress(),
+      skipKeyIndices: async (n: number) => {
+        if (this.#signerStorage) {
+          const current = await this.#signerStorage.getKeyIndex();
+          await this.#signerStorage.setKeyIndex(current + n);
+        }
+      },
       storeSwap: (swapId, swapParams, response) =>
         this.#storeSwap(swapId, swapParams, response),
     };

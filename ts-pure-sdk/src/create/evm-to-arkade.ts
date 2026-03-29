@@ -5,6 +5,7 @@
  */
 
 import { bytesToHex } from "../signer/index.js";
+import { retryOnHashCollision } from "./retry.js";
 import type {
   CreateSwapContext,
   EvmToArkadeSwapGenericOptions,
@@ -41,45 +42,47 @@ export async function createEvmToArkadeSwapGeneric(
   options: EvmToArkadeSwapGenericOptions,
   ctx: CreateSwapContext,
 ): Promise<EvmToArkadeSwapGenericResult> {
-  const swapParams = await ctx.deriveSwapParams();
-  const hashLock = `0x${bytesToHex(swapParams.preimageHash)}`;
-  const receiverPk = bytesToHex(swapParams.publicKey);
-  const userId = bytesToHex(swapParams.userId);
+  return retryOnHashCollision(ctx, async () => {
+    const swapParams = await ctx.deriveSwapParams();
+    const hashLock = `0x${bytesToHex(swapParams.preimageHash)}`;
+    const receiverPk = bytesToHex(swapParams.publicKey);
+    const userId = bytesToHex(swapParams.userId);
 
-  const userAddress = options.gasless ? ctx.evmAddress : options.userAddress;
+    const userAddress = options.gasless ? ctx.evmAddress : options.userAddress;
 
-  const { data, error } = await ctx.apiClient.POST("/swap/evm/arkade", {
-    body: {
-      hash_lock: hashLock,
-      receiver_pk: receiverPk,
-      user_id: userId,
-      target_address: options.targetAddress,
-      token_address: options.tokenAddress,
-      evm_chain_id: options.evmChainId,
-      user_address: userAddress,
-      amount_in: options.sourceAmount
-        ? Number(options.sourceAmount)
-        : undefined,
-      amount_out: options.targetAmount
-        ? Number(options.targetAmount)
-        : undefined,
-      referral_code: options.referralCode,
-      gasless: options.gasless ?? false,
-    },
+    const { data, error } = await ctx.apiClient.POST("/swap/evm/arkade", {
+      body: {
+        hash_lock: hashLock,
+        receiver_pk: receiverPk,
+        user_id: userId,
+        target_address: options.targetAddress,
+        token_address: options.tokenAddress,
+        evm_chain_id: options.evmChainId,
+        user_address: userAddress,
+        amount_in: options.sourceAmount
+          ? Number(options.sourceAmount)
+          : undefined,
+        amount_out: options.targetAmount
+          ? Number(options.targetAmount)
+          : undefined,
+        referral_code: options.referralCode,
+        gasless: options.gasless ?? false,
+      },
+    });
+
+    if (error) {
+      throw new Error(`Failed to create swap: ${JSON.stringify(error)}`);
+    }
+    if (!data) {
+      throw new Error("No swap data returned");
+    }
+
+    // Store the swap if storage is configured
+    await ctx.storeSwap(data.id, swapParams, {
+      ...data,
+      direction: "evm_to_arkade",
+    });
+
+    return { response: data, swapParams };
   });
-
-  if (error) {
-    throw new Error(`Failed to create swap: ${JSON.stringify(error)}`);
-  }
-  if (!data) {
-    throw new Error("No swap data returned");
-  }
-
-  // Store the swap if storage is configured
-  await ctx.storeSwap(data.id, swapParams, {
-    ...data,
-    direction: "evm_to_arkade",
-  });
-
-  return { response: data, swapParams };
 }

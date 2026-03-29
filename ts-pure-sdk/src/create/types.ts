@@ -395,6 +395,8 @@ export interface CreateSwapContext {
   deriveSwapParams: () => Promise<SwapParams>;
   /** Deterministic EVM address derived from the SDK key, reused across all swaps for Permit2 efficiency. */
   evmAddress: string;
+  /** Jump the key index forward by `n` (used to skip past reused indices). */
+  skipKeyIndices?: (n: number) => Promise<void>;
   /** Function to store the swap in storage (if configured) */
   storeSwap: (
     swapId: string,

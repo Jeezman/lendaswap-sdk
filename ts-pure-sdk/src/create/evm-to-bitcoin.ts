@@ -6,6 +6,7 @@
  */
 
 import { bytesToHex } from "../signer/index.js";
+import { retryOnHashCollision } from "./retry.js";
 import type {
   CreateSwapContext,
   EvmToBitcoinSwapOptions,
@@ -42,46 +43,48 @@ export async function createEvmToBitcoinSwap(
   options: EvmToBitcoinSwapOptions,
   ctx: CreateSwapContext,
 ): Promise<EvmToBitcoinSwapResult> {
-  const swapParams = await ctx.deriveSwapParams();
-  const hashLock = `0x${bytesToHex(swapParams.preimageHash)}`;
-  // For BTC on-chain claim, the user needs their public key (compressed, 33 bytes)
-  const claimPk = bytesToHex(swapParams.publicKey);
-  const userId = bytesToHex(swapParams.userId);
+  return retryOnHashCollision(ctx, async () => {
+    const swapParams = await ctx.deriveSwapParams();
+    const hashLock = `0x${bytesToHex(swapParams.preimageHash)}`;
+    // For BTC on-chain claim, the user needs their public key (compressed, 33 bytes)
+    const claimPk = bytesToHex(swapParams.publicKey);
+    const userId = bytesToHex(swapParams.userId);
 
-  const userAddress = options.gasless ? ctx.evmAddress : options.userAddress;
+    const userAddress = options.gasless ? ctx.evmAddress : options.userAddress;
 
-  const { data, error } = await ctx.apiClient.POST("/swap/evm/bitcoin", {
-    body: {
-      hash_lock: hashLock,
-      claim_pk: claimPk,
-      user_id: userId,
-      token_address: options.tokenAddress,
-      evm_chain_id: options.evmChainId,
-      user_address: userAddress,
-      target_address: options.targetAddress,
-      amount_in: options.sourceAmount
-        ? Number(options.sourceAmount)
-        : undefined,
-      amount_out: options.targetAmount
-        ? Number(options.targetAmount)
-        : undefined,
-      referral_code: options.referralCode,
-      gasless: options.gasless ?? false,
-    },
+    const { data, error } = await ctx.apiClient.POST("/swap/evm/bitcoin", {
+      body: {
+        hash_lock: hashLock,
+        claim_pk: claimPk,
+        user_id: userId,
+        token_address: options.tokenAddress,
+        evm_chain_id: options.evmChainId,
+        user_address: userAddress,
+        target_address: options.targetAddress,
+        amount_in: options.sourceAmount
+          ? Number(options.sourceAmount)
+          : undefined,
+        amount_out: options.targetAmount
+          ? Number(options.targetAmount)
+          : undefined,
+        referral_code: options.referralCode,
+        gasless: options.gasless ?? false,
+      },
+    });
+
+    if (error) {
+      throw new Error(`Failed to create swap: ${JSON.stringify(error)}`);
+    }
+    if (!data) {
+      throw new Error("No swap data returned");
+    }
+
+    // Store the swap if storage is configured
+    await ctx.storeSwap(data.id, swapParams, {
+      ...data,
+      direction: "evm_to_bitcoin",
+    });
+
+    return { response: data, swapParams };
   });
-
-  if (error) {
-    throw new Error(`Failed to create swap: ${JSON.stringify(error)}`);
-  }
-  if (!data) {
-    throw new Error("No swap data returned");
-  }
-
-  // Store the swap if storage is configured
-  await ctx.storeSwap(data.id, swapParams, {
-    ...data,
-    direction: "evm_to_bitcoin",
-  });
-
-  return { response: data, swapParams };
 }
