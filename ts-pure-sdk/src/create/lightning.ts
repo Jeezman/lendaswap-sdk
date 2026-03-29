@@ -2,7 +2,6 @@
  * Lightning to EVM swap creation.
  */
 
-import type { LightningToEvmSwapResponse } from "../api/client";
 import { bytesToHex } from "../signer/index.js";
 import type {
   CreateSwapContext,
@@ -48,37 +47,30 @@ export async function createLightningToEvmSwapGeneric(
   // reused across swaps so a single Permit2 approval suffices.
   const claimingAddress = ctx.evmAddress;
 
-  const body = {
-    hash_lock: hashLock,
-    refund_pk: refundPk,
-    user_id: userId,
-    claiming_address: claimingAddress,
-    target_address: options.targetAddress,
-    evm_chain_id: options.evmChainId,
-    token_address: options.tokenAddress,
-    amount_in: options.amountIn,
-    amount_out: options.amountOut,
-    referral_code: options.referralCode,
-    gasless: options.gasless ?? true,
-    bridge_target_chain: options.bridgeParams?.targetChain,
-    bridge_target_token_address: options.bridgeParams?.targetTokenAddress,
-  };
-
-  // Use fetch directly since the generated types don't have this endpoint yet
-  const response = await fetch(`${ctx.baseUrl}/swap/lightning/evm`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  const { data, error } = await ctx.apiClient.POST("/swap/lightning/evm", {
+    body: {
+      hash_lock: hashLock,
+      refund_pk: refundPk,
+      user_id: userId,
+      claiming_address: claimingAddress,
+      target_address: options.targetAddress,
+      evm_chain_id: options.evmChainId,
+      token_address: options.tokenAddress,
+      amount_in: options.amountIn,
+      amount_out: options.amountOut,
+      referral_code: options.referralCode,
+      gasless: options.gasless ?? true,
+      bridge_target_chain: options.bridgeParams?.targetChain,
+      bridge_target_token_address: options.bridgeParams?.targetTokenAddress,
     },
-    body: JSON.stringify(body),
   });
 
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Failed to create swap: ${error}`);
+  if (error) {
+    throw new Error(`Failed to create swap: ${JSON.stringify(error)}`);
   }
-
-  const data = (await response.json()) as LightningToEvmSwapResponse;
+  if (!data) {
+    throw new Error("No swap data returned");
+  }
 
   // Store the swap if storage is configured
   await ctx.storeSwap(data.id, swapParams, {
