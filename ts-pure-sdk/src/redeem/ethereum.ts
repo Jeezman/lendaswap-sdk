@@ -111,7 +111,7 @@ function getRedeemParams(swap: GetSwapResponse):
   // EVM swaps with the newer field structure
   // Check for the fields we need
   const evmSwap = swap as {
-    evm_expected_sats?: number;
+    evm_expected_sats?: number | string;
     wbtc_address?: string;
     server_evm_address?: string;
     evm_refund_locktime?: number;

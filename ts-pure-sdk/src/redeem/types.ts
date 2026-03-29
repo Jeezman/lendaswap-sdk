@@ -37,9 +37,9 @@ export interface CoordinatorClaimData {
   coordinatorAddress: string;
   /** EVM chain ID */
   chainId: number;
-  /** WBTC amount locked in the HTLC (evm_expected_sats) */
-  amount: number;
-  /** WBTC token address (derived from chain config or response) */
+  /** WBTC/tBTC amount locked in the HTLC (evm_expected_sats) */
+  amount: number | string;
+  /** WBTC/tBTC token address (derived from chain config or response) */
   wbtcAddress: string;
   /** HTLC sender (server's EVM address) */
   sender: string;
