@@ -22,10 +22,13 @@ import type {
  * 3. User claims Arkade VHTLC with secret, revealing it
  * 4. Server claims Boltz VHTLC with the revealed secret
  *
+ * If the server rejects the hash lock (duplicate or collision), the
+ * function automatically retries with a new key index.
+ *
  * @param options - The swap options.
  * @param ctx - The context containing API client and helper functions.
  * @returns The swap response and parameters for storage.
- * @throws Error if the swap creation fails.
+ * @throws Error if the swap creation fails after all retries.
  *
  * @example
  * ```ts

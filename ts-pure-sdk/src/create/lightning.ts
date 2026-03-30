@@ -16,7 +16,7 @@ import type {
  * The claiming address is derived internally from the swap's secret key,
  * allowing the SDK to sign gasless claims without user interaction.
  *
- * If the server rejects the hash lock (duplicate or Boltz collision), the
+ * If the server rejects the hash lock (duplicate or collision), the
  * function automatically retries with a new key index.
  *
  * @param options - The swap options.

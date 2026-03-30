@@ -18,10 +18,13 @@ import type {
  * `evm_coordinator_address` and optional `dex_call_data` for the
  * redeem-and-swap flow.
  *
+ * If the server rejects the hash lock (duplicate or collision), the
+ * function automatically retries with a new key index.
+ *
  * @param options - The swap options.
  * @param ctx - The context containing API client and helper functions.
  * @returns The swap response and parameters for storage.
- * @throws Error if the swap creation fails.
+ * @throws Error if the swap creation fails after all retries.
  *
  * @example
  * ```ts
