@@ -18,6 +18,7 @@ export { createEvmToBitcoinSwap } from "./evm-to-bitcoin.js";
 export { createEvmToLightningSwapGeneric } from "./evm-to-lightning.js";
 export { createLightningToEvmSwapGeneric } from "./lightning.js";
 export { createLightningToArkadeSwap } from "./lightning-to-arkade.js";
+export { DuplicateInvoiceError } from "./retry.js";
 export type {
   ArkadeToEvmSwapOptions,
   ArkadeToEvmSwapResult,

@@ -6,6 +6,7 @@
  */
 
 import { bytesToHex } from "../signer/index.js";
+import { DuplicateInvoiceError, isDuplicateInvoiceError } from "./retry.js";
 import type {
   ArkadeToLightningSwapOptions,
   ArkadeToLightningSwapResult,
@@ -63,7 +64,13 @@ export async function createArkadeToLightningSwap(
   const { data, error } = await ctx.apiClient.POST("/swap/arkade/lightning", {
     body: body as never,
   });
-  if (error) throw new Error(`Failed to create swap: ${JSON.stringify(error)}`);
+  if (error) {
+    const msg = JSON.stringify(error);
+    if (isDuplicateInvoiceError(msg)) {
+      throw new DuplicateInvoiceError(msg);
+    }
+    throw new Error(`Failed to create swap: ${msg}`);
+  }
   if (!data) throw new Error("No swap data returned");
 
   // Store the swap if storage is configured

@@ -6,6 +6,7 @@
 
 import type { EvmToLightningSwapResponse } from "../api/client";
 import { bytesToHex } from "../signer/index.js";
+import { DuplicateInvoiceError, isDuplicateInvoiceError } from "./retry.js";
 import type {
   CreateSwapContext,
   EvmToLightningSwapGenericOptions,
@@ -76,6 +77,9 @@ export async function createEvmToLightningSwapGeneric(
 
   if (!response.ok) {
     const error = await response.text();
+    if (isDuplicateInvoiceError(error)) {
+      throw new DuplicateInvoiceError(error);
+    }
     throw new Error(`Failed to create swap: ${error}`);
   }
 
