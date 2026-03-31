@@ -9,15 +9,15 @@ const client = await Client.builder()
   .withSignerStorage(new InMemoryWalletStorage())
   .build();
 
-const { limits } = await client.getLimits();
+const { pairs } = await client.getSwapPairs();
 
 console.log("=== Swap Limits (satoshis) ===\n");
 console.log(
-  `${"Source".padEnd(12)} ${"Target".padEnd(12)} ${"Min".padStart(10)} ${"Max".padStart(12)}`,
+  `${"Source".padEnd(12)} ${"Target".padEnd(12)} ${"Min".padStart(10)} ${"Max".padStart(12)} ${"Fee %".padStart(12)}`,
 );
-console.log("-".repeat(50));
-for (const l of limits) {
+console.log("-".repeat(62));
+for (const pair of pairs) {
   console.log(
-    `${String(l.source).padEnd(12)} ${String(l.target).padEnd(12)} ${String(l.min_sats).padStart(10)} ${String(l.max_sats).padStart(12)}`,
+    `${String(pair.source).padEnd(12)} ${String(pair.target).padEnd(12)} ${String(pair.min_sats).padStart(10)} ${String(pair.max_sats).padStart(12)} ${String(pair.fee_percentage).padStart(12)}`,
   );
 }

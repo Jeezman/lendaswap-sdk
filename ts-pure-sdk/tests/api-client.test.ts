@@ -37,7 +37,7 @@ describe("API Client - Type Safety", () => {
           query: {
             source_chain: "Arkade",
             source_token: "btc",
-            target_chain: "Polygon",
+            target_chain: "137",
             target_token: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
             source_amount: 100000,
           },
@@ -59,40 +59,30 @@ describe("API Client - Type Safety", () => {
     });
 
     // Verify POST methods exist and type-check
+    const evmBody = {
+      target_address: "0x1234567890123456789012345678901234567890",
+      claiming_address: "0x1234567890123456789012345678901234567890",
+      token_address: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
+      evm_chain_id: 137,
+      hash_lock: `0x${"ab".repeat(32)}`,
+      refund_pk: `02${"cd".repeat(32)}`,
+      user_id: `03${"ef".repeat(32)}`,
+      amount_in: 100000,
+    };
+
     const _createArkadeToPolygon = () =>
-      client.POST("/swap/arkade/polygon", {
-        body: {
-          target_address: "0x1234567890123456789012345678901234567890",
-          target_token: "usdc_pol",
-          hash_lock: `0x${"ab".repeat(32)}`,
-          refund_pk: `02${"cd".repeat(32)}`,
-          user_id: `03${"ef".repeat(32)}`,
-          source_amount: 100000,
-        },
+      client.POST("/swap/arkade/evm", {
+        body: evmBody,
       });
 
     const _createLightningToPolygon = () =>
-      client.POST("/swap/lightning/polygon", {
-        body: {
-          target_address: "0x1234567890123456789012345678901234567890",
-          target_token: "usdc_pol",
-          hash_lock: `0x${"ab".repeat(32)}`,
-          refund_pk: `02${"cd".repeat(32)}`,
-          user_id: `03${"ef".repeat(32)}`,
-          source_amount: 100000,
-        },
+      client.POST("/swap/lightning/evm", {
+        body: evmBody,
       });
 
     const _createBitcoinToPolygon = () =>
-      client.POST("/swap/bitcoin/polygon", {
-        body: {
-          target_address: "0x1234567890123456789012345678901234567890",
-          target_token: "usdc_pol",
-          hash_lock: `0x${"ab".repeat(32)}`,
-          refund_pk: `02${"cd".repeat(32)}`,
-          user_id: `03${"ef".repeat(32)}`,
-          source_amount: 100000,
-        },
+      client.POST("/swap/bitcoin/evm", {
+        body: evmBody,
       });
 
     expect(_createArkadeToPolygon).toBeDefined();

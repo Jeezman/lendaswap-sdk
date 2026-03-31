@@ -78,6 +78,48 @@ describe("InMemoryWalletStorage", () => {
   });
 });
 
+/** Helper to create a minimal valid stored swap response for tests */
+function createTestResponse(swapId: string): StoredSwap["response"] {
+  return {
+    id: swapId,
+    direction: "bitcoin_to_evm",
+    status: "pending",
+    btc_hash_lock: "ab".repeat(20),
+    btc_htlc_address: "tb1qtestaddress000000000000000000000000000",
+    btc_refund_locktime: 1_700_000_000,
+    btc_server_pk: `02${"1".repeat(64)}`,
+    chain: "Polygon",
+    client_evm_address: "0x1234567890123456789012345678901234567890",
+    created_at: new Date(0).toISOString(),
+    evm_chain_id: 137,
+    evm_coordinator_address: "0x2222222222222222222222222222222222222222",
+    evm_expected_sats: "100000",
+    evm_hash_lock: `0x${"ab".repeat(32)}`,
+    evm_htlc_address: "0x3333333333333333333333333333333333333333",
+    evm_refund_locktime: 1_700_000_100,
+    fee_sats: 100,
+    network: "testnet",
+    server_evm_address: "0x4444444444444444444444444444444444444444",
+    source_amount: "100000",
+    source_token: {
+      chain: "Bitcoin",
+      decimals: 8,
+      name: "Bitcoin",
+      symbol: "BTC",
+      token_id: "btc",
+    },
+    target_amount: "99000000",
+    target_token: {
+      chain: "137",
+      decimals: 6,
+      name: "USD Coin",
+      symbol: "USDC",
+      token_id: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
+    },
+    wbtc_address: "0x5555555555555555555555555555555555555555",
+  };
+}
+
 /** Helper to create a test StoredSwap */
 function createTestSwap(
   swapId: string,
@@ -87,11 +129,7 @@ function createTestSwap(
     version: SWAP_STORAGE_VERSION,
     swapId,
     keyIndex: 0,
-    response: {
-      direction: "btc_to_evm",
-      id: swapId,
-      status: "pending",
-    } as StoredSwap["response"],
+    response: createTestResponse(swapId),
     publicKey: `02${"a".repeat(64)}`,
     preimage: "b".repeat(64),
     preimageHash: "c".repeat(64),

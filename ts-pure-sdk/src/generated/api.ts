@@ -889,7 +889,6 @@ export interface components {
             evm_chain_id: number;
             evm_claim_txid?: string | null;
             evm_coordinator_address: string;
-            /** Format: int64 */
             evm_expected_sats: string;
             evm_fund_txid?: string | null;
             evm_htlc_address: string;
@@ -1130,10 +1129,7 @@ export interface components {
             evm_claim_txid?: string | null;
             /** @description HTLCCoordinator contract address (for redeemAndExecute) */
             evm_coordinator_address: string;
-            /**
-             * Format: int64
-             * @description Amount of WBTC sats locked in the EVM HTLC
-             */
+            /** @description Amount of WBTC sats locked in the EVM HTLC */
             evm_expected_sats: string;
             /** @description EVM HTLC fund transaction ID */
             evm_fund_txid?: string | null;
@@ -1585,7 +1581,6 @@ export interface components {
             /** Format: int64 */
             evm_chain_id: number;
             evm_claim_txid?: string | null;
-            /** Format: int64 */
             evm_expected_sats: string;
             evm_fund_txid?: string | null;
             evm_htlc_address: string;
@@ -1687,10 +1682,7 @@ export interface components {
              */
             evm_chain_id: number;
             evm_claim_txid?: string | null;
-            /**
-             * Format: int64
-             * @description Expected WBTC amount (in sats) on EVM
-             */
+            /** @description Expected WBTC amount (in sats) on EVM */
             evm_expected_sats: string;
             evm_fund_txid?: string | null;
             /** @description EVM hash lock (SHA-256, 0x-prefixed 32-byte hex) */
@@ -1778,7 +1770,6 @@ export interface components {
             /** Format: int64 */
             evm_chain_id: number;
             evm_claim_txid?: string | null;
-            /** Format: int64 */
             evm_expected_sats: string;
             evm_fund_txid?: string | null;
             evm_htlc_address: string;
@@ -2040,7 +2031,6 @@ export interface components {
             evm_chain_id: number;
             evm_claim_txid?: string | null;
             evm_coordinator_address: string;
-            /** Format: int64 */
             evm_expected_sats: string;
             evm_fund_txid?: string | null;
             evm_htlc_address: string;
@@ -2223,12 +2213,12 @@ export interface components {
              */
             fee_percentage: number;
             /**
-             * Format: double
+             * Format: int64
              * @description Maximum BTC amount in satoshis.
              */
             max_sats: number;
             /**
-             * Format: double
+             * Format: int64
              * @description Minimum BTC amount in satoshis.
              */
             min_sats: number;
