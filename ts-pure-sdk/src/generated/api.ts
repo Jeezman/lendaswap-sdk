@@ -2921,6 +2921,8 @@ export interface operations {
                  *     When set, the CCTP forwarding fee is deducted from the target amount.
                  */
                 bridge_target_chain?: string | null;
+                /** @description Optional referral code for tracking. */
+                ref?: string | null;
             };
             header?: never;
             path?: never;
@@ -3019,6 +3021,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description Conflict - a swap with this preimage hash exists already */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Internal server error */
             500: {
                 headers: {
@@ -3054,6 +3065,15 @@ export interface operations {
             };
             /** @description Bad request - invalid parameters */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict - a swap with this preimage hash exists already */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3103,6 +3123,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description Conflict - a swap with this preimage hash exists already */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Internal server error */
             500: {
                 headers: {
@@ -3138,6 +3167,15 @@ export interface operations {
             };
             /** @description Bad request - invalid parameters */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict - a swap with this preimage hash exists already */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3187,6 +3225,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description Conflict - a swap with this preimage hash exists already */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Internal server error */
             500: {
                 headers: {
@@ -3222,6 +3269,15 @@ export interface operations {
             };
             /** @description Bad request - invalid parameters */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict - a swap with this preimage hash exists already */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3271,6 +3327,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description Conflict - a swap with this preimage hash exists already */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Internal server error */
             500: {
                 headers: {
@@ -3313,6 +3378,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description Conflict - a swap with this preimage hash exists already */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Internal server error */
             500: {
                 headers: {
@@ -3348,6 +3422,15 @@ export interface operations {
             };
             /** @description Bad request - invalid parameters */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict - a swap with this preimage hash exists already */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
