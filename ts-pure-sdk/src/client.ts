@@ -117,6 +117,7 @@ import {
   isSourceEvmChain,
   toChainName,
 } from "./tokens.js";
+import { USDT0_ADDRESSES } from "./usdt0-bridge/constants.js";
 
 // Re-export types from create module for backwards compatibility
 export type {
@@ -885,18 +886,23 @@ export class Client {
     referralCode?: string;
   }): Promise<QuoteResponse> {
     // If the target is a bridge-only chain (e.g. USDC on Base), remap the
-    // quote request to USDC on a source chain the backend knows about.
-    // Pass bridge_target_chain so the backend fetches the live CCTP
-    // forwarding fee and deducts it from the quoted target amount.
+    // quote request to the token on Arbitrum (source chain the backend knows).
+    // Pass bridge_target_chain so the backend includes the bridge fee.
     let targetChain = params.targetChain;
     let targetToken = params.targetToken;
     let bridgeTargetChain: string | undefined;
     if (isBridgeOnlyChain(targetChain)) {
       bridgeTargetChain = toChainName(targetChain);
-      // Remap to Arbitrum USDC for the DEX quote (cheapest gas, good liquidity).
-      // The backend expects the raw contract address, not a token_id.
+      // Determine if this is a USDT0 or USDC bridge token by checking
+      // if the target token matches a known USDT0 address on the destination.
+      const isUsdt0 = Object.values(USDT0_ADDRESSES).some(
+        (addr) => addr.toLowerCase() === params.targetToken.toLowerCase(),
+      );
+      // Remap to Arbitrum for the DEX quote (cheapest gas, good liquidity).
       targetChain = "42161" as Chain;
-      targetToken = USDC_ADDRESSES.Arbitrum;
+      targetToken = isUsdt0
+        ? USDT0_ADDRESSES.Arbitrum
+        : USDC_ADDRESSES.Arbitrum;
     }
 
     const { data, error } = await this.#apiClient.GET("/quote", {
@@ -3119,19 +3125,26 @@ export class Client {
     let tokenAddress = targetAsset.token_id;
 
     // If the target is a bridge-only chain (e.g. USDC on Base), automatically
-    // remap to Arbitrum USDC for the DEX swap and populate bridgeParams so
-    // the backend knows to CCTP-bridge after. This keeps the remapping logic
+    // remap to the token on Arbitrum for the DEX swap and populate bridgeParams
+    // so the backend knows to bridge after. This keeps the remapping logic
     // in one place — SDK consumers just pass their desired target.
     let bridgeParams = options.bridgeParams;
     if (!bridgeParams && isBridgeOnlyChain(targetChain)) {
       const chainName = toChainName(targetChain as Chain);
       if (chainName) {
+        const isUsdt0 = Object.values(USDT0_ADDRESSES).some(
+          (addr) => addr.toLowerCase() === tokenAddress.toLowerCase(),
+        );
         bridgeParams = {
           targetChain: chainName,
-          targetTokenAddress: USDC_ADDRESSES[chainName],
+          targetTokenAddress: isUsdt0
+            ? USDT0_ADDRESSES[chainName]
+            : USDC_ADDRESSES[chainName],
         };
         targetChain = "42161"; // Arbitrum
-        tokenAddress = USDC_ADDRESSES.Arbitrum;
+        tokenAddress = isUsdt0
+          ? USDT0_ADDRESSES.Arbitrum
+          : USDC_ADDRESSES.Arbitrum;
       }
     }
 

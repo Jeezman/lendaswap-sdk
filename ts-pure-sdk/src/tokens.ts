@@ -1,5 +1,6 @@
 import type { Chain, TokenId, TokenInfo } from "./api/client.js";
-import { CCTP_DOMAINS, USDC_ADDRESSES } from "./cctp/constants.js";
+import { CCTP_DOMAINS, USDC_ADDRESSES } from "./cctp";
+import { LZ_EIDS, USDT0_ADDRESSES } from "./usdt0-bridge";
 
 /** A token identifier: either a plain string TokenId or a TokenInfo object. */
 export type TokenInput = TokenId;
@@ -124,13 +125,13 @@ export const BTC_ONCHAIN_INFO: TokenInfo = {
 /** Source chains where HTLCs and DEX swaps run. */
 const SOURCE_EVM_CHAINS = ["1", "137", "42161"] as const;
 
-/** All EVM chain IDs including CCTP bridge-only destinations. */
+/** All EVM chain IDs including CCTP and USDT0 bridge-only destinations. */
 const ALL_EVM_CHAIN_IDS: Record<string, string> = {
   Ethereum: "1",
   Polygon: "137",
   Arbitrum: "42161",
-  Base: "8453",
   Optimism: "10",
+  Base: "8453",
   Avalanche: "43114",
   Linea: "59144",
   Unichain: "130",
@@ -140,6 +141,20 @@ const ALL_EVM_CHAIN_IDS: Record<string, string> = {
   Sei: "1329",
   HyperEVM: "999",
   Monad: "10143",
+  // USDT0-only chains
+  Berachain: "80094",
+  "Conflux eSpace": "1030",
+  Corn: "21000000",
+  Flare: "14",
+  Hedera: "295",
+  Mantle: "5000",
+  MegaETH: "4326",
+  Morph: "2818",
+  Plasma: "9745",
+  Rootstock: "30",
+  Stable: "988",
+  Tempo: "4217",
+  XLayer: "196",
 };
 
 /** Reverse lookup: chain ID → chain name. */
@@ -232,6 +247,10 @@ export function isLineaToken(chain: string): boolean {
   return chain.toLowerCase() === "linea" || chain === "59144";
 }
 
+export function isSonicToken(chain: string): boolean {
+  return chain.toLowerCase() === "sonic" || chain === "146";
+}
+
 /** Normalizes any chain string to its canonical Chain value. */
 export function toChain(str: string): Chain {
   const c = str.toLowerCase();
@@ -293,6 +312,41 @@ export function getCctpBridgeTokens(): TokenInfo[] {
       token_id: usdcAddress as TokenId,
       symbol: "USDC",
       name: `USD Coin (${chainName})`,
+      decimals: 6,
+      chain: chainId as Chain,
+    });
+  }
+
+  return tokens;
+}
+
+// ============================================================================
+// USDT0 OFT bridge tokens (target-only)
+// ============================================================================
+
+/**
+ * Generate TokenInfo objects for USDT0 on all LayerZero OFT-supported chains.
+ * These are "bridge-only" target tokens — the swap runs on Arbitrum and USDT0
+ * is bridged to the destination via LayerZero OFT send().
+ *
+ * Excludes source chains (those already have USDT0 tokens from the backend).
+ */
+export function getUsdt0BridgeTokens(): TokenInfo[] {
+  const sourceChainNames = new Set(["Ethereum", "Polygon", "Arbitrum"]);
+  const tokens: TokenInfo[] = [];
+
+  for (const chainName of Object.keys(LZ_EIDS)) {
+    // Skip source chains (backend already provides their USDT tokens)
+    if (sourceChainNames.has(chainName)) continue;
+
+    const usdt0Address = USDT0_ADDRESSES[chainName];
+    const chainId = ALL_EVM_CHAIN_IDS[chainName];
+    if (!usdt0Address || !chainId) continue;
+
+    tokens.push({
+      token_id: usdt0Address as TokenId,
+      symbol: "USDT",
+      name: `Tether USD (${chainName})`,
       decimals: 6,
       chain: chainId as Chain,
     });

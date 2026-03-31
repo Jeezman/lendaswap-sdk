@@ -180,6 +180,7 @@ export {
   BTC_ONCHAIN_INFO,
   getBridgeTargetChain,
   getCctpBridgeTokens,
+  getUsdt0BridgeTokens,
   isArbitrumToken,
   isArkade,
   isAvalancheToken,
@@ -194,9 +195,24 @@ export {
   isLineaToken,
   isOptimismToken,
   isPolygonToken,
+  isSonicToken,
   isSourceEvmChain,
   type TokenInput,
   toChain,
   toChainName,
 } from "./tokens.js";
 export { getUsdPrices } from "./usd-price.js";
+// USDT0 bridge (LayerZero OFT) utilities
+export {
+  getEid,
+  getLzExplorerUrl,
+  getLzMessageStatus,
+  type LayerZeroMessageResult,
+  type LayerZeroMessageStatus,
+  LZ_EIDS,
+  needsBridge as usdt0NeedsBridge,
+  type TrackLzMessageOptions,
+  trackLzMessage,
+  USDT0_ADDRESSES,
+  type Usdt0ChainName,
+} from "./usdt0-bridge/index.js";
