@@ -871,6 +871,7 @@ export class Client {
    * @param params.targetToken - Target token: contract address for EVM tokens, or "btc" for BTC.
    * @param params.sourceAmount - Amount in smallest unit of source token (mutually exclusive with targetAmount).
    * @param params.targetAmount - Amount in smallest unit of target token (mutually exclusive with sourceAmount).
+   * @param params.referralCode - Optional referral code to apply referral pricing to the quote.
    * @returns A promise that resolves to the quote response with pricing details.
    * @throws Error if the request fails.
    */
@@ -881,6 +882,7 @@ export class Client {
     targetToken: string;
     sourceAmount?: number;
     targetAmount?: number;
+    referralCode?: string;
   }): Promise<QuoteResponse> {
     // If the target is a bridge-only chain (e.g. USDC on Base), remap the
     // quote request to USDC on a source chain the backend knows about.
@@ -907,6 +909,7 @@ export class Client {
           source_amount: params.sourceAmount,
           target_amount: params.targetAmount,
           bridge_target_chain: bridgeTargetChain,
+          ref: params.referralCode,
         },
       },
     });
