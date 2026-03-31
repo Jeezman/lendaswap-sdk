@@ -6,7 +6,7 @@
     "license": {
       "name": ""
     },
-    "version": "0.2.14"
+    "version": "0.2.15"
   },
   "paths": {
     "/api/delegate/cosigner-pk": {
@@ -4532,14 +4532,16 @@
             "description": "Fee percentage as a decimal (e.g. 0.0025 = 0.25%).\n\nFor a swap of 100,000 sats at 0.25% fee, the fee would be 250 sats.\nSwaps involving Lightning may incur additional Lightning Network routing fees\non top of this percentage."
           },
           "max_sats": {
-            "type": "number",
-            "format": "double",
-            "description": "Maximum BTC amount in satoshis."
+            "type": "integer",
+            "format": "int64",
+            "description": "Maximum BTC amount in satoshis.",
+            "minimum": 0
           },
           "min_sats": {
-            "type": "number",
-            "format": "double",
-            "description": "Minimum BTC amount in satoshis."
+            "type": "integer",
+            "format": "int64",
+            "description": "Minimum BTC amount in satoshis.",
+            "minimum": 0
           },
           "source": {
             "$ref": "#/components/schemas/Chain"
