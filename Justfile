@@ -60,6 +60,9 @@ generate:
 build:
     cd ts-pure-sdk && npm run build
 
+typecheck:
+    cd ts-pure-sdk && npm run typecheck
+
 # Bump version for the SDK
 bump-version version:
     cd ts-pure-sdk && npm version {{ version }} --no-git-tag-version
