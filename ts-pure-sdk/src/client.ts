@@ -1813,7 +1813,7 @@ export class Client {
 
     // Fetch the latest swap state from API
     const swap = (await this.getSwap(id, {
-      updateStorage: true,
+      updateStorage: false,
     })) as EvmToBitcoinSwapResponse & { direction: "evm_to_bitcoin" };
 
     if (swap.direction !== "evm_to_bitcoin") {
