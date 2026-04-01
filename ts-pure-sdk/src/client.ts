@@ -1136,7 +1136,7 @@ export class Client {
    * - **Arkade**: Claims via Arkade protocol
    *
    * @param id - The UUID of the swap.
-   * @param _options - Deprecated. For Arkade/Lightning-to-EVM, destination is set at swap creation.
+   * @param options - For Arkade/Lightning-to-EVM, destination is set at swap creation.
    * @returns A ClaimResult with the outcome.
    *
    * @example
@@ -1151,7 +1151,7 @@ export class Client {
    * }
    * ```
    */
-  async claim(id: string, _options?: ClaimOptions): Promise<ClaimResult> {
+  async claim(id: string, options?: ClaimOptions): Promise<ClaimResult> {
     // Check swap storage is configured
     if (!this.#swapStorage) {
       return {
@@ -1209,7 +1209,7 @@ export class Client {
 
     // EVM-to-Bitcoin: user claims BTC from on-chain Taproot HTLC with preimage
     if (swap.direction === "evm_to_bitcoin") {
-      return this.#claimOnchainBtc(id, _options);
+      return this.#claimOnchainBtc(id, options);
     }
 
     // Check if target is Arkade (handle both string "btc_arkade" and TokenInfo object)
