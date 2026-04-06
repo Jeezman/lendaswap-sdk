@@ -10,7 +10,8 @@ export type CctpMessageStatus =
   | "PENDING"
   | "CONFIRMING"
   | "FORWARDING"
-  | "COMPLETE";
+  | "COMPLETE"
+  | "FAILED";
 
 /** Response from the IRIS attestation API (V2). */
 export interface AttestationResponse {

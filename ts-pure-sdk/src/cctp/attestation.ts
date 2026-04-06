@@ -212,6 +212,18 @@ export async function trackCctpMessage(
         };
       }
 
+      // Forwarding failed — stop polling
+      if (
+        msg.forwardState &&
+        msg.forwardState !== "PENDING" &&
+        msg.forwardState !== "COMPLETE"
+      ) {
+        emitStatus("FAILED");
+        throw new Error(
+          `CCTP forwarding failed (state: ${msg.forwardState}) for tx ${txHash} on ${sourceChain}`,
+        );
+      }
+
       // Attestation complete but forwarding still in progress
       emitStatus("FORWARDING");
       await sleep(pollIntervalMs, signal);
