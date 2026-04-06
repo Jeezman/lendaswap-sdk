@@ -5,6 +5,13 @@
 /** Status of a CCTP attestation request. */
 export type AttestationStatus = "pending_confirmations" | "complete";
 
+/** Status of a CCTP cross-chain message tracked via IRIS. */
+export type CctpMessageStatus =
+  | "PENDING"
+  | "CONFIRMING"
+  | "FORWARDING"
+  | "COMPLETE";
+
 /** Response from the IRIS attestation API (V2). */
 export interface AttestationResponse {
   messages: Array<{
@@ -12,7 +19,38 @@ export interface AttestationResponse {
     attestation: string;
     status: AttestationStatus;
     eventNonce: string;
+    /** Forwarding state (present when CCTP forwarding service is used). */
+    forwardState?: string | null;
+    /** Transaction hash of the forward/mint on the destination chain. */
+    forwardTxHash?: string | null;
+    /** Decoded CCTP message with amounts and fees. */
+    decodedMessage?: {
+      sourceDomain: string;
+      destinationDomain: string;
+      decodedMessageBody?: {
+        /** Amount received in smallest units (after fee deduction). */
+        amount: string;
+        /** Mint recipient address on destination chain. */
+        mintRecipient: string;
+        /** Maximum fee allowed. */
+        maxFee: string;
+        /** Fee actually executed in smallest units. */
+        feeExecuted: string;
+      };
+    } | null;
   }>;
+}
+
+/** Result of tracking a CCTP cross-chain message. */
+export interface CctpMessageResult {
+  /** Current message status. */
+  status: CctpMessageStatus;
+  /** Transaction hash on the destination chain (from forwarding service). */
+  forwardTxHash?: string;
+  /** Amount received on destination in smallest units (after fee deduction). */
+  amount?: string;
+  /** Forwarding fee executed in smallest units. */
+  feeExecuted?: string;
 }
 
 /** Parameters for initiating a CCTP bridge. */

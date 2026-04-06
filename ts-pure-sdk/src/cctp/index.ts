@@ -11,6 +11,8 @@ export {
   type AttestationResult,
   type FetchAttestationOptions,
   fetchAttestation,
+  type TrackCctpMessageOptions,
+  trackCctpMessage,
 } from "./attestation.js";
 export {
   CCTP_DOMAINS,
@@ -34,6 +36,8 @@ export type {
   AttestationStatus,
   BridgeParams,
   BurnResult,
+  CctpMessageResult,
+  CctpMessageStatus,
   MintResult,
 } from "./types.js";
 

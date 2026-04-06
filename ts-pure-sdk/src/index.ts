@@ -50,6 +50,8 @@ export {
   bytes32ToAddress,
   CCTP_DOMAINS,
   type CctpChainName,
+  type CctpMessageResult,
+  type CctpMessageStatus,
   type FetchAttestationOptions,
   FINALITY_FAST,
   FINALITY_STANDARD,
@@ -66,6 +68,8 @@ export {
   needsBridge,
   TOKEN_MESSENGER_ADDRESSES,
   TOKEN_MESSENGER_V2,
+  type TrackCctpMessageOptions,
+  trackCctpMessage,
   USDC_ADDRESSES,
 } from "./cctp/index.js";
 export type {

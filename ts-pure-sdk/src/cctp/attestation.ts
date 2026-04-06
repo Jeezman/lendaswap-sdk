@@ -10,7 +10,11 @@ import {
   type CctpChainName,
   IRIS_API_MAINNET,
 } from "./constants.js";
-import type { AttestationResponse } from "./types.js";
+import type {
+  AttestationResponse,
+  CctpMessageResult,
+  CctpMessageStatus,
+} from "./types.js";
 
 export interface FetchAttestationOptions {
   /** Source chain name (e.g. "Polygon"). */
@@ -103,6 +107,131 @@ export async function fetchAttestation(
     `Attestation not ready after ${timeoutMs / 1000}s for tx ${txHash} on ${sourceChain}`,
   );
 }
+
+// ============================================================================
+// Cross-chain message tracking (with forwarding)
+// ============================================================================
+
+/** Options for tracking a CCTP cross-chain message via IRIS. */
+export interface TrackCctpMessageOptions {
+  /** Source chain name (e.g. "Arbitrum"). */
+  sourceChain: CctpChainName;
+  /** Transaction hash of the burn/claim on the source chain. */
+  txHash: string;
+  /** IRIS API base URL. Defaults to mainnet. */
+  irisApiUrl?: string;
+  /** Polling interval in ms. Defaults to 5000 (5s). */
+  pollIntervalMs?: number;
+  /** Maximum time to wait in ms. Defaults to 600000 (10min). */
+  timeoutMs?: number;
+  /** Optional abort signal. */
+  signal?: AbortSignal;
+  /** Optional callback invoked when the message status changes. */
+  onStatusChange?: (status: CctpMessageStatus) => void;
+}
+
+/**
+ * Poll the IRIS V2 API until the CCTP message is forwarded and delivered.
+ *
+ * Tracks attestation → forwarding → delivery on the destination chain.
+ *
+ * @returns The message result with forwarding details (destination tx hash, amount, fee).
+ * @throws If the message is not delivered within the timeout.
+ */
+export async function trackCctpMessage(
+  options: TrackCctpMessageOptions,
+): Promise<CctpMessageResult> {
+  const {
+    sourceChain,
+    txHash,
+    irisApiUrl = IRIS_API_MAINNET,
+    pollIntervalMs = 5_000,
+    timeoutMs = 600_000,
+    signal,
+    onStatusChange,
+  } = options;
+
+  const sourceDomain = CCTP_DOMAINS[sourceChain];
+  if (sourceDomain === undefined) {
+    throw new Error(`Unknown CCTP source chain: ${sourceChain}`);
+  }
+
+  const url = `${irisApiUrl}/v2/messages/${sourceDomain}?transactionHash=${txHash}`;
+  const startTime = Date.now();
+  let lastStatus: CctpMessageStatus | undefined;
+
+  const emitStatus = (status: CctpMessageStatus) => {
+    if (status !== lastStatus) {
+      lastStatus = status;
+      onStatusChange?.(status);
+    }
+  };
+
+  while (Date.now() - startTime < timeoutMs) {
+    signal?.throwIfAborted();
+
+    try {
+      const response = await fetch(url);
+
+      if (response.status === 404) {
+        emitStatus("PENDING");
+        await sleep(pollIntervalMs, signal);
+        continue;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          `IRIS API error: ${response.status} ${response.statusText}`,
+        );
+      }
+
+      const data: AttestationResponse = await response.json();
+
+      if (data.messages.length === 0) {
+        emitStatus("PENDING");
+        await sleep(pollIntervalMs, signal);
+        continue;
+      }
+
+      const msg = data.messages[0];
+
+      if (msg.status !== "complete") {
+        emitStatus("CONFIRMING");
+        await sleep(pollIntervalMs, signal);
+        continue;
+      }
+
+      // Attestation is complete — check forwarding state
+      if (msg.forwardState === "COMPLETE" && msg.forwardTxHash) {
+        emitStatus("COMPLETE");
+        return {
+          status: "COMPLETE",
+          forwardTxHash: msg.forwardTxHash,
+          amount: msg.decodedMessage?.decodedMessageBody?.amount,
+          feeExecuted: msg.decodedMessage?.decodedMessageBody?.feeExecuted,
+        };
+      }
+
+      // Attestation complete but forwarding still in progress
+      emitStatus("FORWARDING");
+      await sleep(pollIntervalMs, signal);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        throw err;
+      }
+      // Network errors — retry after delay
+      await sleep(pollIntervalMs, signal);
+    }
+  }
+
+  throw new Error(
+    `CCTP message not delivered after ${timeoutMs / 1000}s for tx ${txHash} on ${sourceChain}`,
+  );
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
