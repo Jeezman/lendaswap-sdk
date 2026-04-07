@@ -12,7 +12,7 @@ import {
   type EvmSigner,
   InMemorySwapStorage,
   InMemoryWalletStorage,
-} from "../src";
+} from "../src/index.js";
 
 // #region setup
 const client = await Client.builder()

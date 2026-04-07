@@ -23,7 +23,13 @@
         "noChildrenProp": "off",
         "noUnusedVariables": "error",
         "noUnusedImports": "error",
-        "noUnusedLabels": "error"
+        "noUnusedLabels": "error",
+        "useImportExtensions": {
+          "level": "error",
+          "options": {
+            "forceJsExtensions": true
+          }
+        }
       }
     }
   },

@@ -48,7 +48,7 @@ import {
   type LightningToArkadeSwapResult,
   type LightningToEvmSwapGenericOptions,
   type LightningToEvmSwapGenericResult,
-} from "./create";
+} from "./create/index.js";
 import { delegateClaim, delegateRefund } from "./delegate.js";
 import { broadcastTransaction, findOutputByAddress } from "./esplora.js";
 import {
@@ -67,7 +67,7 @@ import {
   type Permit2SignedFundingCallData,
   signEvmDigest,
   type UnsignedPermit2FundingData,
-} from "./evm";
+} from "./evm/index.js";
 import {
   decodeUint256,
   type EvmSigner,
@@ -94,7 +94,7 @@ import {
   collabRefundDelegate,
   collabRefundOffchain,
   verifyHtlcAddress,
-} from "./refund";
+} from "./refund/index.js";
 import {
   bytesToHex,
   hexToBytes,
@@ -106,7 +106,7 @@ import {
   SWAP_STORAGE_VERSION,
   type SwapStorage,
   type WalletStorage,
-} from "./storage";
+} from "./storage/index.js";
 import {
   isArkade,
   isBridgeOnlyChain,
@@ -142,7 +142,7 @@ export type {
   UsdcBridgeParams,
 } from "./create/index.js";
 
-import type { BitcoinToEvmSwapResponse } from "./create";
+import type { BitcoinToEvmSwapResponse } from "./create/index.js";
 
 // Re-export coordinator utilities for Arkade-to-EVM redeemAndExecute flow
 export {

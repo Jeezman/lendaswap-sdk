@@ -3,7 +3,11 @@
  * USDT ↔ Lightning BTC in both directions.
  */
 
-import { Client, InMemorySwapStorage, InMemoryWalletStorage } from "../src";
+import {
+  Client,
+  InMemorySwapStorage,
+  InMemoryWalletStorage,
+} from "../src/index.js";
 
 // #region setup
 const client = await Client.builder()

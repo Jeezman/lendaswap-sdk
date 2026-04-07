@@ -10,7 +10,7 @@ import {
   type EvmSigner,
   InMemorySwapStorage,
   InMemoryWalletStorage,
-} from "../src";
+} from "../src/index.js";
 
 // #region evm-to-lightning-setup
 const client = await Client.builder()

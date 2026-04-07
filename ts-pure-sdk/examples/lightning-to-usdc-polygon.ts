@@ -7,7 +7,7 @@ import {
   Client,
   InMemorySwapStorage,
   InMemoryWalletStorage,
-} from "../src";
+} from "../src/index.js";
 
 // #region lightning-to-evm-setup
 const client = await Client.builder()

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createApiClient } from "../src";
+import { createApiClient } from "../src/index.js";
 
 describe("API Client", () => {
   it("should create a client with base URL", () => {

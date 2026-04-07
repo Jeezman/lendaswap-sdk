@@ -2,7 +2,11 @@
  * Setup sample
  */
 
-import { Client, InMemorySwapStorage, InMemoryWalletStorage } from "../src";
+import {
+  Client,
+  InMemorySwapStorage,
+  InMemoryWalletStorage,
+} from "../src/index.js";
 
 // #region setup
 const client = await Client.builder()

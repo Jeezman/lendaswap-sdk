@@ -6,7 +6,11 @@
  * timelock expires by building and broadcasting a refund transaction.
  */
 
-import { Client, InMemorySwapStorage, InMemoryWalletStorage } from "../src";
+import {
+  Client,
+  InMemorySwapStorage,
+  InMemoryWalletStorage,
+} from "../src/index.js";
 
 // #region setup
 const client = await Client.builder()

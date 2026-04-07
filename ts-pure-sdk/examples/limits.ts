@@ -2,7 +2,7 @@
  * Limits: fetch and display swap limits for all supported chain pairs.
  */
 
-import { Client, InMemoryWalletStorage } from "../src";
+import { Client, InMemoryWalletStorage } from "../src/index.js";
 
 const client = await Client.builder()
   .withBaseUrl(process.env.BASE_URL || "http://localhost:3333")
