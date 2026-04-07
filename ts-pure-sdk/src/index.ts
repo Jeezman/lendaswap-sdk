@@ -52,6 +52,7 @@ export {
   type CctpChainName,
   type CctpMessageResult,
   type CctpMessageStatus,
+  EURC_ADDRESSES,
   type FetchAttestationOptions,
   FINALITY_FAST,
   FINALITY_STANDARD,

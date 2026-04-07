@@ -17,6 +17,7 @@ export {
 export {
   CCTP_DOMAINS,
   type CctpChainName,
+  EURC_ADDRESSES,
   FINALITY_FAST,
   FINALITY_STANDARD,
   FORWARDING_FEE_ETHEREUM,
