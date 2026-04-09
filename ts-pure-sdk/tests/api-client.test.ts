@@ -12,10 +12,10 @@ describe("API Client", () => {
     expect(client.POST).toBeDefined();
   });
 
-  it("should create a client with API key", () => {
+  it("should create a client with org code", () => {
     const client = createApiClient({
       baseUrl: "https://api.lendaswap.com",
-      apiKey: "test-api-key",
+      orgCode: "test-org-code",
     });
 
     expect(client).toBeDefined();

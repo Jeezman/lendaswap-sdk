@@ -7,7 +7,7 @@ import { Signer, type Client } from "@lendasat/lendaswap-sdk-pure";
 interface Config {
   apiUrl: string;
   mnemonic?: string;
-  apiKey?: string;
+  orgCode?: string;
   dbPath?: string;
 }
 
@@ -53,7 +53,7 @@ export async function showInfo(client: Client, config: Config): Promise<void> {
   console.log("API:");
   console.log("-".repeat(40));
   console.log(`  URL:         ${config.apiUrl}`);
-  console.log(`  API Key:     ${config.apiKey ? "****" + config.apiKey.slice(-4) : "(none)"}`);
+  console.log(`  Org code:     ${config.orgCode ? "****" + config.orgCode.slice(-4) : "(none)"}`);
 
   try {
     // #region get-version

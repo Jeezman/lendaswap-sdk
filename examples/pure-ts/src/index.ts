@@ -52,7 +52,7 @@ export const CONFIG = {
   apiUrl: process.env.LENDASWAP_API_URL || "https://api.lendaswap.com/",
   mnemonic: process.env.MNEMONIC,
   evmMnemonic: process.env.EVM_MNEMONIC, // Separate mnemonic for EVM wallet
-  apiKey: process.env.LENDASWAP_API_KEY,
+  orgCode: process.env.LENDASWAP_ORG_CODE,
   dbPath:
     process.env.LENDASWAP_DB_PATH ||
     path.join(os.homedir(), ".lendaswap", "data.db"),
@@ -86,8 +86,8 @@ async function createClient(): Promise<Client> {
     .withSignerStorage(walletStorage)
     .withSwapStorage(swapStorage);
 
-  if (CONFIG.apiKey) {
-    builder = builder.withApiKey(CONFIG.apiKey);
+  if (CONFIG.orgCode) {
+    builder = builder.withOrgCode(CONFIG.orgCode);
   }
 
   if (CONFIG.mnemonic) {
@@ -164,7 +164,7 @@ Environment Variables:
   LENDASWAP_API_URL   API URL (default: https://api.lendaswap.com/)
   MNEMONIC            Wallet mnemonic for BTC operations (optional, generates new if not set)
   EVM_MNEMONIC        Wallet mnemonic for EVM operations (required for fund command)
-  LENDASWAP_API_KEY   API key for authentication (optional)
+  LENDASWAP_ORG_CODE  Org code for swap tracking (optional)
   LENDASWAP_DB_PATH   SQLite database path (default: ~/.lendaswap/data.db)
   ESPLORA_URL         Esplora API URL for broadcasting (default: mempool.space)
 `);

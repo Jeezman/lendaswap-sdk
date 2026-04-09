@@ -19,7 +19,7 @@ import {
 const client = await Client.builder()
   .withSignerStorage(new InMemoryWalletStorage())
   .withSwapStorage(new InMemorySwapStorage())
-  .withApiKey(process.env.API_KEY || "")
+  .withOrgCode(process.env.ORG_CODE || "")
   .build();
 // #endregion setup
 

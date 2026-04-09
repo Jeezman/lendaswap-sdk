@@ -380,8 +380,8 @@ const DEFAULT_ESPLORA_URLS: Record<string, string> = {
 export interface ClientConfig {
   /** The base URL of the Lendaswap API. */
   baseUrl: string;
-  /** Optional API key for authenticated requests. */
-  apiKey?: string;
+  /** Optional unique identifier for the organization using the SDK. */
+  orgCode?: string;
   /** Optional Esplora API URL for broadcasting Bitcoin transactions. */
   esploraUrl?: string;
   /** Optional Arkade server URL (e.g. "https://arkade.computer"). Falls back to network-based defaults. */
@@ -412,7 +412,7 @@ export interface ClientConfig {
  */
 export class ClientBuilder {
   #baseUrl: string = DEFAULT_BASE_URL;
-  #apiKey?: string;
+  #orgCode?: string;
   #esploraUrl?: string;
   #arkadeServerUrl?: string;
   #signerStorage?: WalletStorage;
@@ -430,12 +430,12 @@ export class ClientBuilder {
   }
 
   /**
-   * Sets the API key for authenticated requests.
-   * @param apiKey - The API key to use for authentication.
+   * Sets the org code.
+   * @param orgCode - The identifier for the organization sending the request.
    * @returns The builder instance for chaining.
    */
-  withApiKey(apiKey: string): this {
-    this.#apiKey = apiKey;
+  withOrgCode(orgCode: string): this {
+    this.#orgCode = orgCode;
     return this;
   }
 
@@ -548,7 +548,7 @@ export class ClientBuilder {
     return new Client(
       {
         baseUrl: this.#baseUrl.replace(/\/+$/, ""),
-        apiKey: this.#apiKey,
+        orgCode: this.#orgCode,
         esploraUrl: this.#esploraUrl?.replace(/\/+$/, ""),
         arkadeServerUrl: this.#arkadeServerUrl?.replace(/\/+$/, ""),
       },
@@ -573,7 +573,7 @@ export class ClientBuilder {
  * ```ts
  * const client = await Client.builder()
  *   .withSignerStorage(new IdbWalletStorage())
- *   .withApiKey("your-api-key")
+ *   .withOrgCode("your-org-code")
  *   .build();
  *
  * // Get mnemonic (for backup)
@@ -606,7 +606,7 @@ export class Client {
     this.#config = config;
     this.#apiClient = createApiClient({
       baseUrl: config.baseUrl,
-      apiKey: config.apiKey,
+      orgCode: config.orgCode,
     });
     this.#signer = signer;
     this.#signerStorage = signerStorage;
@@ -3663,8 +3663,8 @@ export class Client {
     const baseUrl = this.#config.baseUrl.replace(/\/$/, "");
     const url = `${baseUrl}/swap/${swapId}/swap-and-lock-calldata-permit2`;
     const headers: Record<string, string> = {};
-    if (this.#config.apiKey) {
-      headers["X-Org-Code"] = this.#config.apiKey;
+    if (this.#config.orgCode) {
+      headers["X-Org-Code"] = this.#config.orgCode;
     }
 
     const resp = await fetch(url, { headers });
@@ -3837,8 +3837,8 @@ export class Client {
     const baseUrl = this.#config.baseUrl.replace(/\/$/, "");
     const url = `${baseUrl}/swap/${swapId}/swap-and-lock-calldata-permit2`;
     const headers: Record<string, string> = {};
-    if (this.#config.apiKey) {
-      headers["X-Org-Code"] = this.#config.apiKey;
+    if (this.#config.orgCode) {
+      headers["X-Org-Code"] = this.#config.orgCode;
     }
 
     const resp = await fetch(url, { headers });
@@ -4190,8 +4190,8 @@ export class Client {
     const baseUrl = this.#config.baseUrl.replace(/\/$/, "");
     const url = `${baseUrl}/swap/${swapId}/swap-and-lock-calldata-permit2`;
     const headers: Record<string, string> = {};
-    if (this.#config.apiKey) {
-      headers["X-Org-Code"] = this.#config.apiKey;
+    if (this.#config.orgCode) {
+      headers["X-Org-Code"] = this.#config.orgCode;
     }
 
     const resp = await fetch(url, { headers });
