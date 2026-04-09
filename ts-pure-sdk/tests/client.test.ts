@@ -54,10 +54,19 @@ describe("ClientBuilder", () => {
     const client = await Client.builder()
       .withBaseUrl("https://custom.api.com")
       .withOrgCode("test-org-code")
+      .withDefaultHeaders({ "X-Client-Id": "test-client-id" })
       .build();
 
     expect(client).toBeDefined();
     expect(client.baseUrl).toBe("https://custom.api.com");
+  });
+
+  it("should build a client with default headers", async () => {
+    const client = await Client.builder()
+      .withDefaultHeaders({ "X-Client-Id": "test-client-id" })
+      .build();
+
+    expect(client).toBeDefined();
   });
 
   it("should create new builder from ClientBuilder class", async () => {

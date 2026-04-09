@@ -20,6 +20,15 @@ describe("API Client", () => {
 
     expect(client).toBeDefined();
   });
+
+  it("should create a client with default headers", () => {
+    const client = createApiClient({
+      baseUrl: "https://api.lendaswap.com",
+      defaultHeaders: { "X-Client-Id": "test-client-id" },
+    });
+
+    expect(client).toBeDefined();
+  });
 });
 
 describe("API Client - Type Safety", () => {

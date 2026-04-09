@@ -382,6 +382,8 @@ export interface ClientConfig {
   baseUrl: string;
   /** Optional unique identifier for the organization using the SDK. */
   orgCode?: string;
+  /** Optional default headers to send with SDK API requests. */
+  defaultHeaders?: Record<string, string>;
   /** Optional Esplora API URL for broadcasting Bitcoin transactions. */
   esploraUrl?: string;
   /** Optional Arkade server URL (e.g. "https://arkade.computer"). Falls back to network-based defaults. */
@@ -413,6 +415,7 @@ export interface ClientConfig {
 export class ClientBuilder {
   #baseUrl: string = DEFAULT_BASE_URL;
   #orgCode?: string;
+  #defaultHeaders?: Record<string, string>;
   #esploraUrl?: string;
   #arkadeServerUrl?: string;
   #signerStorage?: WalletStorage;
@@ -436,6 +439,19 @@ export class ClientBuilder {
    */
   withOrgCode(orgCode: string): this {
     this.#orgCode = orgCode;
+    return this;
+  }
+
+  /**
+   * Sets default headers to send with SDK API requests.
+   * @param headers - Headers merged into API requests made by the SDK.
+   * @returns The builder instance for chaining.
+   */
+  withDefaultHeaders(headers: Record<string, string>): this {
+    this.#defaultHeaders = {
+      ...this.#defaultHeaders,
+      ...headers,
+    };
     return this;
   }
 
@@ -549,6 +565,7 @@ export class ClientBuilder {
       {
         baseUrl: this.#baseUrl.replace(/\/+$/, ""),
         orgCode: this.#orgCode,
+        defaultHeaders: this.#defaultHeaders,
         esploraUrl: this.#esploraUrl?.replace(/\/+$/, ""),
         arkadeServerUrl: this.#arkadeServerUrl?.replace(/\/+$/, ""),
       },
@@ -607,6 +624,7 @@ export class Client {
     this.#apiClient = createApiClient({
       baseUrl: config.baseUrl,
       orgCode: config.orgCode,
+      defaultHeaders: config.defaultHeaders,
     });
     this.#signer = signer;
     this.#signerStorage = signerStorage;
