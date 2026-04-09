@@ -4,7 +4,6 @@
  * Supports swapping tokens from any EVM chain to pay a Lightning invoice.
  */
 
-import type { EvmToLightningSwapResponse } from "../api/client.js";
 import { bytesToHex } from "../signer/index.js";
 import { DuplicateInvoiceError, isDuplicateInvoiceError } from "./retry.js";
 import type {
@@ -50,43 +49,44 @@ export async function createEvmToLightningSwapGeneric(
 
   const userAddress = options.gasless ? ctx.evmAddress : options.userAddress;
 
-  const body: Record<string, unknown> = {
-    user_id: userId,
-    evm_chain_id: options.evmChainId,
-    token_address: options.tokenAddress,
-    user_address: userAddress,
-    referral_code: options.referralCode,
-    gasless: options.gasless ?? false,
-  };
-
+  let lightningInvoice = null;
+  let lightningAddress = null;
+  let lnurl = null;
+  let amountSats = null;
   if (options.lightningInvoice) {
-    body.lightning_invoice = options.lightningInvoice;
+    lightningInvoice = options.lightningInvoice;
   } else if (options.lightningAddress) {
-    body.lightning_address = options.lightningAddress;
-    body.amount_sats = options.amountSats;
+    lightningAddress = options.lightningAddress;
+    amountSats = options.amountSats;
   } else if (options.lnurl) {
-    body.lnurl = options.lnurl;
-    body.amount_sats = options.amountSats;
+    lnurl = options.lnurl;
+    amountSats = options.amountSats;
   }
 
-  // Use fetch directly since the generated types don't have this endpoint yet
-  const response = await fetch(`${ctx.baseUrl}/swap/evm/lightning`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  const { data, error } = await ctx.apiClient.POST("/swap/evm/lightning", {
+    body: {
+      amount_sats: amountSats,
+      evm_chain_id: options.evmChainId,
+      gasless: options.gasless ?? false,
+      lightning_address: lightningAddress,
+      lightning_invoice: lightningInvoice,
+      lnurl: lnurl,
+      referral_code: options.referralCode,
+      token_address: options.tokenAddress,
+      user_address: userAddress,
+      user_id: userId,
     },
-    body: JSON.stringify(body),
   });
 
-  if (!response.ok) {
-    const error = await response.text();
-    if (isDuplicateInvoiceError(error)) {
-      throw new DuplicateInvoiceError(error);
+  if (error) {
+    if (isDuplicateInvoiceError(error.error)) {
+      throw new DuplicateInvoiceError(error.error);
     }
     throw new Error(`Failed to create swap: ${error}`);
   }
-
-  const data = (await response.json()) as EvmToLightningSwapResponse;
+  if (!data) {
+    throw new Error("No swap data returned");
+  }
 
   // Store the swap if storage is configured
   await ctx.storeSwap(data.id, swapParams, {
