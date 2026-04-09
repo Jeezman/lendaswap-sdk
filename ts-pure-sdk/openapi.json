@@ -6,7 +6,7 @@
     "license": {
       "name": ""
     },
-    "version": "0.2.15"
+    "version": "0.2.18"
   },
   "paths": {
     "/api/delegate/cosigner-pk": {
@@ -2044,16 +2044,20 @@
           "amount_sats": {
             "type": ["integer", "null"],
             "format": "int64",
-            "description": "Amount in satoshis the recipient should receive on Lightning.\nRequired when `lightning_address` is provided; ignored when\n`lightning_invoice` is provided (amount is read from the invoice).",
+            "description": "Amount in satoshis the recipient should receive on Lightning.\nRequired when `lightning_address` or `lnurl` is provided; ignored when\n`lightning_invoice` is provided (amount is read from the invoice).",
             "minimum": 0
           },
           "lightning_address": {
             "type": ["string", "null"],
-            "description": "Lightning address (e.g. `user@speed.app`) to resolve via LNURL-pay.\nMutually exclusive with `lightning_invoice`. Requires `amount_sats`."
+            "description": "Lightning address (e.g. `user@speed.app`) to resolve via LNURL-pay.\nMutually exclusive with `lightning_invoice` and `lnurl`. Requires `amount_sats`."
           },
           "lightning_invoice": {
             "type": ["string", "null"],
             "description": "Lightning BOLT11 invoice the user wants paid."
+          },
+          "lnurl": {
+            "type": ["string", "null"],
+            "description": "Raw LNURL string (e.g. `lnurl1...`) to resolve via LNURL-pay.\nMutually exclusive with `lightning_invoice` and `lightning_address`. Requires\n`amount_sats`."
           },
           "referral_code": {
             "type": ["string", "null"],
@@ -3520,7 +3524,7 @@
       },
       "EvmToLightningSwapRequest": {
         "type": "object",
-        "description": "Request to create an EVM-to-Lightning swap.\n\nUser sends any ERC-20 token on EVM, receives BTC via Lightning.\nThe hash_lock is derived from the Lightning invoice's payment hash.\n\nProvide **either** `lightning_invoice` (a BOLT11 invoice) **or**\n`lightning_address` + `amount_sats` (a Lightning address that will be\nresolved server-side via LNURL-pay).",
+        "description": "Request to create an EVM-to-Lightning swap.\n\nUser sends any ERC-20 token on EVM, receives BTC via Lightning.\nThe hash_lock is derived from the Lightning invoice's payment hash.\n\nProvide **one of**:\n- `lightning_invoice` — a BOLT11 invoice\n- `lightning_address` + `amount_sats` — a Lightning address resolved via LNURL-pay\n- `lnurl` + `amount_sats` — a raw LNURL string (bech32-encoded URL) resolved via LNURL-pay",
         "required": [
           "evm_chain_id",
           "token_address",
@@ -3531,7 +3535,7 @@
           "amount_sats": {
             "type": ["integer", "null"],
             "format": "int64",
-            "description": "Amount in satoshis the recipient should receive on Lightning.\nRequired when `lightning_address` is provided; ignored when\n`lightning_invoice` is provided (amount is read from the invoice).",
+            "description": "Amount in satoshis the recipient should receive on Lightning.\nRequired when `lightning_address` or `lnurl` is provided; ignored when\n`lightning_invoice` is provided (amount is read from the invoice).",
             "minimum": 0
           },
           "evm_chain_id": {
@@ -3546,11 +3550,15 @@
           },
           "lightning_address": {
             "type": ["string", "null"],
-            "description": "Lightning address (e.g. `user@speed.app`) to resolve via LNURL-pay.\nMutually exclusive with `lightning_invoice`. Requires `amount_sats`."
+            "description": "Lightning address (e.g. `user@speed.app`) to resolve via LNURL-pay.\nMutually exclusive with `lightning_invoice` and `lnurl`. Requires `amount_sats`."
           },
           "lightning_invoice": {
             "type": ["string", "null"],
-            "description": "User's Lightning BOLT11 invoice to receive payment.\nMutually exclusive with `lightning_address`."
+            "description": "User's Lightning BOLT11 invoice to receive payment.\nMutually exclusive with `lightning_address` and `lnurl`."
+          },
+          "lnurl": {
+            "type": ["string", "null"],
+            "description": "Raw LNURL string (e.g. `lnurl1...`) to resolve via LNURL-pay.\nMutually exclusive with `lightning_invoice` and `lightning_address`. Requires\n`amount_sats`."
           },
           "referral_code": {
             "type": ["string", "null"],

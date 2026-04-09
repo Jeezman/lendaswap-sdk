@@ -59,6 +59,9 @@ export async function createArkadeToLightningSwap(
   } else if (options.lightningAddress) {
     body.lightning_address = options.lightningAddress;
     body.amount_sats = options.amountSats;
+  } else if (options.lnurl) {
+    body.lnurl = options.lnurl;
+    body.amount_sats = options.amountSats;
   }
 
   const { data, error } = await ctx.apiClient.POST("/swap/arkade/lightning", {

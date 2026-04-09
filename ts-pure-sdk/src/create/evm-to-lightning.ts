@@ -64,6 +64,9 @@ export async function createEvmToLightningSwapGeneric(
   } else if (options.lightningAddress) {
     body.lightning_address = options.lightningAddress;
     body.amount_sats = options.amountSats;
+  } else if (options.lnurl) {
+    body.lnurl = options.lnurl;
+    body.amount_sats = options.amountSats;
   }
 
   // Use fetch directly since the generated types don't have this endpoint yet

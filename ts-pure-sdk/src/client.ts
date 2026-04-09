@@ -3180,24 +3180,27 @@ export class Client {
 
     // Arkade → Lightning
     if (isArkade(sourceAsset) && isLightning(targetAsset)) {
-      // Detect whether targetAddress is a Lightning address (user@domain)
-      // or a BOLT11 invoice (starts with ln...).
+      // Detect whether targetAddress is a Lightning address (user@domain),
+      // an LNURL (lnurl1...), or a BOLT11 invoice (starts with ln...).
       const isAddress = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(
         options.targetAddress,
       );
+      const isLnurlStr = /^lnurl1[a-z0-9]+$/i.test(options.targetAddress);
 
-      if (isAddress) {
+      if (isAddress || isLnurlStr) {
         if (
           options.targetAmount == null ||
           !Number.isFinite(options.targetAmount) ||
           options.targetAmount <= 0
         ) {
           throw new Error(
-            "targetAmount (in sats) is required when using a Lightning address",
+            "targetAmount (in sats) is required when using a Lightning address or LNURL",
           );
         }
         return this.createArkadeToLightningSwap({
-          lightningAddress: options.targetAddress,
+          ...(isAddress
+            ? { lightningAddress: options.targetAddress }
+            : { lnurl: options.targetAddress }),
           amountSats: options.targetAmount,
           referralCode: options.referralCode,
         });
@@ -3300,24 +3303,27 @@ export class Client {
         );
       }
 
-      // Detect whether targetAddress is a Lightning address (user@domain)
-      // or a BOLT11 invoice (starts with ln...).
+      // Detect whether targetAddress is a Lightning address (user@domain),
+      // an LNURL (lnurl1...), or a BOLT11 invoice (starts with ln...).
       const isAddress = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(
         options.targetAddress,
       );
+      const isLnurlStr = /^lnurl1[a-z0-9]+$/i.test(options.targetAddress);
 
-      if (isAddress) {
+      if (isAddress || isLnurlStr) {
         if (
           options.targetAmount == null ||
           !Number.isFinite(options.targetAmount) ||
           options.targetAmount <= 0
         ) {
           throw new Error(
-            "targetAmount (in sats) is required when using a Lightning address",
+            "targetAmount (in sats) is required when using a Lightning address or LNURL",
           );
         }
         return this.createEvmToLightningSwapGeneric({
-          lightningAddress: options.targetAddress,
+          ...(isAddress
+            ? { lightningAddress: options.targetAddress }
+            : { lnurl: options.targetAddress }),
           amountSats: options.targetAmount,
           evmChainId: Number(sourceChain),
           tokenAddress: sourceAsset.token_id,

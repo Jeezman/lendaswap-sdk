@@ -166,14 +166,16 @@ export interface LightningToEvmSwapGenericResult {
 
 /** Options for creating an EVM-to-Lightning swap via the generic endpoint.
  *
- * Provide **either** `lightningInvoice` **or** `lightningAddress` + `amountSats`.
+ * Provide **one of** `lightningInvoice`, `lightningAddress` + `amountSats`, or `lnurl` + `amountSats`.
  */
 export interface EvmToLightningSwapGenericOptions {
-  /** User's BOLT11 Lightning invoice. Mutually exclusive with `lightningAddress`. */
+  /** User's BOLT11 Lightning invoice. Mutually exclusive with `lightningAddress` and `lnurl`. */
   lightningInvoice?: string;
-  /** Lightning address (e.g. `user@speed.app`). Mutually exclusive with `lightningInvoice`. Requires `amountSats`. */
+  /** Lightning address (e.g. `user@speed.app`). Mutually exclusive with `lightningInvoice` and `lnurl`. Requires `amountSats`. */
   lightningAddress?: string;
-  /** Amount in satoshis the recipient should receive. Required when `lightningAddress` is provided. */
+  /** Raw LNURL string (e.g. `lnurl1...`). Mutually exclusive with `lightningInvoice` and `lightningAddress`. Requires `amountSats`. */
+  lnurl?: string;
+  /** Amount in satoshis the recipient should receive. Required when `lightningAddress` or `lnurl` is provided. */
   amountSats?: number;
   /** Numeric EVM chain ID: 1 (Ethereum), 137 (Polygon), 42161 (Arbitrum) */
   evmChainId: number;
@@ -349,14 +351,16 @@ export interface LightningToArkadeSwapResult {
 
 /** Options for creating an Arkade-to-Lightning swap.
  *
- * Provide **either** `lightningInvoice` **or** `lightningAddress` + `amountSats`.
+ * Provide **one of** `lightningInvoice`, `lightningAddress` + `amountSats`, or `lnurl` + `amountSats`.
  */
 export interface ArkadeToLightningSwapOptions {
-  /** User's BOLT11 Lightning invoice. Mutually exclusive with `lightningAddress`. */
+  /** User's BOLT11 Lightning invoice. Mutually exclusive with `lightningAddress` and `lnurl`. */
   lightningInvoice?: string;
-  /** Lightning address (e.g. `user@speed.app`). Mutually exclusive with `lightningInvoice`. Requires `amountSats`. */
+  /** Lightning address (e.g. `user@speed.app`). Mutually exclusive with `lightningInvoice` and `lnurl`. Requires `amountSats`. */
   lightningAddress?: string;
-  /** Amount in satoshis the recipient should receive. Required when `lightningAddress` is provided. */
+  /** Raw LNURL string (e.g. `lnurl1...`). Mutually exclusive with `lightningInvoice` and `lightningAddress`. Requires `amountSats`. */
+  lnurl?: string;
+  /** Amount in satoshis the recipient should receive. Required when `lightningAddress` or `lnurl` is provided. */
   amountSats?: number;
   /** Optional referral code for fee tracking */
   referralCode?: string;
