@@ -49,7 +49,7 @@ npm run refund -- <swap-id> <btc-address> 5 --dry-run # Build tx without broadca
 # Refund an EVM HTLC (for EVM-to-BTC swaps after timelock)
 npm run evm-refund -- <swap-id>
 
-# Claim EVM tokens (BTC-to-Ethereum only, no Gelato)
+# Claim EVM tokens (BTC-to-Ethereum only)
 npm run evm-claim -- <swap-id>
 
 # Show EVM wallet balances across all chains
@@ -107,7 +107,7 @@ npm run docs:create-onchain-to-arkade
 npm run docs:monitor-swaps
 npm run docs:monitor-swaps -- <swap-id>
 
-# Claim swaps (Gelato, VHTLC, manual EVM)
+# Claim swaps (VHTLC, manual EVM)
 npm run docs:claim -- <swap-id>
 
 # Refund swaps (VHTLC, EVM HTLC, on-chain)

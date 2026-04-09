@@ -7,7 +7,6 @@ use super::types::BtcToArkadeSwapRequest;
 use super::types::BtcToArkadeSwapResponse;
 use super::types::BtcToEvmSwapRequest;
 use super::types::BtcToEvmSwapResponse;
-use super::types::ClaimGelatoRequest;
 use super::types::CreateVtxoSwapRequest;
 use super::types::EstimateVtxoSwapRequest;
 use super::types::EstimateVtxoSwapResponse;
@@ -207,31 +206,6 @@ impl ApiClient {
     ) -> Result<ArkadeToEvmSwapCreateResponse> {
         let url = format!("{}/swap/arkade/evm", self.base_url);
         self.post_json(&url, request).await
-    }
-
-    /// Claim a swap via Gelato relay.
-    pub async fn claim_gelato(&self, swap_id: &str, secret: &str) -> Result<()> {
-        let url = format!("{}/swap/{}/claim-gelato", self.base_url, swap_id);
-        let request = ClaimGelatoRequest {
-            secret: secret.to_string(),
-        };
-
-        let response = self
-            .client
-            .post(&url)
-            .json(&request)
-            .send()
-            .await
-            .map_err(|e| Error::Network(format!("Failed to send request: {}", e)))?;
-
-        if !response.status().is_success() {
-            let error: ApiError = response.json().await.unwrap_or_else(|_| ApiError {
-                error: "Unknown error".to_string(),
-            });
-            return Err(Error::Network(format!("Failed to claim: {}", error.error)));
-        }
-
-        Ok(())
     }
 
     /// Get API version information.

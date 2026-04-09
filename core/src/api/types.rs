@@ -581,12 +581,6 @@ pub struct QuoteResponse {
     pub max_amount: u64,
 }
 
-/// Claim request for Gelato relay.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ClaimGelatoRequest {
-    pub secret: String,
-}
-
 /// Recover swaps request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecoverSwapsRequest {

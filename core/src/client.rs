@@ -620,22 +620,6 @@ impl<S: WalletStorage, SS: SwapStorage, VSS: VtxoSwapStorage> Client<S, SS, VSS>
         Ok(response)
     }
 
-    pub async fn claim_gelato(
-        &self,
-        swap_id: &str,
-        maybe_secret: Option<String>,
-    ) -> crate::Result<()> {
-        if let Some(secret) = maybe_secret {
-            self.api_client.claim_gelato(swap_id, &secret).await?;
-            return Ok(());
-        }
-
-        let swap_data = self.load_swap_data_from_storage(swap_id).await?;
-        let preimage = swap_data.swap_params.preimage;
-        let preimage = hex::encode(preimage);
-        self.api_client.claim_gelato(swap_id, &preimage).await
-    }
-
     pub async fn claim_vhtlc(&self, swap_id: &str) -> crate::Result<String> {
         let swap_data = self.load_swap_data_from_storage(swap_id).await?;
         if let GetSwapResponse::EvmToBtc(data) = &swap_data.response {

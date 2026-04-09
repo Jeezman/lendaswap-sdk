@@ -1,7 +1,7 @@
 /**
  * Redeem a swap that is in the serverfunded state.
  *
- * For Polygon/Arbitrum swaps: Uses Gelato Relay for gasless claiming.
+ * For Polygon/Arbitrum swaps: Provides gasless claiming.
  * For Ethereum swaps: Returns call data for manual execution.
  */
 
@@ -58,7 +58,7 @@ export async function redeemSwap(
       ? { destinationAddress: destination!, feeRateSatPerVb: 2 }
       : destination ? { destination } : undefined;
 
-    // #region claim-gelato
+    // #region claim
     const result = await client.claim(swapId, claimOptions);
 
     if (result.success) {
@@ -67,7 +67,7 @@ export async function redeemSwap(
     } else {
       console.error("Claim failed:", result.message);
     }
-    // #endregion claim-gelato
+    // #endregion claim
 
     if (!result.success) {
       console.error("=".repeat(60));
