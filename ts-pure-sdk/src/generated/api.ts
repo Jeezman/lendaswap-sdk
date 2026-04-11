@@ -929,17 +929,23 @@ export interface components {
             /**
              * Format: int64
              * @description Amount in satoshis the recipient should receive on Lightning.
-             *     Required when `lightning_address` is provided; ignored when
+             *     Required when `lightning_address` or `lnurl` is provided; ignored when
              *     `lightning_invoice` is provided (amount is read from the invoice).
              */
             amount_sats?: number | null;
             /**
              * @description Lightning address (e.g. `user@speed.app`) to resolve via LNURL-pay.
-             *     Mutually exclusive with `lightning_invoice`. Requires `amount_sats`.
+             *     Mutually exclusive with `lightning_invoice` and `lnurl`. Requires `amount_sats`.
              */
             lightning_address?: string | null;
             /** @description Lightning BOLT11 invoice the user wants paid. */
             lightning_invoice?: string | null;
+            /**
+             * @description Raw LNURL string (e.g. `lnurl1...`) to resolve via LNURL-pay.
+             *     Mutually exclusive with `lightning_invoice` and `lightning_address`. Requires
+             *     `amount_sats`.
+             */
+            lnurl?: string | null;
             /** @description Optional referral code for fee tracking. */
             referral_code?: string | null;
             /** @description User's refund public key for the Arkade VHTLC (if swap fails/expires). */
@@ -1720,15 +1726,16 @@ export interface components {
          *     User sends any ERC-20 token on EVM, receives BTC via Lightning.
          *     The hash_lock is derived from the Lightning invoice's payment hash.
          *
-         *     Provide **either** `lightning_invoice` (a BOLT11 invoice) **or**
-         *     `lightning_address` + `amount_sats` (a Lightning address that will be
-         *     resolved server-side via LNURL-pay).
+         *     Provide **one of**:
+         *     - `lightning_invoice` — a BOLT11 invoice
+         *     - `lightning_address` + `amount_sats` — a Lightning address resolved via LNURL-pay
+         *     - `lnurl` + `amount_sats` — a raw LNURL string (bech32-encoded URL) resolved via LNURL-pay
          */
         EvmToLightningSwapRequest: {
             /**
              * Format: int64
              * @description Amount in satoshis the recipient should receive on Lightning.
-             *     Required when `lightning_address` is provided; ignored when
+             *     Required when `lightning_address` or `lnurl` is provided; ignored when
              *     `lightning_invoice` is provided (amount is read from the invoice).
              */
             amount_sats?: number | null;
@@ -1741,14 +1748,20 @@ export interface components {
             gasless?: boolean;
             /**
              * @description Lightning address (e.g. `user@speed.app`) to resolve via LNURL-pay.
-             *     Mutually exclusive with `lightning_invoice`. Requires `amount_sats`.
+             *     Mutually exclusive with `lightning_invoice` and `lnurl`. Requires `amount_sats`.
              */
             lightning_address?: string | null;
             /**
              * @description User's Lightning BOLT11 invoice to receive payment.
-             *     Mutually exclusive with `lightning_address`.
+             *     Mutually exclusive with `lightning_address` and `lnurl`.
              */
             lightning_invoice?: string | null;
+            /**
+             * @description Raw LNURL string (e.g. `lnurl1...`) to resolve via LNURL-pay.
+             *     Mutually exclusive with `lightning_invoice` and `lightning_address`. Requires
+             *     `amount_sats`.
+             */
+            lnurl?: string | null;
             /** @description Optional referral code for tracking. */
             referral_code?: string | null;
             /** @description ERC-20 contract address of the source token on the EVM chain. */
