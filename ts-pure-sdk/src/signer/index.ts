@@ -9,7 +9,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { HDKey } from "@scure/bip32";
 import * as bip39 from "@scure/bip39";
-import { wordlist } from "@scure/bip39/wordlists/english";
+import { wordlist } from "@scure/bip39/wordlists/english.js";
 
 /** BIP-85 prefix for signing keys. */
 const SIGNING_PREFIX = 83696968;
