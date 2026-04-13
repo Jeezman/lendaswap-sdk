@@ -2114,6 +2114,18 @@ export interface components {
              */
             min_amount: number;
             /**
+             * @description Net source amount: what the user actually sends including all fees.
+             *     Equals `source_amount` when the user provided `source_amount`;
+             *     otherwise `source_amount + fees_in_source_units`.
+             */
+            net_source_amount: string;
+            /**
+             * @description Net target amount: what the user actually receives after all fees.
+             *     Equals `target_amount` when the user provided `target_amount`;
+             *     otherwise `target_amount - fees_in_target_units`.
+             */
+            net_target_amount: string;
+            /**
              * Format: int64
              * @description Network fee estimate (in satoshis) — covers server-paid gas for HTLC
              *     create/claim + BTC mining fee when applicable.
@@ -2129,9 +2141,9 @@ export interface components {
              * @description Protocol fee rate (as decimal, e.g., 0.0025 = 0.25%)
              */
             protocol_fee_rate: number;
-            /** @description Pre-calculated source amount in smallest unit of source token */
+            /** @description Pre-calculated source amount in smallest unit of source token (pre-fee). */
             source_amount: string;
-            /** @description Pre-calculated target amount in smallest unit of target token */
+            /** @description Pre-calculated target amount in smallest unit of target token (pre-fee). */
             target_amount: string;
         };
         RecoveredSwap: components["schemas"]["GetSwapResponse"] & {

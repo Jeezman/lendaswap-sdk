@@ -4398,7 +4398,9 @@
           "min_amount",
           "max_amount",
           "source_amount",
-          "target_amount"
+          "target_amount",
+          "net_source_amount",
+          "net_target_amount"
         ],
         "properties": {
           "bridge_fee": {
@@ -4429,6 +4431,14 @@
             "description": "Minimum BTC value of the swap in satoshis",
             "minimum": 0
           },
+          "net_source_amount": {
+            "type": "string",
+            "description": "Net source amount: what the user actually sends including all fees.\nEquals `source_amount` when the user provided `source_amount`;\notherwise `source_amount + fees_in_source_units`."
+          },
+          "net_target_amount": {
+            "type": "string",
+            "description": "Net target amount: what the user actually receives after all fees.\nEquals `target_amount` when the user provided `target_amount`;\notherwise `target_amount - fees_in_target_units`."
+          },
           "network_fee": {
             "type": "integer",
             "format": "int64",
@@ -4448,11 +4458,11 @@
           },
           "source_amount": {
             "type": "string",
-            "description": "Pre-calculated source amount in smallest unit of source token"
+            "description": "Pre-calculated source amount in smallest unit of source token (pre-fee)."
           },
           "target_amount": {
             "type": "string",
-            "description": "Pre-calculated target amount in smallest unit of target token"
+            "description": "Pre-calculated target amount in smallest unit of target token (pre-fee)."
           }
         }
       },
