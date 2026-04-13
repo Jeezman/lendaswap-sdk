@@ -29,7 +29,7 @@ import {
   VHTLC,
   VtxoTaprootTree,
 } from "@arkade-os/sdk";
-import { ripemd160 } from "@noble/hashes/ripemd160";
+import { ripemd160 } from "@noble/hashes/legacy.js";
 import { base64, hex } from "@scure/base";
 import { Address, OutScript, SigHash } from "@scure/btc-signer";
 

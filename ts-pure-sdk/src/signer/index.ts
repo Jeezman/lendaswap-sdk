@@ -5,8 +5,8 @@
  * mirroring the Rust implementation in `client-sdk/core/src/hd_wallet.rs`.
  */
 
-import { sha256 } from "@noble/hashes/sha256";
-import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { HDKey } from "@scure/bip32";
 import * as bip39 from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";

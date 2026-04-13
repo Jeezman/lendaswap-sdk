@@ -28,8 +28,8 @@ import {
   VHTLC,
   VtxoTaprootTree,
 } from "@arkade-os/sdk";
-import { ripemd160 } from "@noble/hashes/ripemd160";
-import { sha256 } from "@noble/hashes/sha256";
+import { ripemd160 } from "@noble/hashes/legacy.js";
+import { sha256 } from "@noble/hashes/sha2.js";
 import { base64, hex } from "@scure/base";
 import { SigHash } from "@scure/btc-signer";
 

@@ -36,7 +36,7 @@
   "dependencies": {
     "@arkade-os/sdk": "^0.4.6",
     "@noble/curves": "^2.0.1",
-    "@noble/hashes": "^1.7.1",
+    "@noble/hashes": "^2.2.0",
     "@scure/bip32": "^1.6.2",
     "@scure/bip39": "^1.5.4",
     "@scure/btc-signer": "^2.0.1",

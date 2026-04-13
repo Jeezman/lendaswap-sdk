@@ -6,11 +6,11 @@
  * `executeAndCreate` / refund helpers for EVM-to-BTC coordinator swaps.
  */
 
-import { keccak_256 } from "@noble/hashes/sha3";
+import { keccak_256 } from "@noble/hashes/sha3.js";
 import {
   hexToBytes as nobleFromHex,
   bytesToHex as nobleToHex,
-} from "@noble/hashes/utils";
+} from "@noble/hashes/utils.js";
 
 // ── ABI helpers ──────────────────────────────────────────────────────────────
 

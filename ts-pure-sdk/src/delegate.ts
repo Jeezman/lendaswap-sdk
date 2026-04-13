@@ -31,8 +31,8 @@ import { Address, OutScript, SigHash } from "@scure/btc-signer";
 const P2A_SCRIPT = new Uint8Array([0x51, 0x02, 0x4e, 0x73]);
 const P2A = { script: P2A_SCRIPT, amount: 0n };
 
-import { ripemd160 } from "@noble/hashes/legacy";
-import { sha256 } from "@noble/hashes/sha2";
+import { ripemd160 } from "@noble/hashes/legacy.js";
+import { sha256 } from "@noble/hashes/sha2.js";
 import { base64, hex } from "@scure/base";
 
 /** Default Arkade server URL by network */
