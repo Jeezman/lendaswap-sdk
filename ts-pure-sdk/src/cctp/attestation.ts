@@ -214,7 +214,7 @@ export async function trackCctpMessage(
           forwardTxHash: msg.forwardTxHash,
           amount:
             cctpSentAmount && cctpPaidFee
-              ? (Number(cctpSentAmount) - Number(cctpPaidFee)).toString()
+              ? (BigInt(cctpSentAmount) - BigInt(cctpPaidFee)).toString()
               : undefined,
           feeExecuted: msg.decodedMessage?.decodedMessageBody?.feeExecuted,
         };
