@@ -202,12 +202,20 @@ export async function trackCctpMessage(
       }
 
       // Attestation is complete — check forwarding state
-      if (msg.forwardState === "COMPLETE" && msg.forwardTxHash) {
+      if (
+        (msg.forwardState === "COMPLETE" || msg.forwardState === "CONFIRMED") &&
+        msg.forwardTxHash
+      ) {
         emitStatus("COMPLETE");
+        const cctpSentAmount = msg.decodedMessage?.decodedMessageBody?.amount;
+        const cctpPaidFee = msg.decodedMessage?.decodedMessageBody?.feeExecuted;
         return {
           status: "COMPLETE",
           forwardTxHash: msg.forwardTxHash,
-          amount: msg.decodedMessage?.decodedMessageBody?.amount,
+          amount:
+            cctpSentAmount && cctpPaidFee
+              ? (Number(cctpSentAmount) - Number(cctpPaidFee)).toString()
+              : undefined,
           feeExecuted: msg.decodedMessage?.decodedMessageBody?.feeExecuted,
         };
       }
