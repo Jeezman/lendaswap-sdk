@@ -62,6 +62,8 @@ function taggedHash(tag: string, data: Uint8Array): Uint8Array {
  * HD Wallet Signer for Lendaswap key derivation.
  *
  * Provides BIP39/BIP32 key derivation matching the Rust `HdWallet` implementation.
+ * Can be constructed from either a BIP39 mnemonic or a BIP32 extended private key
+ * (xprv). When constructed from an xprv, the `mnemonic` getter returns `undefined`.
  *
  * @example
  * ```ts
@@ -71,18 +73,20 @@ function taggedHash(tag: string, data: Uint8Array): Uint8Array {
  * // Or restore from an existing mnemonic
  * const signer = Signer.fromMnemonic("your twelve word mnemonic phrase here ...");
  *
+ * // Or restore from a BIP32 extended private key (xprv)
+ * const signer = Signer.fromXprv("xprv9s21ZrQH143K...");
+ *
  * // Derive swap parameters at a specific index
  * const params = signer.deriveSwapParams(0);
  * ```
  */
 export class Signer {
-  readonly #mnemonic: string;
-  readonly #seed: Uint8Array;
+  readonly #mnemonic: string | undefined;
+  readonly #master: HDKey;
 
-  private constructor(mnemonic: string) {
+  private constructor(master: HDKey, mnemonic?: string) {
+    this.#master = master;
     this.#mnemonic = mnemonic;
-    // No passphrase, matching Rust implementation
-    this.#seed = bip39.mnemonicToSeedSync(mnemonic, "");
   }
 
   /**
@@ -95,7 +99,7 @@ export class Signer {
   static generate(wordCount: 12 | 15 | 18 | 21 | 24 = 12): Signer {
     const strength = (wordCount / 3) * 32; // 128, 160, 192, 224, or 256 bits
     const mnemonic = bip39.generateMnemonic(wordlist, strength);
-    return new Signer(mnemonic);
+    return Signer.fromMnemonic(mnemonic);
   }
 
   /**
@@ -110,15 +114,46 @@ export class Signer {
     if (!bip39.validateMnemonic(normalized, wordlist)) {
       throw new Error("Invalid mnemonic phrase");
     }
-    return new Signer(normalized);
+    const seed = bip39.mnemonicToSeedSync(normalized, "");
+    const master = HDKey.fromMasterSeed(seed);
+    return new Signer(master, normalized);
   }
 
   /**
-   * Get the mnemonic phrase.
+   * Create a Signer from a BIP32 extended private key (xprv).
    *
-   * @returns The BIP39 mnemonic phrase.
+   * The xprv is treated as the master key for all subsequent derivations,
+   * so it must be the root key (depth 0) for derivation paths to match those
+   * produced from a mnemonic. Signers created this way have no mnemonic
+   * available — `mnemonic` returns `undefined`.
+   *
+   * @param xprv - The base58check-encoded extended private key.
+   * @returns A new Signer instance.
+   * @throws Error if the key is not a valid xprv or is a public-only extended key.
    */
-  get mnemonic(): string {
+  static fromXprv(xprv: string): Signer {
+    let master: HDKey;
+    try {
+      master = HDKey.fromExtendedKey(xprv.trim());
+    } catch (err) {
+      throw new Error(`Invalid xprv: ${(err as Error).message}`);
+    }
+    if (!master.privateKey) {
+      throw new Error(
+        "Extended key has no private key (xprv required, not xpub)",
+      );
+    }
+    return new Signer(master);
+  }
+
+  /**
+   * Get the mnemonic phrase, if this signer was created from one.
+   *
+   * Returns `undefined` for signers created via `fromXprv()`.
+   *
+   * @returns The BIP39 mnemonic phrase, or `undefined`.
+   */
+  get mnemonic(): string | undefined {
     return this.#mnemonic;
   }
 
@@ -131,11 +166,9 @@ export class Signer {
    * @returns The derived swap parameters.
    */
   deriveSwapParams(index: number): SwapParams {
-    const master = HDKey.fromMasterSeed(this.#seed);
-
     // Derive signing key: m/{SIGNING_PREFIX}'/{LSW_IDENTIFIER}'/{index}'
     const signingPath = `m/${SIGNING_PREFIX}'/${LSW_IDENTIFIER}'/${index}'`;
-    const derived = master.derive(signingPath);
+    const derived = this.#master.derive(signingPath);
 
     if (!derived.privateKey || !derived.publicKey) {
       throw new Error("Failed to derive key");
@@ -197,11 +230,9 @@ export class Signer {
    * @returns The HDKey representing the user ID Xpub.
    */
   deriveUserIdXpub(): HDKey {
-    const master = HDKey.fromMasterSeed(this.#seed);
-
     // Build hardened derivation path
     const path = `m/${ID_PREFIX}'/${LSW_IDENTIFIER}'/0'`;
-    const derived = master.derive(path);
+    const derived = this.#master.derive(path);
 
     // Return neutered key (Xpub only, no private key)
     return derived.wipePrivateData();
@@ -231,9 +262,8 @@ export class Signer {
    * @returns The 32-byte secret key for EVM signing.
    */
   deriveEvmKey(): { secretKey: Uint8Array } {
-    const master = HDKey.fromMasterSeed(this.#seed);
     const path = "m/44'/60'/0'/0/0";
-    const derived = master.derive(path);
+    const derived = this.#master.derive(path);
 
     if (!derived.privateKey) {
       throw new Error("Failed to derive EVM key");
@@ -252,9 +282,8 @@ export class Signer {
    * @returns The 32-byte private key as a hex string.
    */
   deriveNostrKeyHex(account = 0): string {
-    const master = HDKey.fromMasterSeed(this.#seed);
     const path = `m/44'/${NOSTR_COIN_TYPE}'/${account}'/0/0`;
-    const derived = master.derive(path);
+    const derived = this.#master.derive(path);
 
     if (!derived.privateKey) {
       throw new Error("Failed to derive Nostr key");

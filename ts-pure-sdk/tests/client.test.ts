@@ -1,5 +1,15 @@
+import { HDKey } from "@scure/bip32";
+import * as bip39 from "@scure/bip39";
 import { beforeEach, describe, expect, it } from "vitest";
 import { Client, ClientBuilder, InMemoryWalletStorage } from "../src/index.js";
+
+const TEST_MNEMONIC =
+  "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+
+function xprvFor(mnemonic: string): string {
+  const seed = bip39.mnemonicToSeedSync(mnemonic, "");
+  return HDKey.fromMasterSeed(seed).privateExtendedKey;
+}
 
 describe("Client", () => {
   it("should create a client with builder", async () => {
@@ -216,5 +226,101 @@ describe("Client Signer", () => {
     expect(params1.keyIndex).toBe(params2.keyIndex);
     expect(params1.preimage).toEqual(params2.preimage);
     expect(params1.preimageHash).toEqual(params2.preimageHash);
+  });
+});
+
+describe("Client xprv signer", () => {
+  it("should build a client from an xprv", async () => {
+    const xprv = xprvFor(TEST_MNEMONIC);
+    const client = await Client.builder().withXprv(xprv).build();
+
+    expect(client).toBeDefined();
+  });
+
+  it("should derive the same params as a mnemonic-based client", async () => {
+    const xprv = xprvFor(TEST_MNEMONIC);
+
+    const fromMnemonic = await Client.builder()
+      .withMnemonic(TEST_MNEMONIC)
+      .build();
+    const fromXprv = await Client.builder().withXprv(xprv).build();
+
+    const a = fromMnemonic.deriveSwapParamsAtIndex(0);
+    const b = fromXprv.deriveSwapParamsAtIndex(0);
+
+    expect(a.preimage).toEqual(b.preimage);
+    expect(a.preimageHash).toEqual(b.preimageHash);
+    expect(a.publicKey).toEqual(b.publicKey);
+  });
+
+  it("should throw when calling getMnemonic on an xprv-based client", async () => {
+    const client = await Client.builder()
+      .withXprv(xprvFor(TEST_MNEMONIC))
+      .build();
+
+    expect(() => client.getMnemonic()).toThrow(/xprv/);
+  });
+
+  it("should not write the secret to signer storage", async () => {
+    const storage = new InMemoryWalletStorage();
+    await Client.builder()
+      .withSignerStorage(storage)
+      .withXprv(xprvFor(TEST_MNEMONIC))
+      .build();
+
+    expect(await storage.getMnemonic()).toBeNull();
+  });
+
+  it("should not load mnemonic from storage when xprv is provided", async () => {
+    const storage = new InMemoryWalletStorage();
+    // Pre-populate storage with a *different* mnemonic to make sure xprv wins.
+    const otherMnemonic =
+      "legal winner thank year wave sausage worth useful legal winner thank yellow";
+    await storage.setMnemonic(otherMnemonic);
+
+    const client = await Client.builder()
+      .withSignerStorage(storage)
+      .withXprv(xprvFor(TEST_MNEMONIC))
+      .build();
+
+    // Storage value untouched
+    expect(await storage.getMnemonic()).toBe(otherMnemonic);
+
+    // Derived params come from the xprv, not the stored mnemonic
+    const xprvParams = client.deriveSwapParamsAtIndex(0);
+    const referenceClient = await Client.builder()
+      .withMnemonic(TEST_MNEMONIC)
+      .build();
+    const referenceParams = referenceClient.deriveSwapParamsAtIndex(0);
+    expect(xprvParams.preimage).toEqual(referenceParams.preimage);
+  });
+
+  it("should still use storage for the key index counter", async () => {
+    const storage = new InMemoryWalletStorage();
+    const client = await Client.builder()
+      .withSignerStorage(storage)
+      .withXprv(xprvFor(TEST_MNEMONIC))
+      .build();
+
+    const p1 = await client.deriveSwapParams();
+    const p2 = await client.deriveSwapParams();
+    expect(p1.keyIndex).toBe(0);
+    expect(p2.keyIndex).toBe(1);
+    expect(await storage.getKeyIndex()).toBe(2);
+  });
+
+  it("should reject combining withMnemonic and withXprv", async () => {
+    await expect(
+      Client.builder()
+        .withMnemonic(TEST_MNEMONIC)
+        .withXprv(xprvFor(TEST_MNEMONIC))
+        .build(),
+    ).rejects.toThrow(/mutually exclusive/);
+  });
+
+  it("should throw on a malformed xprv", async () => {
+    await expect(
+      Client.builder().withXprv("not-an-xprv").build(),
+    ).rejects.toThrow(/Invalid xprv/);
   });
 });

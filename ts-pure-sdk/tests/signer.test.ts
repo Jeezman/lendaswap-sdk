@@ -1,17 +1,27 @@
+import { HDKey } from "@scure/bip32";
+import * as bip39 from "@scure/bip39";
 import { describe, expect, it } from "vitest";
 import { bytesToHex, Signer } from "../src/index.js";
+
+const TEST_MNEMONIC =
+  "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+
+function xprvFromMnemonic(mnemonic: string): string {
+  const seed = bip39.mnemonicToSeedSync(mnemonic, "");
+  return HDKey.fromMasterSeed(seed).privateExtendedKey;
+}
 
 describe("Signer", () => {
   describe("generate", () => {
     it("should generate a signer with 12 words by default", () => {
       const signer = Signer.generate();
-      const words = signer.mnemonic.split(" ");
+      const words = signer.mnemonic?.split(" ");
       expect(words).toHaveLength(12);
     });
 
     it("should generate a signer with 24 words when specified", () => {
       const signer = Signer.generate(24);
-      const words = signer.mnemonic.split(" ");
+      const words = signer.mnemonic?.split(" ");
       expect(words).toHaveLength(24);
     });
 
@@ -103,6 +113,57 @@ describe("Signer", () => {
 
       expect(bytesToHex(params1.secretKey)).toBe(bytesToHex(params2.secretKey));
       expect(bytesToHex(params1.preimage)).toBe(bytesToHex(params2.preimage));
+    });
+  });
+
+  describe("fromXprv", () => {
+    it("should derive the same swap params as the source mnemonic", () => {
+      const fromMnemonic = Signer.fromMnemonic(TEST_MNEMONIC);
+      const fromXprv = Signer.fromXprv(xprvFromMnemonic(TEST_MNEMONIC));
+
+      const a = fromMnemonic.deriveSwapParams(0);
+      const b = fromXprv.deriveSwapParams(0);
+
+      expect(bytesToHex(a.secretKey)).toBe(bytesToHex(b.secretKey));
+      expect(bytesToHex(a.publicKey)).toBe(bytesToHex(b.publicKey));
+      expect(bytesToHex(a.preimage)).toBe(bytesToHex(b.preimage));
+      expect(bytesToHex(a.preimageHash)).toBe(bytesToHex(b.preimageHash));
+      expect(bytesToHex(a.userId)).toBe(bytesToHex(b.userId));
+    });
+
+    it("should derive the same EVM and Nostr keys as the source mnemonic", () => {
+      const fromMnemonic = Signer.fromMnemonic(TEST_MNEMONIC);
+      const fromXprv = Signer.fromXprv(xprvFromMnemonic(TEST_MNEMONIC));
+
+      expect(bytesToHex(fromMnemonic.deriveEvmKey().secretKey)).toBe(
+        bytesToHex(fromXprv.deriveEvmKey().secretKey),
+      );
+      expect(fromMnemonic.deriveNostrKeyHex()).toBe(
+        fromXprv.deriveNostrKeyHex(),
+      );
+      expect(fromMnemonic.getUserIdXpubString()).toBe(
+        fromXprv.getUserIdXpubString(),
+      );
+    });
+
+    it("should expose undefined mnemonic for xprv-based signers", () => {
+      const signer = Signer.fromXprv(xprvFromMnemonic(TEST_MNEMONIC));
+      expect(signer.mnemonic).toBeUndefined();
+    });
+
+    it("should accept whitespace around the xprv string", () => {
+      const xprv = xprvFromMnemonic(TEST_MNEMONIC);
+      expect(() => Signer.fromXprv(`  ${xprv}\n`)).not.toThrow();
+    });
+
+    it("should throw on a malformed xprv", () => {
+      expect(() => Signer.fromXprv("not-an-xprv")).toThrow(/Invalid xprv/);
+    });
+
+    it("should reject an xpub (public-only extended key)", () => {
+      const seed = bip39.mnemonicToSeedSync(TEST_MNEMONIC, "");
+      const xpub = HDKey.fromMasterSeed(seed).publicExtendedKey;
+      expect(() => Signer.fromXprv(xpub)).toThrow(/xprv required/);
     });
   });
 

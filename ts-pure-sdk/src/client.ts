@@ -408,6 +408,12 @@ export interface ClientConfig {
  *   .withMnemonic("abandon abandon abandon ...")
  *   .build();
  *
+ * // Create client from a BIP32 extended private key (ephemeral — never persisted).
+ * // Useful when the secret lives in an env var, KMS, or external secure store.
+ * const client = await Client.builder()
+ *   .withXprv("xprv9s21ZrQH143K...")
+ *   .build();
+ *
  * // Create client without storage (stateless, generates new mnemonic)
  * const client = await Client.builder().build();
  * ```
@@ -421,6 +427,7 @@ export class ClientBuilder {
   #signerStorage?: WalletStorage;
   #swapStorage?: SwapStorage;
   #mnemonic?: string;
+  #xprv?: string;
 
   /**
    * Sets the base URL for the API.
@@ -525,26 +532,56 @@ export class ClientBuilder {
   }
 
   /**
+   * Sets a BIP32 extended private key (xprv) to use for the signer.
+   *
+   * The xprv is treated as ephemeral: it is **never** persisted to signer
+   * storage, even if storage is configured. The caller is responsible for
+   * supplying it on every `build()` (e.g. from an env var, KMS, or vault).
+   * Storage, if configured, is still used for the swap key index counter.
+   *
+   * Cannot be combined with `withMnemonic()`.
+   *
+   * @param xprv - The base58check-encoded extended private key.
+   * @returns The builder instance for chaining.
+   */
+  withXprv(xprv: string): this {
+    this.#xprv = xprv;
+    return this;
+  }
+
+  /**
    * Builds and returns a fully initialized Client instance.
    *
    * Initialization order:
-   * 1. If `withMnemonic()` was called, use that mnemonic
-   * 2. Else if storage is configured and contains a mnemonic, load it
-   * 3. Else generate a new mnemonic
+   * 1. If `withXprv()` was called, use that xprv (ephemeral, never stored)
+   * 2. Else if `withMnemonic()` was called, use that mnemonic
+   * 3. Else if storage is configured and contains a mnemonic, load it
+   * 4. Else generate a new mnemonic
    *
-   * The mnemonic is persisted to storage if storage is configured.
+   * The mnemonic is persisted to storage if storage is configured. An xprv
+   * is never persisted.
    *
    * @returns A promise that resolves to a fully initialized Client.
-   * @throws Error if the provided mnemonic is invalid.
+   * @throws Error if the provided mnemonic or xprv is invalid, or if both
+   *         `withMnemonic()` and `withXprv()` were called.
    */
   async build(): Promise<Client> {
+    if (this.#xprv && this.#mnemonic) {
+      throw new Error(
+        "withMnemonic() and withXprv() are mutually exclusive — pick one",
+      );
+    }
+
     let signer: Signer;
 
-    if (this.#mnemonic) {
+    if (this.#xprv) {
+      // Ephemeral xprv — never touch signer storage for the secret
+      signer = Signer.fromXprv(this.#xprv);
+    } else if (this.#mnemonic) {
       // Use provided mnemonic
       signer = Signer.fromMnemonic(this.#mnemonic);
       if (this.#signerStorage) {
-        await this.#signerStorage.setMnemonic(signer.mnemonic);
+        await this.#signerStorage.setMnemonic(this.#mnemonic);
       }
     } else if (this.#signerStorage) {
       // Try to load from storage
@@ -554,7 +591,8 @@ export class ClientBuilder {
       } else {
         // Generate new and persist
         signer = Signer.generate();
-        await this.#signerStorage.setMnemonic(signer.mnemonic);
+        // Signer.generate() always populates mnemonic
+        await this.#signerStorage.setMnemonic(signer.mnemonic as string);
       }
     } else {
       // No storage, generate new (stateless mode)
@@ -664,9 +702,16 @@ export class Client {
    * Store this securely - it's the only way to recover the wallet.
    *
    * @returns The BIP39 mnemonic phrase.
+   * @throws Error if the wallet was initialized from an xprv (no mnemonic exists).
    */
   getMnemonic(): string {
-    return this.#signer.mnemonic;
+    const mnemonic = this.#signer.mnemonic;
+    if (!mnemonic) {
+      throw new Error(
+        "No mnemonic available — wallet was initialized from an xprv",
+      );
+    }
+    return mnemonic;
   }
 
   /**
