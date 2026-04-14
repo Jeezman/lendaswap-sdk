@@ -543,8 +543,13 @@ export class ClientBuilder {
    *
    * @param xprv - The base58check-encoded extended private key.
    * @returns The builder instance for chaining.
+   * @throws Error if `xprv` is empty or whitespace-only — fail fast on a
+   *         misconfigured secret rather than silently falling back to storage.
    */
   withXprv(xprv: string): this {
+    if (typeof xprv !== "string" || xprv.trim().length === 0) {
+      throw new Error("withXprv() requires a non-empty xprv string");
+    }
     this.#xprv = xprv;
     return this;
   }

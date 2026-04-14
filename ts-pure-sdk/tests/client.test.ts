@@ -323,4 +323,20 @@ describe("Client xprv signer", () => {
       Client.builder().withXprv("not-an-xprv").build(),
     ).rejects.toThrow(/Invalid xprv/);
   });
+
+  it("should reject an empty xprv at withXprv() rather than silently falling back", () => {
+    expect(() => Client.builder().withXprv("")).toThrow(/non-empty xprv/);
+    expect(() => Client.builder().withXprv("   ")).toThrow(/non-empty xprv/);
+  });
+
+  it("should not silently generate a wallet when an empty xprv is paired with storage", async () => {
+    // The whole point of fail-fast: if env injects "", we must NOT fall through
+    // to storage and end up with the wrong keys.
+    const storage = new InMemoryWalletStorage();
+    expect(() =>
+      Client.builder().withSignerStorage(storage).withXprv(""),
+    ).toThrow(/non-empty xprv/);
+    // And nothing got written to storage as a side effect.
+    expect(await storage.getMnemonic()).toBeNull();
+  });
 });
