@@ -1,5 +1,6 @@
 import createClient from "openapi-fetch";
 import type { components, paths } from "../generated/api.js";
+import { CLIENT_AGENT } from "../version.js";
 
 export type ApiClient = ReturnType<typeof createClient<paths>>;
 
@@ -72,7 +73,9 @@ export interface ApiClientOptions {
 }
 
 export function createApiClient(options: ApiClientOptions): ApiClient {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = {
+    "X-Lendaswap-Client": CLIENT_AGENT,
+  };
   if (options.apiKey) {
     headers["X-Org-Code"] = options.apiKey;
   }

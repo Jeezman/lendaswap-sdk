@@ -1,6 +1,6 @@
 {
   "name": "@lendasat/lendaswap-sdk-pure",
-  "version": "0.2.20",
+  "version": "0.2.21-1",
   "description": "Lendaswap Client SDK - Pure TypeScript, React Native compatible",
   "type": "module",
   "main": "dist/index.js",
@@ -25,6 +25,9 @@
   ],
   "scripts": {
     "generate:api": "openapi-typescript openapi.json -o src/generated/api.ts",
+    "sync-version": "node scripts/sync-version.mjs",
+    "prebuild": "node scripts/sync-version.mjs",
+    "version": "node scripts/sync-version.mjs && git add src/version.ts",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest",
