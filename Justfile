@@ -58,7 +58,7 @@ generate:
     cd ts-pure-sdk && npm run generate:api
 
 build:
-    cd ts-pure-sdk && npm run build
+    cd ts-pure-sdk && npm install && npm run build
 
 typecheck:
     cd ts-pure-sdk && npm run typecheck
