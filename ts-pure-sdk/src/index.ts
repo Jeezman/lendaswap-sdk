@@ -71,6 +71,7 @@ export {
   TOKEN_MESSENGER_V2,
   type TrackCctpMessageOptions,
   trackCctpMessage,
+  USAT_ADDRESSES,
   USDC_ADDRESSES,
 } from "./cctp/index.js";
 export type {

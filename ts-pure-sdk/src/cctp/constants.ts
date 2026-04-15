@@ -63,6 +63,10 @@ export const EURC_ADDRESSES: Record<string, string> = {
   Ethereum: "0x1aBaEA1f7C830bD89Acc67eC4af516284b1bC33c",
 };
 
+export const USAT_ADDRESSES: Record<string, string> = {
+  Ethereum: "0x07041776F5007aCa2A54844f50503a18A72A8b68",
+};
+
 // ============================================================================
 // V2 addresses are the same on all chains, but kept as Records for
 // backward compatibility and for the receiveMessage destination lookup.
