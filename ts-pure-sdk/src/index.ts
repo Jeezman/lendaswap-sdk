@@ -222,3 +222,4 @@ export {
   USDT0_ADDRESSES,
   type Usdt0ChainName,
 } from "./usdt0-bridge/index.js";
+export type { SwapStatusHandler, SwapStatusWatcher } from "./ws.js";

@@ -118,6 +118,11 @@ import {
   toChainName,
 } from "./tokens.js";
 import { USDT0_ADDRESSES } from "./usdt0-bridge/constants.js";
+import {
+  createSwapStatusWatcher,
+  type SwapStatusHandler,
+  type SwapStatusWatcher,
+} from "./ws.js";
 
 // Re-export types from create module for backwards compatibility
 export type {
@@ -649,6 +654,7 @@ export class Client {
   #signer: Signer;
   readonly #signerStorage?: WalletStorage;
   readonly #swapStorage?: SwapStorage;
+  #statusWatcher: SwapStatusWatcher | null = null;
 
   /**
    * Creates a new Client instance.
@@ -672,6 +678,37 @@ export class Client {
     this.#signer = signer;
     this.#signerStorage = signerStorage;
     this.#swapStorage = swapStorage;
+  }
+
+  /**
+   * Subscribe to status updates for one or more swaps over a shared WebSocket.
+   * The socket is opened lazily on first call and closed automatically when
+   * the last subscriber unsubscribes.
+   *
+   * @param swapIds Swap ids to watch.
+   * @param onUpdate Fires with `(swapId, status)` for every status change of
+   *                 any id in the set.
+   * @returns Unsubscribe function that removes `onUpdate` from all of the
+   *          passed ids at once.
+   */
+  subscribeToSwaps(swapIds: string[], onUpdate: SwapStatusHandler): () => void {
+    if (!this.#statusWatcher) {
+      this.#statusWatcher = createSwapStatusWatcher(this.#config.baseUrl);
+    }
+    return this.#statusWatcher.subscribe(swapIds, onUpdate);
+  }
+
+  /**
+   * Remove `onUpdate` from the given swap ids.
+   */
+  unsubscribeFromSwaps(swapIds: string[], onUpdate: SwapStatusHandler): void {
+    this.#statusWatcher?.unsubscribe(swapIds, onUpdate);
+  }
+
+  /** Force-close the shared swap-status socket. */
+  closeSwapStatusSocket(): void {
+    this.#statusWatcher?.close();
+    this.#statusWatcher = null;
   }
 
   /**
