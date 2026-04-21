@@ -113,8 +113,7 @@ export async function signEscrowDelegate(
   forfeitPsbtsB64: string[],
   secretKey: Uint8Array | string,
 ): Promise<SignedEscrowDelegate> {
-  const sk =
-    typeof secretKey === "string" ? secretKey : hex.encode(secretKey);
+  const sk = typeof secretKey === "string" ? secretKey : hex.encode(secretKey);
   const signer = SingleKey.fromHex(sk);
 
   // Sign intent proof — SingleKey.sign handles per-input sighash types

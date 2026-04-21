@@ -106,6 +106,15 @@ export type {
 } from "./client.js";
 // Main client
 export { Client, ClientBuilder } from "./client.js";
+// Escrow signing utilities
+export {
+  getArkTxid,
+  type SignedEscrowDelegate,
+  type SignedEscrowTx,
+  signEscrowArkTx,
+  signEscrowCheckpoints,
+  signEscrowDelegate,
+} from "./escrow/index.js";
 // EVM HTLC utilities
 export {
   type ApproveCallData,
@@ -135,15 +144,6 @@ export {
   calculateTargetAmount,
   computeExchangeRate,
 } from "./price-calculations.js";
-// Escrow signing utilities
-export {
-  type SignedEscrowTx,
-  type SignedEscrowDelegate,
-  getArkTxid,
-  signEscrowArkTx,
-  signEscrowCheckpoints,
-  signEscrowDelegate,
-} from "./escrow/index.js";
 // Redeem module (Arkade claim)
 export {
   type ArkadeClaimParams,
