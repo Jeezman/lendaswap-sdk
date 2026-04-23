@@ -39,7 +39,7 @@ impl HdWallet {
     pub fn generate(network: bitcoin::Network, word_count: usize) -> Result<Self> {
         use bip39::Language;
         use bip39::Mnemonic;
-        use rand::rngs::OsRng;
+        use bip39::rand::rngs::OsRng;
 
         let mnemonic = Mnemonic::generate_in_with(&mut OsRng, Language::English, word_count)
             .map_err(|e| Error::KeyDerivation(format!("Failed to generate mnemonic: {}", e)))?;
